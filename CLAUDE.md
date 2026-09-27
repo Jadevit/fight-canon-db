@@ -21,8 +21,10 @@ data/
   canon.db             the database (committed)
   summary.json         coverage + row counts (committed)
   raw/                 fetched pages (ignored)
+site/                  static website (sql.js): index.html, app.js, style.css
 tests/                 same layout as canon_db/; saved pages in tests/ufcstats/fixtures/
 .github/workflows/update-db.yml   daily update + commit
+.github/workflows/pages.yml       publishes site/ + gzipped DB to GitHub Pages
 ```
 
 ## Rules
@@ -43,6 +45,15 @@ tests/                 same layout as canon_db/; saved pages in tests/ufcstats/f
    upsert its fighters.
 5. If the content changed, overwrite `data/canon.db` and `data/summary.json`.
    Otherwise leave the file untouched.
+
+## Website
+
+`site/` has no build step. `app.js` loads `canon.db.gz` (deployed next to it) or
+falls back to `../data/canon.db` for local preview (`python3 -m http.server` from the
+repo root, open `/site/`). Views are routed by URL hash: `#/fighters`, `#/fighter/<id>`,
+`#/events`, `#/event/<id>`, `#/fight/<id>`, `#/leaders`, `#/sql`. `pages.yml` runs on
+changes to `site/` and after each "Update database" run (a bot push can't trigger it
+directly).
 
 ## Adding a source
 

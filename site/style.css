@@ -1,0 +1,33 @@
+/* Small additions on top of Pico's classless styles. */
+
+body > header, body > main, body > footer {
+  max-width: 960px;
+  margin: 0 auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+nav .brand { font-weight: 700; }
+nav ul:last-child li { padding-left: .4rem; padding-right: .4rem; }
+
+/* Wide tables scroll sideways instead of breaking the layout on phones. */
+.scroll { overflow-x: auto; }
+.scroll table { margin-bottom: 0; }
+td, th { white-space: nowrap; }
+td.wrap { white-space: normal; }
+
+.muted { color: var(--pico-muted-color); }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.res { display: inline-block; min-width: 2.2em; text-align: center; border-radius: 4px;
+       font-size: .8em; font-weight: 700; padding: 0 .3em; }
+.res-W  { background: #1f8a4c; color: #fff; }
+.res-L  { background: #b3261e; color: #fff; }
+.res-D, .res-NC { background: #777; color: #fff; }
+
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .5rem 1rem; }
+.stat b { display: block; font-size: 1.3em; }
+.filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0 1rem; }
+
+textarea.sql { font-family: var(--pico-font-family-monospace); min-height: 8rem; }
+.error { color: #b3261e; }

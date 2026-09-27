@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Canon DB</title>
+  <meta name="description" content="Browse every UFC fight, round by round.">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2.1.1/css/pico.classless.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <nav>
+      <ul><li><a href="#/" class="brand">Canon DB</a></li></ul>
+      <ul>
+        <li><a href="#/fighters">Fighters</a></li>
+        <li><a href="#/events">Events</a></li>
+        <li><a href="#/leaders">Leaders</a></li>
+        <li><a href="#/sql">SQL</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main id="app">
+    <p id="loading">Loading database… <progress id="progress"></progress></p>
+  </main>
+
+  <footer>
+    <small id="footer">Data from <a href="http://ufcstats.com">UFC Stats</a>.</small>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/sql.js@1.14.2/dist/sql-wasm.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
