@@ -1,0 +1,19 @@
+{
+  "updated_at": "2026-09-27T18:58:11+00:00",
+  "coverage": {
+    "first_event_date": "1994-03-11",
+    "last_event_date": "2026-09-26",
+    "last_event": "UFC Fight Night: Rosas Jr. vs. Barcelos",
+    "last_event_id": "7e654edcddd71550"
+  },
+  "rows": {
+    "fighters": 4619,
+    "fighter_aliases": 4640,
+    "events": 791,
+    "fights": 8920,
+    "fight_participants": 17838,
+    "round_stats": 41894,
+    "judge_scores": 0,
+    "odds": 0
+  }
+}
