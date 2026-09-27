@@ -17,16 +17,16 @@ curl -L -o canon.db https://raw.githubusercontent.com/<owner>/<repo>/main/data/c
 
 All tables link by UFC Stats ID.
 
-| Table | One row per | Keys |
-| --- | --- | --- |
-| `events` | event | `event_id` |
-| `fights` | fight | `fight_id` → `event_id` |
-| `fight_participants` | fighter in a fight (2 per fight) | `fight_id`, `fighter_id` |
-| `round_stats` | fighter per round | `fight_id`, `fighter_id`, `round` |
-| `fighters` | fighter | `fighter_id` |
-| `fighter_aliases` | spelling of a fighter's name | `fighter_id` |
-| `judge_scores` | reserved (empty) | `fight_id`, `fighter_id` |
-| `odds` | reserved (empty) | `fight_id`, `fighter_id` |
+| Table                | One row per                      | Keys                              |
+| -------------------- | -------------------------------- | --------------------------------- |
+| `events`             | event                            | `event_id`                        |
+| `fights`             | fight                            | `fight_id` → `event_id`           |
+| `fight_participants` | fighter in a fight (2 per fight) | `fight_id`, `fighter_id`          |
+| `round_stats`        | fighter per round                | `fight_id`, `fighter_id`, `round` |
+| `fighters`           | fighter                          | `fighter_id`                      |
+| `fighter_aliases`    | spelling of a fighter's name     | `fighter_id`                      |
+| `judge_scores`       | reserved (empty)                 | `fight_id`, `fighter_id`          |
+| `odds`               | reserved (empty)                 | `fight_id`, `fighter_id`          |
 
 Stats that weren't recorded are `NULL`, not `0`.
 
@@ -34,7 +34,7 @@ Stats that weren't recorded are `NULL`, not `0`.
 
 A GitHub Action runs daily. It fetches any new events from UFC Stats, reloads the
 last 21 days (UFC Stats often posts stats and corrections late), and commits
-`data/canon.db` only if something changed.
+`data/canon.db` if something changes.
 
 ## Run locally
 
