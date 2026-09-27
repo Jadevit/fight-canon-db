@@ -44,11 +44,6 @@ last 21 days (UFC Stats often posts stats and corrections late), and commits
 leaderboards and a SQL box. `.github/workflows/pages.yml` publishes it to GitHub
 Pages (with a gzipped copy of the DB) after every database update.
 
-One-time setup: **Settings → Pages → Source: GitHub Actions**.
-
-Preview locally from the repo root with `python3 -m http.server`, then open
-<http://localhost:8000/site/>.
-
 ## Run locally
 
 ```bash
