@@ -3,6 +3,7 @@
 A SQLite database of UFC events, fights and round-by-round stats, scraped from
 [UFC Stats](http://ufcstats.com) and updated automatically.
 
+- Browse it: **https://jadevit.github.io/fight-canon-db/** (works on phones)
 - Database: [`data/canon.db`](data/canon.db)
 - Coverage and row counts: [`data/summary.json`](data/summary.json)
 - Schema: [`canon_db/schema.sql`](canon_db/schema.sql)
@@ -10,7 +11,7 @@ A SQLite database of UFC events, fights and round-by-round stats, scraped from
 ## Use it from another repo
 
 ```bash
-curl -L -o canon.db https://raw.githubusercontent.com/<owner>/<repo>/main/data/canon.db
+curl -L -o canon.db https://raw.githubusercontent.com/jadevit/fight-canon-db/main/data/canon.db
 ```
 
 ## Tables
@@ -35,6 +36,18 @@ Stats that weren't recorded are `NULL`, not `0`.
 A GitHub Action runs daily. It fetches any new events from UFC Stats, reloads the
 last 21 days (UFC Stats often posts stats and corrections late), and commits
 `data/canon.db` if something changes.
+
+## The website
+
+`site/` is a static page that loads the whole database into the browser with
+[sql.js](https://sql.js.org): fighter search, events, round-by-round fight stats,
+leaderboards and a SQL box. `.github/workflows/pages.yml` publishes it to GitHub
+Pages (with a gzipped copy of the DB) after every database update.
+
+One-time setup: **Settings → Pages → Source: GitHub Actions**.
+
+Preview locally from the repo root with `python3 -m http.server`, then open
+<http://localhost:8000/site/>.
 
 ## Run locally
 
