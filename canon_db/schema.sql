@@ -108,13 +108,19 @@ CREATE TABLE judge_scores (
     PRIMARY KEY (fight_id, fighter_id, round, judge)
 );
 
--- Reserved: closing odds (American).
+-- Betting lines, American odds. One row per fighter per fight per source per book.
+-- `source` is where the data came from; `book` is who set the line, or 'all' for a
+-- summary across books. Both fighters of a fight always get a row.
 CREATE TABLE odds (
     fight_id     TEXT NOT NULL REFERENCES fights(fight_id),
     fighter_id   TEXT NOT NULL REFERENCES fighters(fighter_id),
-    odds         INTEGER,
     source       TEXT NOT NULL,
-    PRIMARY KEY (fight_id, fighter_id, source)
+    book         TEXT NOT NULL,
+    open         INTEGER,
+    close        INTEGER,                   -- one book's closing line
+    close_low    INTEGER,                   -- lowest close across books ('all' rows)
+    close_high   INTEGER,                   -- highest close across books ('all' rows)
+    PRIMARY KEY (fight_id, fighter_id, source, book)
 );
 
 CREATE INDEX idx_fights_event          ON fights(event_id);

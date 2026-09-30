@@ -7,6 +7,7 @@
 To add a source, create sources/<name>/ with those three and register it below.
 """
 
-from canon_db.sources import ufcstats
+from canon_db.sources import bestfightodds, ufcstats
 
-SOURCES = {s.NAME: s for s in (ufcstats,)}
+# ufcstats first: odds match against the fights it has just loaded.
+SOURCES = {s.NAME: s for s in (ufcstats, bestfightodds)}

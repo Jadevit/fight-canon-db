@@ -1,7 +1,8 @@
 # canon-db
 
 A SQLite database of MMA events, fights and round-by-round stats (UFC, PRIDE and more),
-scraped from [UFC Stats](http://ufcstats.com) and updated automatically.
+scraped from [UFC Stats](http://ufcstats.com), with betting lines from
+[BestFightOdds](https://www.bestfightodds.com), updated automatically.
 
 - Browse it: **https://jadevit.github.io/fight-canon-db/** (works on phones)
 - Database: [`data/canon.db`](data/canon.db)
@@ -27,9 +28,10 @@ All tables link by UFC Stats ID.
 | `fighters`           | fighter (bio + pro record)       | `fighter_id`                      |
 | `fighter_aliases`    | spelling of a fighter's name     | `fighter_id`                      |
 | `judge_scores`       | reserved (empty)                 | `fight_id`, `fighter_id`          |
-| `odds`               | reserved (empty)                 | `fight_id`, `fighter_id`          |
+| `odds`               | fighter's betting line per fight | `fight_id`, `fighter_id`          |
 
-Stats that weren't recorded are `NULL`, not `0`.
+Stats that weren't recorded are `NULL`, not `0`. Odds are American and cover 2007 onward:
+the opening line and the lowest/highest closing line across sportsbooks.
 
 To filter by promotion, join through `events`:
 
