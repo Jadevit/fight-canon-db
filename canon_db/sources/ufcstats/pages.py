@@ -105,7 +105,7 @@ def _per_round(table: str, cols: list[str]) -> dict[tuple[int, str], dict]:
 
 
 def parse_fight(html: str) -> dict:
-    """{fighters: [{fighter_id, name, status}] in page order, bout, belt, method,
+    """{event_id, fighters: [{fighter_id, name, status}] in page order, bout, belt, method,
     round, time, time_format, referee, details, rounds: {(round, fighter_id): cells}}.
 
     `status` is the page's W/L/D/NC flag, blank for a bout with no result yet.
@@ -131,7 +131,9 @@ def parse_fight(html: str) -> dict:
         for key, cells in _per_round(table, cols).items():
             rounds.setdefault(key, {}).update(cells)
 
+    ev = re.search(r"event-details/([0-9a-f]{16})", html)
     return dict(
+        event_id=ev.group(1) if ev else None,
         fighters=fighters,
         bout=text(bout_html),
         belt="belt.png" in bout_html,
@@ -148,11 +150,16 @@ def parse_fight(html: str) -> dict:
 # --- fighter page -----------------------------------------------------------------
 
 def parse_fighter(html: str) -> dict:
-    """{name, nickname, height, weight, reach, stance, dob} as shown on the page."""
+    """{name, record, nickname, height, weight, reach, stance, dob, fight_ids} as shown on
+    the page. `fight_ids` covers every fight UFC Stats has for the fighter, including events
+    missing from its events list (e.g. PRIDE)."""
     m = re.search(r'b-content__title-highlight">(.*?)</span>', html, re.S)
     nick = re.search(r'b-content__Nickname">(.*?)</p>', html, re.S)
+    rec = re.search(r'b-content__title-record">(.*?)</span>', html, re.S)
     return dict(
+        fight_ids=_unique(_FIGHT_LINK_RE.findall(html)),
         name=text(m.group(1)) if m else "",
+        record=text(rec.group(1)) if rec else "",
         nickname=text(nick.group(1)) if nick else "",
         height=_info_item(html, "Height"),
         weight=_info_item(html, "Weight"),

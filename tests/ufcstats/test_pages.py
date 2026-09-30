@@ -76,7 +76,13 @@ def test_upcoming_fight_has_no_result():
     assert f["method"] == "" and f["rounds"] == {}
 
 
+def test_fight_page_links_its_event():
+    assert parse_fight(page("fight_modern.html"))["event_id"] == "7e654edcddd71550"
+
+
 def test_fighter_page():
-    assert parse_fighter(page("fighter.html")) == dict(
-        name="Danny Abbadi", nickname="The Assassin", height="5' 11\"",
+    f = parse_fighter(page("fighter.html"))
+    assert len(f.pop("fight_ids")) == 2
+    assert f == dict(
+        name="Danny Abbadi", record="Record: 4-6-0", nickname="The Assassin", height="5' 11\"",
         weight="155 lbs.", reach="--", stance="Orthodox", dob="Jul 03, 1983")

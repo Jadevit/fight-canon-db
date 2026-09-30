@@ -5,6 +5,7 @@
     python -m canon_db update ufcstats --all     # reload everything (~4-5 h)
     python -m canon_db update ufcstats --offline # re-apply saved pages, no network
     python -m canon_db update ufcstats -h        # a source's own options
+    python -m canon_db migrate                   # rebuild the DB after editing schema.sql
 
 All sources run against one working copy of the database, which replaces
 data/canon.db (and data/summary.json) only if its content changed. If any source
@@ -35,13 +36,19 @@ def main() -> None:
     per_source = update.add_subparsers(dest="source")
     for name, source in SOURCES.items():
         source.add_arguments(per_source.add_parser(name, help=source.__doc__))
+    commands.add_parser("migrate", help="rebuild the database from schema.sql, keeping every row")
     args = ap.parse_args()
+
+    if args.command == "migrate":
+        for table, n in db.migrate(args.db).items():
+            print(f"  {table:20} {n:>7} rows")
+        return
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s",
                         datefmt="%H:%M:%S")
     log = logging.getLogger("canon_db")
 
-    if args.source:
+    if getattr(args, "source", None):
         run = {args.source: args}
     else:  # every source with its defaults
         run = {}

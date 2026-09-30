@@ -122,6 +122,18 @@ def parse_reach_in(s: str | None) -> int | None:
     return int(m.group(1)) if m else None
 
 
+def parse_record(s: str | None) -> tuple[int | None, int | None, int | None, int]:
+    """Pro record "Record: 20-5-1 (1 NC)" -> (20, 5, 1, 1). Unreadable -> Nones, 0 NC.
+
+    >>> parse_record("Record: 4-6-0")
+    (4, 6, 0, 0)
+    """
+    m = re.search(r"(\d+)-(\d+)-(\d+)(?:\s*\((\d+)\s*NC\))?", s or "")
+    if not m:
+        return (None, None, None, 0)
+    return (int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4) or 0))
+
+
 def parse_dob(s: str | None) -> str | None:
     """UFC Stats date "Jul 13, 1978" -> ISO "1978-07-13". Blank -> None."""
     if _blank(s):

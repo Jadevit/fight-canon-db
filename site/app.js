@@ -36,6 +36,9 @@ const table = (head, rows) =>
   `<div class="scroll"><table><thead><tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr></thead>` +
   `<tbody>${rows.join("") || `<tr><td colspan="${head.length}" class="muted">Nothing found.</td></tr>`}</tbody></table></div>`;
 const record = (r) => `${r.w || 0}-${r.l || 0}-${r.d || 0}` + (r.nc ? ` (${r.nc} NC)` : "");
+// Pro MMA record from the fighter's UFC Stats page; falls back to the fights in the DB.
+const proRecord = (f, fallback) => f.wins != null
+  ? record({ w: f.wins, l: f.losses, d: f.draws, nc: f.no_contests }) : record(fallback);
 
 function debounce(fn, ms = 150) {
   let t;
@@ -48,6 +51,9 @@ function setParams(p) {
   const base = location.hash.split("?")[0];
   history.replaceState(null, "", `${base}?${p.toString()}`);
 }
+
+const promotions = () => q("SELECT promotion FROM events GROUP BY promotion ORDER BY COUNT(*) DESC")
+  .map((r) => r.promotion);
 
 // Weight classes are stored as the bout title ("UFC Lightweight Title Bout");
 // division() reduces them to the division name.
@@ -147,8 +153,8 @@ function home() {
                (SELECT COUNT(*) FROM fighters) fr, (SELECT MIN(date) FROM events) first`)[0];
   const recent = q("SELECT event_id, name, date, location FROM events ORDER BY date DESC LIMIT 10");
   app.innerHTML = `
-    <h1>Every UFC fight, round by round</h1>
-    <p>${num(c.ev)} events, ${num(c.fi)} fights and ${num(c.fr)} fighters since ${esc(c.first)}.
+    <h1>MMA fights, round by round</h1>
+    <p>${num(c.ev)} events, ${num(c.fi)} fights and ${num(c.fr)} fighters since ${esc(c.first)}, from UFC, PRIDE and more.
        Search a fighter, open any card, or rank fighters by their stats.</p>
     <form id="s"><input type="search" name="q" placeholder="Search fighters…" autofocus></form>
     <h2>Latest events</h2>
@@ -172,17 +178,17 @@ function fighters() {
     const term = norm(input.value.trim());
     setParams(new URLSearchParams(term ? { q: input.value.trim() } : {}));
     const rows = q(`
-      SELECT f.fighter_id, f.name, f.nickname, COUNT(p.fight_id) n,
+      SELECT f.fighter_id, f.name, f.nickname, f.wins, f.losses, f.draws, f.no_contests, COUNT(p.fight_id) n,
              SUM(p.result = 'W') w, SUM(p.result = 'L') l, SUM(p.result = 'D') d, SUM(p.result = 'NC') nc
       FROM fighters f LEFT JOIN fight_participants p USING (fighter_id)
       WHERE ?1 = '' OR norm(f.name) LIKE ?2
          OR f.fighter_id IN (SELECT fighter_id FROM fighter_aliases WHERE norm(name) LIKE ?2)
       GROUP BY f.fighter_id ORDER BY n DESC, f.name LIMIT 50`, [term, `%${term}%`]);
     document.getElementById("results").innerHTML =
-      (term ? "" : `<p class="muted">Most UFC fights:</p>`) +
-      table(["Fighter", "Record", "UFC fights"], rows.map((r) =>
+      (term ? "" : `<p class="muted">Most fights in the database:</p>`) +
+      table(["Fighter", "Pro record", "Fights here"], rows.map((r) =>
         `<tr><td>${fighterLink(r.fighter_id, r.name)}${r.nickname ? ` <span class="muted">“${esc(r.nickname)}”</span>` : ""}</td>
-             <td>${record(r)}</td><td class="num">${r.n}</td></tr>`));
+             <td>${proRecord(r, r)}</td><td class="num">${r.n}</td></tr>`));
   };
   input.oninput = debounce(render);
   render();
@@ -192,7 +198,7 @@ function fighter(id) {
   const f = q("SELECT * FROM fighters WHERE fighter_id = ?", [id])[0];
   if (!f) { app.innerHTML = "<p>Fighter not found.</p>"; return; }
   const fights = q(`
-    SELECT e.date, e.event_id, e.name AS event, x.fight_id, x.weight_class, x.method, x.end_round,
+    SELECT e.date, e.event_id, e.name AS event, e.promotion, x.fight_id, x.weight_class, x.method, x.end_round,
            x.end_time, x.time_format, me.result, o.fighter_id AS opp_id, of.name AS opp
     FROM fight_participants me
     JOIN fights x USING (fight_id) JOIN events e USING (event_id)
@@ -232,7 +238,7 @@ function fighter(id) {
     <h1>${esc(f.name)}</h1>
     <p>${bio}</p>
     <div class="grid2">
-      ${stat("UFC record", record(rec))}
+      ${stat("Pro record", proRecord(f, rec))}
       ${stat("Sig. strikes / min", secs ? (slTimed / (secs / 60)).toFixed(2) : "—")}
       ${stat("Sig. strike accuracy", pct(t.sl, t.sa))}
       ${stat("Sig. strike defense", opp.sa ? pct(opp.sa - opp.sl, opp.sa) : "—")}
@@ -242,18 +248,20 @@ function fighter(id) {
       ${stat("Control time", hmm(t.ctrl))}
     </div>
     <h2>Fights</h2>
-    ${table(["", "Opponent", "Method", "Rd", "Time", "Event", "Date"], fights.map((x) => `
+    ${table(["", "Opponent", "Method", "Rd", "Time", "Event", "Promotion", "Date"], fights.map((x) => `
       <tr><td>${badge(x.result)}</td><td>${fighterLink(x.opp_id, x.opp)}</td>
           <td>${fightLink(x.fight_id, x.method || "—")}</td><td>${dash(x.end_round)}</td>
-          <td>${dash(x.end_time)}</td><td>${eventLink(x.event_id, x.event)}</td><td>${esc(x.date)}</td></tr>`))}
+          <td>${dash(x.end_time)}</td><td>${eventLink(x.event_id, x.event)}</td>
+          <td>${esc(x.promotion)}</td><td>${esc(x.date)}</td></tr>`))}
     <p><small><a href="http://ufcstats.com/fighter-details/${esc(id)}">View on UFC Stats</a></small></p>`;
 }
 
 function events() {
-  const all = q(`SELECT e.event_id, e.name, e.date, e.location, COUNT(f.fight_id) n
+  const all = q(`SELECT e.event_id, e.name, e.date, e.location, e.promotion, COUNT(f.fight_id) n
                  FROM events e LEFT JOIN fights f USING (event_id)
                  GROUP BY e.event_id ORDER BY e.date DESC`);
   const years = [...new Set(all.map((e) => e.date.slice(0, 4)))];
+  const promos = promotions();
   const p = params();
   app.innerHTML = `
     <h1>Events</h1>
@@ -261,22 +269,26 @@ function events() {
       <input type="search" id="q" placeholder="Search events or places…" value="${esc(p.get("q") || "")}">
       <select id="y"><option value="">All years</option>${years.map((y) =>
         `<option ${p.get("y") === y ? "selected" : ""}>${y}</option>`).join("")}</select>
+      <select id="pr"><option value="">All promotions</option>${promos.map((x) =>
+        `<option ${p.get("pr") === x ? "selected" : ""}>${esc(x)}</option>`).join("")}</select>
     </div>
     <div id="results"></div>`;
-  const qi = document.getElementById("q"), yi = document.getElementById("y");
+  const qi = document.getElementById("q"), yi = document.getElementById("y"), pi = document.getElementById("pr");
   const render = () => {
-    const term = norm(qi.value.trim()), year = yi.value;
-    setParams(new URLSearchParams({ ...(qi.value.trim() && { q: qi.value.trim() }), ...(year && { y: year }) }));
-    const rows = all.filter((e) => (!year || e.date.startsWith(year)) &&
+    const term = norm(qi.value.trim()), year = yi.value, promo = pi.value;
+    setParams(new URLSearchParams({ ...(qi.value.trim() && { q: qi.value.trim() }), ...(year && { y: year }),
+                                    ...(promo && { pr: promo }) }));
+    const rows = all.filter((e) => (!year || e.date.startsWith(year)) && (!promo || e.promotion === promo) &&
       (!term || norm(e.name).includes(term) || norm(e.location).includes(term)));
     document.getElementById("results").innerHTML =
       `<p class="muted">${rows.length} events</p>` +
-      table(["Date", "Event", "Location", "Fights"], rows.slice(0, 300).map((e) =>
-        `<tr><td>${esc(e.date)}</td><td>${eventLink(e.event_id, e.name)}</td>
+      table(["Date", "Event", "Promotion", "Location", "Fights"], rows.slice(0, 300).map((e) =>
+        `<tr><td>${esc(e.date)}</td><td>${eventLink(e.event_id, e.name)}</td><td>${esc(e.promotion)}</td>
              <td>${esc(e.location)}</td><td class="num">${e.n}</td></tr>`));
   };
   qi.oninput = debounce(render);
   yi.onchange = render;
+  pi.onchange = render;
   render();
 }
 
@@ -295,7 +307,7 @@ function event(id) {
     WHERE x.event_id = ? ORDER BY x.rowid`, [id]);
   app.innerHTML = `
     <h1>${esc(e.name)}</h1>
-    <p>${esc(e.date)} · ${esc(e.location)}</p>
+    <p>${esc(e.promotion)} · ${esc(e.date)} · ${esc(e.location)}</p>
     ${table(["Fighters", "Weight class", "Method", "Rd", "Time", ""], fights.map((x) => `
       <tr><td>${badge(x.a_res)} ${fighterLink(x.a_id, x.a_name)}<br>${badge(x.b_res)} ${fighterLink(x.b_id, x.b_name)}</td>
           <td>${esc(division(x.weight_class))}</td><td>${esc(x.method || "—")}</td>
@@ -383,7 +395,7 @@ const LEADER_STATS = {
   tdacc:  { label: "Takedown accuracy (min. 10 attempted)", expr: "1.0 * rs.tl / rs.ta", where: "rs.ta >= 10", fmt: "pct" },
   subatt: { label: "Submission attempts", expr: "rs.suba" },
   ctrl:   { label: "Control time", expr: "rs.ctrl", fmt: "time" },
-  fights: { label: "UFC fights", expr: "per.n" },
+  fights: { label: "Fights", expr: "per.n" },
 };
 
 function leaders() {
@@ -392,12 +404,13 @@ function leaders() {
   const years = [];
   for (let y = Number(maxY); y >= Number(minY); y--) years.push(String(y));
   const opt = (v, label, cur) => `<option value="${esc(v)}" ${cur === v ? "selected" : ""}>${esc(label)}</option>`;
-  const cur = { stat: p.get("stat") || "wins", div: p.get("div") || "", from: p.get("from") || minY,
+  const cur = { stat: p.get("stat") || "wins", promo: p.get("promo") || "", div: p.get("div") || "", from: p.get("from") || minY,
                 to: p.get("to") || maxY, min: p.get("min") || "1" };
   app.innerHTML = `
     <h1>Leaders</h1>
     <div class="filters">
       <label>Stat<select id="stat">${Object.entries(LEADER_STATS).map(([k, s]) => opt(k, s.label, cur.stat)).join("")}</select></label>
+      <label>Promotion<select id="promo">${opt("", "All promotions", cur.promo)}${promotions().map((x) => opt(x, x, cur.promo)).join("")}</select></label>
       <label>Division<select id="div">${opt("", "All divisions", cur.div)}${DIVISIONS.map((d) => opt(d, d, cur.div)).join("")}</select></label>
       <label>From<select id="from">${years.map((y) => opt(y, y, cur.from)).join("")}</select></label>
       <label>To<select id="to">${years.map((y) => opt(y, y, cur.to)).join("")}</select></label>
@@ -406,13 +419,14 @@ function leaders() {
     <div id="results"></div>`;
   const val = (k) => document.getElementById(k).value;
   const render = () => {
-    const f = { stat: val("stat"), div: val("div"), from: val("from"), to: val("to"), min: val("min") || "1" };
+    const f = { stat: val("stat"), promo: val("promo"), div: val("div"), from: val("from"), to: val("to"), min: val("min") || "1" };
     setParams(new URLSearchParams(f));
     const s = LEADER_STATS[f.stat];
     const rows = q(`
       WITH ff AS (
         SELECT x.fight_id, x.method FROM fights x JOIN events e USING (event_id)
-        WHERE (?1 = '' OR division(x.weight_class) = ?1) AND substr(e.date, 1, 4) BETWEEN ?2 AND ?3),
+        WHERE (?1 = '' OR division(x.weight_class) = ?1) AND substr(e.date, 1, 4) BETWEEN ?2 AND ?3
+          AND (?5 = '' OR e.promotion = ?5)),
       per AS (
         SELECT p.fighter_id, COUNT(*) n, SUM(p.result = 'W') w,
                SUM(p.result = 'W' AND (ff.method LIKE '%KO%' OR ff.method = 'Submission')) fin,
@@ -426,7 +440,7 @@ function leaders() {
       SELECT f.fighter_id, f.name, per.n, ${s.expr} AS val
       FROM per JOIN fighters f USING (fighter_id) LEFT JOIN rs USING (fighter_id)
       WHERE per.n >= ?4 AND ${s.expr} IS NOT NULL ${s.where ? `AND ${s.where}` : ""}
-      ORDER BY val DESC, per.n ASC LIMIT 50`, [f.div, f.from, f.to, Number(f.min)]);
+      ORDER BY val DESC, per.n ASC LIMIT 50`, [f.div, f.from, f.to, Number(f.min), f.promo]);
     const show = (v) => s.fmt === "pct" ? Math.round(v * 1000) / 10 + "%" : s.fmt === "time" ? hmm(v) : num(v);
     document.getElementById("results").innerHTML = table(["#", "Fighter", "Fights", esc(s.label)],
       rows.map((r, i) => `<tr><td class="num">${i + 1}</td><td>${fighterLink(r.fighter_id, r.name)}</td>

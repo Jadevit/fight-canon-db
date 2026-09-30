@@ -20,6 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DB = ROOT / "data" / "canon.db"
 RAW = ROOT / "data" / "raw"
+SCHEMA = Path(__file__).resolve().parent / "schema.sql"
 
 TABLES = ("fighters", "fighter_aliases", "events", "fights", "fight_participants",
           "round_stats", "judge_scores", "odds")
@@ -84,3 +85,38 @@ def github_output(**values) -> None:
         with open(out, "a", encoding="utf-8") as fh:
             for k, v in values.items():
                 fh.write(f"{k}={str(v).lower() if isinstance(v, bool) else v}\n")
+
+
+def migrate(db: Path) -> dict[str, int]:
+    """Rebuild `db` from schema.sql, copying every row of every table.
+
+    Columns are copied by name: new columns start empty, removed ones are dropped. The
+    result replaces `db` only if every table kept its row count. Returns the row counts.
+    """
+    work = db.with_suffix(".db.migrating")
+    work.unlink(missing_ok=True)
+    conn = sqlite3.connect(work)
+    conn.executescript(SCHEMA.read_text())
+    conn.execute("ATTACH ? AS old", (str(db),))
+    counts = {}
+    with conn:
+        for t in TABLES:
+            new_cols = [r[1] for r in conn.execute(f"PRAGMA main.table_info({t})")]
+            old_cols = {r[1] for r in conn.execute(f"PRAGMA old.table_info({t})")}
+            cols = ", ".join(c for c in new_cols if c in old_cols)
+            if cols:
+                conn.execute(f"INSERT INTO main.{t} ({cols}) SELECT {cols} FROM old.{t}")
+            n_new = conn.execute(f"SELECT COUNT(*) FROM main.{t}").fetchone()[0]
+            n_old = conn.execute(f"SELECT COUNT(*) FROM old.{t}").fetchone()[0] if old_cols else 0
+            if n_new != n_old:
+                raise RuntimeError(f"{t}: {n_old} rows before, {n_new} after")
+            counts[t] = n_new
+    problems = conn.execute("PRAGMA main.foreign_key_check").fetchall()
+    conn.execute("DETACH old")
+    conn.execute("VACUUM")
+    conn.close()
+    if problems:
+        work.unlink()
+        raise RuntimeError(f"foreign key problems after migrating: {problems[:5]}")
+    work.replace(db)
+    return counts

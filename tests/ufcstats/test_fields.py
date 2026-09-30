@@ -52,3 +52,20 @@ def test_result_flags():
     assert F.is_no_contest("Overturned - No Contest")
     assert not F.is_no_contest("Decision - Unanimous")
 
+
+
+def test_parse_record():
+    assert F.parse_record("Record: 4-6-0") == (4, 6, 0, 0)
+    assert F.parse_record("Record: 28-18-0 (1 NC)") == (28, 18, 0, 1)
+    assert F.parse_record("") == (None, None, None, 0)
+
+
+def test_promotion_from_event_name():
+    from canon_db.sources.ufcstats.load import promotion
+    assert promotion("PRIDE 33: The Second Coming") == "PRIDE"
+    assert promotion("PRIDE Shockwave 2006") == "PRIDE"
+    assert promotion("Road to UFC 4.5 + 4.6") == "UFC"
+    assert promotion("Strikeforce: Nashville") == "Strikeforce"
+    assert promotion("IFC - Global Domination") == "IFC"
+    assert promotion("Meca 9") == "Meca"
+    assert promotion("WEC 41") == "WEC"

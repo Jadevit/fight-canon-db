@@ -14,6 +14,10 @@ CREATE TABLE fighters (
     reach_in     INTEGER,
     weight_lbs   INTEGER,
     stance       TEXT,
+    wins         INTEGER,                   -- pro MMA record, as shown on UFC Stats
+    losses       INTEGER,
+    draws        INTEGER,
+    no_contests  INTEGER,
     nationality  TEXT,                      -- reserved
     source       TEXT NOT NULL DEFAULT 'ufcstats'
 );

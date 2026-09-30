@@ -63,3 +63,16 @@ def test_updating_discards_work_on_error(tmp_path):
         pass
     assert path.read_bytes() == before
     assert not (tmp_path / "x.db.tmp").exists()
+
+
+def test_migrate_adds_columns_and_keeps_rows(tmp_path):
+    path = tmp_path / "old.db"
+    old = sqlite3.connect(path)
+    schema = (db.ROOT / "canon_db" / "schema.sql").read_text()
+    old.executescript(schema.replace("    no_contests  INTEGER,\n", ""))  # an older schema
+    old.execute("INSERT INTO fighters (fighter_id, name) VALUES ('a', 'A')")
+    old.commit()
+    old.close()
+    assert db.migrate(path)["fighters"] == 1
+    conn = sqlite3.connect(path)
+    assert conn.execute("SELECT name, no_contests FROM fighters").fetchone() == ("A", None)
