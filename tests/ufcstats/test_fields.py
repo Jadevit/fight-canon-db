@@ -29,16 +29,6 @@ def test_parse_ctrl():
     assert F.parse_ctrl("--") is None
 
 
-def test_parse_pct():
-    assert F.parse_pct("48%") == 0.48
-    assert F.parse_pct("---") is None
-
-
-def test_parse_round_label():
-    assert F.parse_round_label("Round 1") == 1
-    assert F.parse_round_label("Round 5") == 5
-
-
 def test_bio_parsers():
     assert F.parse_height_in("5' 11\"") == 71
     assert F.parse_reach_in("76\"") == 76

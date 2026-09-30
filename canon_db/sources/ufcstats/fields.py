@@ -1,7 +1,7 @@
 """Cell-level parsers for UFC Stats data.
 
 UFC Stats encodes a handful of quirky formats in its tables: "13 of 27" for
-landed-of-attempted, "0:45" for control time, "48%" for accuracy, and "---"
+landed-of-attempted, "0:45" for control time, and "---"
 (or "--", or blank) wherever a value is unknown. These functions turn each of
 those into clean Python values, mapping every flavour of "unknown" to None so
 the ground rule *blank means unknown, never zero* holds all the way to the DB.
@@ -63,14 +63,6 @@ def parse_of(s: str | None) -> tuple[int | None, int | None]:
     return (int(m.group(1)), int(m.group(2)))
 
 
-def parse_pct(s: str | None) -> float | None:
-    """"48%" -> 0.48. Blank/sentinel -> None."""
-    if _blank(s):
-        return None
-    m = re.match(r"\s*(\d+)\s*%", s)
-    return int(m.group(1)) / 100 if m else None
-
-
 def parse_ctrl(s: str | None) -> int | None:
     """Control time "m:ss" -> seconds. Blank/sentinel -> None.
 
@@ -86,14 +78,6 @@ def parse_ctrl(s: str | None) -> int | None:
     if not m:
         return None
     return int(m.group(1)) * 60 + int(m.group(2))
-
-
-def parse_round_label(s: str | None) -> int | None:
-    """"Round 1" -> 1."""
-    if _blank(s):
-        return None
-    m = re.search(r"(\d+)", s)
-    return int(m.group(1)) if m else None
 
 
 def parse_weight_lbs(s: str | None) -> int | None:
