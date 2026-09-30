@@ -1,7 +1,7 @@
 # canon-db
 
-A SQLite database of UFC events, fights and round-by-round stats, scraped from
-[UFC Stats](http://ufcstats.com) and updated automatically.
+A SQLite database of MMA events, fights and round-by-round stats (UFC, PRIDE and more),
+scraped from [UFC Stats](http://ufcstats.com) and updated automatically.
 
 - Browse it: **https://jadevit.github.io/fight-canon-db/** (works on phones)
 - Database: [`data/canon.db`](data/canon.db)
@@ -20,22 +20,29 @@ All tables link by UFC Stats ID.
 
 | Table                | One row per                      | Keys                              |
 | -------------------- | -------------------------------- | --------------------------------- |
-| `events`             | event                            | `event_id`                        |
+| `events`             | event (with its `promotion`)     | `event_id`                        |
 | `fights`             | fight                            | `fight_id` → `event_id`           |
 | `fight_participants` | fighter in a fight (2 per fight) | `fight_id`, `fighter_id`          |
 | `round_stats`        | fighter per round                | `fight_id`, `fighter_id`, `round` |
-| `fighters`           | fighter                          | `fighter_id`                      |
+| `fighters`           | fighter (bio + pro record)       | `fighter_id`                      |
 | `fighter_aliases`    | spelling of a fighter's name     | `fighter_id`                      |
 | `judge_scores`       | reserved (empty)                 | `fight_id`, `fighter_id`          |
 | `odds`               | reserved (empty)                 | `fight_id`, `fighter_id`          |
 
 Stats that weren't recorded are `NULL`, not `0`.
 
+To filter by promotion, join through `events`:
+
+```sql
+SELECT f.* FROM fights f JOIN events e USING (event_id) WHERE e.promotion = 'PRIDE';
+```
+
 ## How it updates
 
 A GitHub Action runs daily. It fetches any new events from UFC Stats, reloads the
 last 21 days (UFC Stats often posts stats and corrections late), and commits
-`data/canon.db` if something changes.
+`data/canon.db` if something changes. A second, weekly Action picks up events UFC Stats
+leaves off its events list (Dana White's Contender Series, PRIDE and other promotions).
 
 ## The website
 

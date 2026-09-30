@@ -7,7 +7,7 @@ on:
     branches: [main]
     paths: ["site/**", ".github/workflows/pages.yml"]
   workflow_run:
-    workflows: ["Update database"]
+    workflows: ["Update database", "Discover events"]
     types: [completed]
   workflow_dispatch:
 
