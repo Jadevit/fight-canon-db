@@ -1,5 +1,5 @@
-# Runtime: only the scraper reaches the network, so requests is the sole hard
-# dependency. The parse + SQLite layer (canon_db/build.py) is pure standard library.
+# Runtime: requests is the only dependency (for fetching pages). Parsing and the
+# database layer are pure standard library.
 requests>=2.31
 
 # Tests

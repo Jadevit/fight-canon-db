@@ -106,13 +106,3 @@ def save(path: Path, html: str) -> None:
     tmp = path.with_suffix(".tmp")
     tmp.write_text(html, encoding="utf-8")
     tmp.replace(path)
-
-
-def fetch_cached(fetcher: Fetcher, url: str, path: Path, force: bool = False) -> str | None:
-    """Return the page from disk if we already have it, otherwise download and save it."""
-    if path.exists() and not force:
-        return path.read_text(encoding="utf-8")
-    html = fetcher.get(url)
-    if html is not None:
-        save(path, html)
-    return html
