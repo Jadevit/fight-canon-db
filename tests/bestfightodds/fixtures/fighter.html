@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html;charset=utf-8">
+        <title>Frank Mir Odds: Fight History &amp; Latest Betting Lines</title>
+        <meta name="description" content="Frank Mir betting odds history. UFC/MMA odds comparison service. Compare the latest UFC/MMA fight odds and betting lines from the top online sportsbooks">
+    <meta name="keywords" content="Frank Mir mma odds, mma betting, mma lines, ufc odds, ufc, mma, odds, betting">
+    <meta name="bfo-version" content="2024-02-15">
+    <meta property="og:image" content="https://www.bestfightodds.com/img/iconv2.jpg">
+            <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+                        <link rel="canonical" href="https://www.bestfightodds.com/fighters/frank-mir-123">
+                    <link rel="preconnect" href="https://www.googletagmanager.com">
+    <link rel="preconnect" href="https://www.google-analytics.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" media="print" onload="this.media='all'">
+    <noscript>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap">
+    </noscript>
+    <link rel="stylesheet" type="text/css" href="/css/bfo.min.css?v=0.3.42">
+    <link rel="stylesheet" type="text/css" href="/css/bfo.redesign.min.css?v=0.0.42">    <link rel="shortcut icon" href="https://www.bestfightodds.com/favicon.ico">
+    <link rel="apple-touch-icon" sizes="144x144" href="/apple-touch-icon-144x144.png">
+    <link rel="apple-touch-icon" sizes="114x114" href="/apple-touch-icon-114x114.png">
+    <link rel="apple-touch-icon" sizes="72x72" href="/apple-touch-icon-72x72.png">
+    <link rel="apple-touch-icon" href="/apple-touch-icon-iphone.png">
+    <!-- Google Tag Manager -->
+    <script>
+        (function(w, d, s, l, i) {
+            w[l] = w[l] || [];
+            w[l].push({
+                'gtm.start':
+
+                    new Date().getTime(),
+                event: 'gtm.js'
+            });
+            var f = d.getElementsByTagName(s)[0],
+
+                j = d.createElement(s),
+                dl = l != 'dataLayer' ? '&l=' + l : '';
+            j.async = true;
+            j.src =
+
+                'https://www.googletagmanager.com/gtm.js?id=' + i + dl;
+            f.parentNode.insertBefore(j, f);
+
+        })(window, document, 'script', 'dataLayer', 'GTM-WGLQH4ZQ');
+    </script>
+    <!-- End Google Tag Manager -->
+    </head>
+
+<body class="rd">
+    <script async src="/js/bfo.min.js?v=0.4.10"></script>
+    <script>
+    if(document.cookie.indexOf('bfo_admin=1')!==-1){document.addEventListener('DOMContentLoaded',function(){document.querySelectorAll('.bfo-admin-link').forEach(function(el){el.style.display='';});});}
+    /* Sticky name-column row heights. Measuring and writing in the same loop
+       forces a synchronous reflow per row (Lighthouse flagged ~185ms), so this
+       does ALL reads first, then ALL writes — one layout pass for the whole
+       page instead of one per row. */
+    document.addEventListener('DOMContentLoaded',function(){
+      function measure(scroller){
+        if(!scroller)return null;
+        var w=scroller.parentElement.parentElement;
+        var rh=w?w.querySelector('.odds-table-responsive-header'):null;
+        if(!rh)return null;
+        var sr=scroller.querySelectorAll('thead tr, tbody tr');
+        var rr=rh.querySelectorAll('thead tr, tbody tr');
+        var n=Math.min(sr.length,rr.length),hs=new Array(n);
+        for(var i=0;i<n;i++){hs[i]=sr[i].offsetHeight;}
+        return {rows:rr,heights:hs,n:n};
+      }
+      function apply(job){if(!job)return;for(var i=0;i<job.n;i++){job.rows[i].style.height=job.heights[i]+'px';}}
+      function syncAll(scrollers){
+        var jobs=[];
+        scrollers.forEach(function(s){var j=measure(s);if(j)jobs.push(j);}); /* read phase */
+        jobs.forEach(apply);                                                 /* write phase */
+      }
+      /* Measuring every event table up front forces one big synchronous layout
+         (~150ms on a throttled phone) even though most tables sit far below the
+         fold. Split the work: tables near the viewport sync immediately, the
+         rest are deferred off the critical path. Reading 12 rects costs a single
+         cheap layout; the expensive part is the thousands of per-row
+         offsetHeight reads, and that is what gets deferred.
+         The deferred pass is guaranteed to run (idle callback with a timeout,
+         plus first scroll, whichever comes first) so the sticky name column is
+         never left unsynced. */
+      var scrollers=Array.prototype.slice.call(document.querySelectorAll('.table-scroller'));
+      var limit=window.innerHeight+300,near=[],far=[];
+      scrollers.forEach(function(s){
+        var r=s.getBoundingClientRect();
+        if(r.top<limit&&r.bottom>-300){near.push(s);}else{far.push(s);}
+      });
+      syncAll(near);
+      if(far.length){
+        var deferredDone=false;
+        var runDeferred=function(){if(deferredDone)return;deferredDone=true;syncAll(far);};
+        if(window.requestIdleCallback){requestIdleCallback(runDeferred,{timeout:3000});}
+        else{setTimeout(runDeferred,300);}
+        window.addEventListener('scroll',runDeferred,{once:true,passive:true});
+      }
+      /* Collapsed events render their table hidden, so row heights measure 0 at load; re-sync the sticky name-column when one is expanded. */
+      document.querySelectorAll('.table-div.event-collapsed .table-header').forEach(function(h){h.addEventListener('click',function(){var d=h.closest('.table-div');if(d){setTimeout(function(){apply(measure(d.querySelector('.table-scroller')));},60);}});});
+    });
+    document.addEventListener('DOMContentLoaded',function(){if(window.innerWidth<=961){document.querySelectorAll('.event-banners[data-mobile-show]').forEach(function(c){var show=parseInt(c.dataset.mobileShow)||0;c.querySelectorAll('.event-banner-card').forEach(function(b){if(parseInt(b.dataset.bannerIdx)!==show)b.classList.add('mobile-hidden');});});}});
+    </script>
+    
+        <div class="rd-canvas">
+      <div class="rd-card">
+        <header class="rd-header">
+          <a href="/" class="rd-logo-tile" aria-label="BestFightOdds home"><img src="/img/bfo-logo-mark.png?v=2" alt="BestFightOdds" class="rd-logo-img" width="30" height="30"></a>
+          <div class="rd-brand">
+            <a href="/"><div class="rd-wordmark">BestFightOdds</div></a>
+            <div class="rd-tagline">The latest Mixed Martial Arts betting lines</div>
+          </div>
+          <form class="rd-search" method="get" action="/search">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input type="text" name="query" placeholder="MMA Event / Fighter" aria-label="Search MMA event or fighter">
+          </form>
+        </header>
+        <nav class="rd-nav">
+          <div class="rd-nav-scroll">
+          <a class="rd-nav-item" href="/">Odds</a>
+          <a class="rd-nav-item is-active" href="/archive">Archive</a>
+          <a class="rd-nav-item" href="/alerts">Alerts</a>
+          <a class="rd-nav-item" href="/prediction">Prediction Markets</a>
+          <a class="rd-nav-item" href="/news">News</a>
+          <a class="rd-nav-item" href="/promos/kalshi">Kalshi</a>
+          <a class="rd-nav-item" href="/links">Widget</a>
+          <a class="rd-nav-item" href="https://www.proboxingodds.com" target="_blank" rel="noopener">Boxing</a>
+          </div>
+          <div class="rd-header-controls">
+            <div id="parlay-mode-container"  style="visibility: hidden" >
+              <a href="#" id="parlay-mode-box"><div class="bfo-check-box">✓</div> Parlay</a>
+            </div>
+            <div id="format-container">
+              <ul class="dropdown">
+                <li><a href="#" id="format-toggle-text"><span>Settings &#9660;</span></a>
+                  <ul class="sub_menu">
+                    <li><a href="#" id="formatSelector1" class="list-checked"><span style="display: inline-block">&#10003;</span>Moneyline</a></li>
+                    <li><a href="#" id="formatSelector2"><span>&#10003;</span>Decimal</a></li>
+                    <li><a href="#" id="formatSelector4"><span>&#10003;</span>Fractional</a></li>
+                    <li style="border-bottom: 1px solid #4a4c53"><a href="#" id="formatSelector3" style="display: inline"><span>&#10003;</span>Return on </a>$<input type="text" name="amountBox" id="format-amount-box1" maxlength="4" value="100" style="display: inline"></li>
+                    <li><a href="#" id="bookieHideSelector">Customize view</a></li>
+                  </ul>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </nav>
+        <div class="rd-content">
+          
+<div id="page-wrapper" style="max-width: 800px;"><div id="page-container"><div class="content-header team-stats-header"><span class="rd-fh-avatar" style="display:none" aria-hidden="true">FM</span><h1 id="team-name">Frank Mir Odds</h1></div><div class="rd-fh-stats" style="display:none"><div class="rd-fh-tile"><span class="rd-fh-val">21</span><span class="rd-fh-lbl">Fights tracked</span></div><div class="rd-fh-tile"><span class="rd-fh-val">21</span><span class="rd-fh-lbl">With odds</span></div><div class="rd-fh-tile"><span class="rd-fh-val">+70.6%</span><span class="rd-fh-lbl">Biggest move</span></div></div><div id="page-inner-wrapper"><div id="page-content"><div id="team-stats-container" style="display: inline-block"><table class="team-stats-table" cellspacing="0" summary="Odds history for Frank Mir"><thead><tr><th>Matchup</th><th style="text-align: right; padding-right: 4px;">Open</th><th style="text-align: center; width: 110px;" colspan="3">Closing range</th><th class="header-movement">Movement</th><th></th><th class="item-non-mobile" style="padding-left: 20px">Event</th></tr></thead><tbody><tr class="event-header item-mobile-only-row"><td colspan="8" scope="row"><a href="/events/triller-triad-combat-2379">Triller Triad Combat</a> Nov 27th 2021</td></tr><tr class="main-row"><th class="oppcell"><a href="/fighters/frank-mir-123">Frank Mir</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID0">+165</span></td><td class="moneyline"><span id="oID1">+700</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0; padding-right: 7px;"><span id="oID2">+1000</span></td><td class="chart-cell" data-sparkline="2.65, 10, 9, 8, 7.25, 7.5, 7.25, 7, 7.3333333333333, 9" data-li="[25314,1]" rowspan="2"></td><td rowspan="2" class="change-cell"><span class="teamPercChange" data-li="[25314,1]">
+                                                    +70.6%<span class="mv-up" style="color: #4BCA02;position:relative; margin-left: 0">▲</span></span></td><td class="item-non-mobile" scope="row" style="padding-left: 20px"><a href="/events/triller-triad-combat-2379" >Triller Triad Combat</a></td></tr><tr><th class="oppcell"><a href="/fighters/kubrat-pulev-12881">Kubrat Pulev</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID3">-205</span></td><td class="moneyline"><span id="oID4">-2000</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0"><span id="oID5">-1400</span></td><td class="item-non-mobile" style="padding-left: 20px; color: #767676">Nov 27th 2021</td></tr><tr class="event-header item-mobile-only-row"><td colspan="8" scope="row"><a href="/events/bellator-231-mir-vs-nelson-2-1798">Bellator 231: Mir vs. Nelson 2</a> Oct 25th 2019</td></tr><tr class="main-row"><th class="oppcell"><a href="/fighters/frank-mir-123">Frank Mir</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID6">+110</span></td><td class="moneyline"><span id="oID7">+165</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0; padding-right: 7px;"><span id="oID8">+183</span></td><td class="chart-cell" data-sparkline="2.1, 2.6, 2.6, 2.5166666666667, 2.55, 2.5666666666667, 2.6833333333333, 2.7166666666667, 2.8666666666667, 2.7266666666667" data-li="[18960,1]" rowspan="2"></td><td rowspan="2" class="change-cell"><span class="teamPercChange" data-li="[18960,1]">
+                                                    +23.1%<span class="mv-up" style="color: #4BCA02;position:relative; margin-left: 0">▲</span></span></td><td class="item-non-mobile" scope="row" style="padding-left: 20px"><a href="/events/bellator-231-mir-vs-nelson-2-1798" >Bellator 231: Mir vs. Nelson 2</a></td></tr><tr><th class="oppcell"><a href="/fighters/roy-nelson-338">Roy Nelson</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID9">-140</span></td><td class="moneyline"><span id="oID10">-213</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0"><span id="oID11">-200</span></td><td class="item-non-mobile" style="padding-left: 20px; color: #767676">Oct 25th 2019</td></tr><tr class="event-header item-mobile-only-row"><td colspan="8" scope="row"><a href="/events/bellator-and-uso-present-salute-the-troops-1609">Bellator and USO Present: Salute the Troops</a> Dec 14th 2018</td></tr><tr class="main-row"><th class="oppcell"><a href="/fighters/frank-mir-123">Frank Mir</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID12">-160</span></td><td class="moneyline"><span id="oID13">+100</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0; padding-right: 7px;"><span id="oID14">+110</span></td><td class="chart-cell" data-sparkline="1.625, 1.86957, 1.90909, 1.86957, 2.004545, 2.0933333333333, 2.0766666666667, 2.1333333333333, 2.1333333333333, 2.0333333333333" data-li="[16941,1]" rowspan="2"></td><td rowspan="2" class="change-cell"><span class="teamPercChange" data-li="[16941,1]">
+                                                    +20%<span class="mv-up" style="color: #4BCA02;position:relative; margin-left: 0">▲</span></span></td><td class="item-non-mobile" scope="row" style="padding-left: 20px"><a href="/events/bellator-and-uso-present-salute-the-troops-1609" >Bellator and USO Present: Salute the Troops</a></td></tr><tr><th class="oppcell"><a href="/fighters/javy-ayala-3057">Javy Ayala</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID15">+120</span></td><td class="moneyline"><span id="oID16">-139</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0"><span id="oID17">-120</span></td><td class="item-non-mobile" style="padding-left: 20px; color: #767676">Dec 14th 2018</td></tr><tr class="event-header item-mobile-only-row"><td colspan="8" scope="row"><a href="/events/bellator-198-fedor-vs-mir-1463">Bellator 198: Fedor vs. Mir</a> Apr 28th 2018</td></tr><tr class="main-row"><th class="oppcell"><a href="/fighters/frank-mir-123">Frank Mir</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID18">-180</span></td><td class="moneyline"><span id="oID19">-145</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0; padding-right: 7px;"><span id="oID20">-144</span></td><td class="chart-cell" data-sparkline="1.55556, 1.56439, 1.579835, 1.598215, 1.61553, 1.669645, 1.68287, 1.669645, 1.65733, 1.69205" data-li="[15057,2]" rowspan="2"></td><td rowspan="2" class="change-cell"><span class="teamPercChange" data-li="[15057,2]">
+                                                    +7.9%<span class="mv-up" style="color: #4BCA02;position:relative; margin-left: 0">▲</span></span></td><td class="item-non-mobile" scope="row" style="padding-left: 20px"><a href="/events/bellator-198-fedor-vs-mir-1463" >Bellator 198: Fedor vs. Mir</a></td></tr><tr><th class="oppcell"><a href="/fighters/fedor-emelianenko-390">Fedor Emelianenko</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID21">+140</span></td><td class="moneyline"><span id="oID22">+124</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0"><span id="oID23">+125</span></td><td class="item-non-mobile" style="padding-left: 20px; color: #767676">Apr 28th 2018</td></tr><tr class="event-header item-mobile-only-row"><td colspan="8" scope="row"><a href="/events/ufc-fight-night-85-hunt-vs-mir-1062">UFC Fight Night 85: Hunt vs. Mir</a> Mar 19th 2016</td></tr><tr class="main-row"><th class="oppcell"><a href="/fighters/frank-mir-123">Frank Mir</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID24">+125</span></td><td class="moneyline"><span id="oID25">+115</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0; padding-right: 7px;"><span id="oID26">+130</span></td><td class="chart-cell" data-sparkline="2.25, 2.55, 2.525, 2.55, 2.525, 2.51, 2.525, 2.515, 2.45, 2.225" data-li="[11359,1]" rowspan="2"></td><td rowspan="2" class="change-cell"><span class="teamPercChange" data-li="[11359,1]">
+                                                    -0.9%<span class="mv-down" style="color: #E93524;position:relative; margin-left: 0">▼</span></span></td><td class="item-non-mobile" scope="row" style="padding-left: 20px"><a href="/events/ufc-fight-night-85-hunt-vs-mir-1062" >UFC Fight Night 85: Hunt vs. Mir</a></td></tr><tr><th class="oppcell"><a href="/fighters/mark-hunt-810">Mark Hunt</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID27">-165</span></td><td class="moneyline"><span id="oID28">-150</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0"><span id="oID29">-135</span></td><td class="item-non-mobile" style="padding-left: 20px; color: #767676">Mar 19th 2016</td></tr><tr class="event-header item-mobile-only-row"><td colspan="8" scope="row"><a href="/events/ufc-191-johnson-vs-dodson-ii-992">UFC 191: Johnson vs. Dodson II</a> Sep 5th 2015</td></tr><tr class="main-row"><th class="oppcell"><a href="/fighters/frank-mir-123">Frank Mir</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID30">+140</span></td><td class="moneyline"><span id="oID31">+135</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0; padding-right: 7px;"><span id="oID32">+135</span></td><td class="chart-cell" data-sparkline="2.4, 2.65, 2.525, 2.5, 2.475, 2.5, 2.46, 2.445, 2.3, 2.35" data-li="[10580,2]" rowspan="2"></td><td rowspan="2" class="change-cell"><span class="teamPercChange" data-li="[10580,2]">
+                                                    -2.1%<span class="mv-down" style="color: #E93524;position:relative; margin-left: 0">▼</span></span></td><td class="item-non-mobile" scope="row" style="padding-left: 20px"><a href="/events/ufc-191-johnson-vs-dodson-ii-992" >UFC 191: Johnson vs. Dodson II</a></td></tr><tr><th class="oppcell"><a href="/fighters/andrei-arlovski-487">Andrei Arlovski</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID33">-180</span></td><td class="moneyline"><span id="oID34">-155</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0"><span id="oID35">-155</span></td><td class="item-non-mobile" style="padding-left: 20px; color: #767676">Sep 5th 2015</td></tr><tr class="event-header item-mobile-only-row"><td colspan="8" scope="row"><a href="/events/ufc-fight-night-71-mir-vs-duffee-965">UFC Fight Night 71: Mir vs. Duffee</a> Jul 15th 2015</td></tr><tr class="main-row"><th class="oppcell"><a href="/fighters/frank-mir-123">Frank Mir</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID36">+135</span></td><td class="moneyline"><span id="oID37">+155</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0; padding-right: 7px;"><span id="oID38">+165</span></td><td class="chart-cell" data-sparkline="2.35, 2.55, 2.6, 2.65, 2.625, 2.65, 2.675, 2.725, 2.775, 2.6" data-li="[10151,1]" rowspan="2"></td><td rowspan="2" class="change-cell"><span class="teamPercChange" data-li="[10151,1]">
+                                                    +9.6%<span class="mv-up" style="color: #4BCA02;position:relative; margin-left: 0">▲</span></span></td><td class="item-non-mobile" scope="row" style="padding-left: 20px"><a href="/events/ufc-fight-night-71-mir-vs-duffee-965" >UFC Fight Night 71: Mir vs. Duffee</a></td></tr><tr><th class="oppcell"><a href="/fighters/todd-duffee-1131">Todd Duffee</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID39">-175</span></td><td class="moneyline"><span id="oID40">-190</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0"><span id="oID41">-180</span></td><td class="item-non-mobile" style="padding-left: 20px; color: #767676">Jul 15th 2015</td></tr><tr class="event-header item-mobile-only-row"><td colspan="8" scope="row"><a href="/events/ufc-fight-night-61-bigfoot-vs-mir-923">UFC Fight Night 61: Bigfoot vs. Mir</a> Feb 22nd 2015</td></tr><tr class="main-row"><th class="oppcell"><a href="/fighters/frank-mir-123">Frank Mir</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID42">+145</span></td><td class="moneyline"><span id="oID43">+145</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0; padding-right: 7px;"><span id="oID44">+145</span></td><td class="chart-cell" data-sparkline="2.45, 2.8, 3, 3.05, 3, 3.025, 3.075, 3.1, 3.55, 2.45" data-li="[9481,2]" rowspan="2"></td><td rowspan="2" class="change-cell"><span class="teamPercChange" data-li="[9481,2]">
+                                                    0%<span class="" style="color: ;position:relative; margin-left: 0"></span></span></td><td class="item-non-mobile" scope="row" style="padding-left: 20px"><a href="/events/ufc-fight-night-61-bigfoot-vs-mir-923" >UFC Fight Night 61: Bigfoot vs. Mir</a></td></tr><tr><th class="oppcell"><a href="/fighters/antonio-silva-349">Antonio Silva</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID45">-185</span></td><td class="moneyline"><span id="oID46">-165</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0"><span id="oID47">-155</span></td><td class="item-non-mobile" style="padding-left: 20px; color: #767676">Feb 22nd 2015</td></tr><tr class="event-header item-mobile-only-row"><td colspan="8" scope="row"><a href="/events/ufc-169-barao-vs-faber-737">UFC 169: Barao vs. Faber</a> Feb 1st 2014</td></tr><tr class="main-row"><th class="oppcell"><a href="/fighters/frank-mir-123">Frank Mir</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID48">+205</span></td><td class="moneyline"><span id="oID49">+330</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0; padding-right: 7px;"><span id="oID50">+375</span></td><td class="chart-cell" data-sparkline="3.05, 3.4, 3.5, 3.45, 3.5, 3.525, 3.55, 3.6, 3.7, 4.525" data-li="[7432,2]" rowspan="2"></td><td rowspan="2" class="change-cell"><span class="teamPercChange" data-li="[7432,2]">
+                                                    +32.7%<span class="mv-up" style="color: #4BCA02;position:relative; margin-left: 0">▲</span></span></td><td class="item-non-mobile" scope="row" style="padding-left: 20px"><a href="/events/ufc-169-barao-vs-faber-737" >UFC 169: Barao vs. Faber</a></td></tr><tr><th class="oppcell"><a href="/fighters/alistair-overeem-246">Alistair Overeem</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID51">-285</span></td><td class="moneyline"><span id="oID52">-430</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0"><span id="oID53">-420</span></td><td class="item-non-mobile" style="padding-left: 20px; color: #767676">Feb 1st 2014</td></tr><tr class="event-header item-mobile-only-row"><td colspan="8" scope="row"><a href="/events/ufc-164-henderson-vs-pettis-ii-691">UFC 164: Henderson vs. Pettis II</a> Aug 31st 2013</td></tr><tr class="main-row"><th class="oppcell"><a href="/fighters/frank-mir-123">Frank Mir</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID54">+170</span></td><td class="moneyline"><span id="oID55">+155</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0; padding-right: 7px;"><span id="oID56">+167</span></td><td class="chart-cell" data-sparkline="2.7, 2.55, 2.6, 2.65, 2.625, 2.6, 2.575, 2.55, 2.5, 2.61" data-li="[7079,1]" rowspan="2"></td><td rowspan="2" class="change-cell"><span class="teamPercChange" data-li="[7079,1]">
+                                                    -3.4%<span class="mv-down" style="color: #E93524;position:relative; margin-left: 0">▼</span></span></td><td class="item-non-mobile" scope="row" style="padding-left: 20px"><a href="/events/ufc-164-henderson-vs-pettis-ii-691" >UFC 164: Henderson vs. Pettis II</a></td></tr><tr><th class="oppcell"><a href="/fighters/josh-barnett-512">Josh Barnett</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID57">-230</span></td><td class="moneyline"><span id="oID58">-185</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0"><span id="oID59">-178</span></td><td class="item-non-mobile" style="padding-left: 20px; color: #767676">Aug 31st 2013</td></tr><tr class="event-header item-mobile-only-row"><td colspan="8" scope="row"><a href="/events/ufc-on-fox-7-henderson-vs-melendez-634">UFC on FOX 7: Henderson vs. Melendez</a> Apr 20th 2013</td></tr><tr class="main-row"><th class="oppcell"><a href="/fighters/frank-mir-123">Frank Mir</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID60">+250</span></td><td class="moneyline"><span id="oID61">+315</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0; padding-right: 7px;"><span id="oID62">+335</span></td><td class="chart-cell" data-sparkline="3.5, 4.075, 4.125, 4.15, 4.2, 4.25, 4.225, 4.225, 4.3, 4.25" data-li="[6459,2]" rowspan="2"></td><td rowspan="2" class="change-cell"><span class="teamPercChange" data-li="[6459,2]">
+                                                    +17.6%<span class="mv-up" style="color: #4BCA02;position:relative; margin-left: 0">▲</span></span></td><td class="item-non-mobile" scope="row" style="padding-left: 20px"><a href="/events/ufc-on-fox-7-henderson-vs-melendez-634" >UFC on FOX 7: Henderson vs. Melendez</a></td></tr><tr><th class="oppcell"><a href="/fighters/daniel-cormier-1583">Daniel Cormier</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID63">-350</span></td><td class="moneyline"><span id="oID64">-375</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0"><span id="oID65">-375</span></td><td class="item-non-mobile" style="padding-left: 20px; color: #767676">Apr 20th 2013</td></tr><tr class="event-header item-mobile-only-row"><td colspan="8" scope="row"><a href="/events/ufc-146-dos-santos-vs-mir-502">UFC 146: Dos Santos vs. Mir</a> May 26th 2012</td></tr><tr class="main-row"><th class="oppcell"><a href="/fighters/frank-mir-123">Frank Mir</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID66">+380</span></td><td class="moneyline"><span id="oID67">+380</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0; padding-right: 7px;"><span id="oID68">+420</span></td><td class="chart-cell" data-sparkline="4.8, 5.25, 5.1, 5.175, 5.125, 5.225, 5.175, 5.15, 5.225, 5" data-li="[5358,1]" rowspan="2"></td><td rowspan="2" class="change-cell"><span class="teamPercChange" data-li="[5358,1]">
+                                                    +4%<span class="mv-up" style="color: #4BCA02;position:relative; margin-left: 0">▲</span></span></td><td class="item-non-mobile" scope="row" style="padding-left: 20px"><a href="/events/ufc-146-dos-santos-vs-mir-502" >UFC 146: Dos Santos vs. Mir</a></td></tr><tr><th class="oppcell"><a href="/fighters/junior-dos-santos-851">Junior Dos Santos</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID69">-520</span></td><td class="moneyline"><span id="oID70">-475</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0"><span id="oID71">-455</span></td><td class="item-non-mobile" style="padding-left: 20px; color: #767676">May 26th 2012</td></tr><tr class="event-header item-mobile-only-row"><td colspan="8" scope="row"><a href="/events/ufc-140-jones-vs-machida-451">UFC 140: Jones vs. Machida</a> Dec 10th 2011</td></tr><tr class="main-row"><th class="oppcell"><a href="/fighters/frank-mir-123">Frank Mir</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID72">-270</span></td><td class="moneyline"><span id="oID73">-210</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0; padding-right: 7px;"><span id="oID74">-210</span></td><td class="chart-cell" data-sparkline="1.37037, 1.37037, 1.37736, 1.4, 1.37037, 1.38462, 1.4, 1.40816, 1.4, 1.47619" data-li="[4519,2]" rowspan="2"></td><td rowspan="2" class="change-cell"><span class="teamPercChange" data-li="[4519,2]">
+                                                    +7.2%<span class="mv-up" style="color: #4BCA02;position:relative; margin-left: 0">▲</span></span></td><td class="item-non-mobile" scope="row" style="padding-left: 20px"><a href="/events/ufc-140-jones-vs-machida-451" >UFC 140: Jones vs. Machida</a></td></tr><tr><th class="oppcell"><a href="/fighters/antonio-rodrigo-nogueira-46">Antonio Rodrigo Nogueira</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID75">+190</span></td><td class="moneyline"><span id="oID76">+190</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0"><span id="oID77">+190</span></td><td class="item-non-mobile" style="padding-left: 20px; color: #767676">Dec 10th 2011</td></tr><tr class="event-header item-mobile-only-row"><td colspan="8" scope="row"><a href="/events/ufc-130-rampage-vs-hamill-357">UFC 130: Rampage vs. Hamill</a> May 28th 2011</td></tr><tr class="main-row"><th class="oppcell"><a href="/fighters/frank-mir-123">Frank Mir</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID78">-115</span></td><td class="moneyline"><span id="oID79">-120</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0; padding-right: 7px;"><span id="oID80">-120</span></td><td class="chart-cell" data-sparkline="1.86957, 1.90909, 1.83333, 1.8, 1.76923, 1.83333, 1.8, 1.76923, 1.74074, 1.83333" data-li="[3518,1]" rowspan="2"></td><td rowspan="2" class="change-cell"><span class="teamPercChange" data-li="[3518,1]">
+                                                    -2%<span class="mv-down" style="color: #E93524;position:relative; margin-left: 0">▼</span></span></td><td class="item-non-mobile" scope="row" style="padding-left: 20px"><a href="/events/ufc-130-rampage-vs-hamill-357" >UFC 130: Rampage vs. Hamill</a></td></tr><tr><th class="oppcell"><a href="/fighters/roy-nelson-338">Roy Nelson</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID81">-115</span></td><td class="moneyline"><span id="oID82">+110</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0"><span id="oID83">+110</span></td><td class="item-non-mobile" style="padding-left: 20px; color: #767676">May 28th 2011</td></tr><tr class="event-header item-mobile-only-row"><td colspan="8" scope="row"><a href="/events/ufc-119-mir-vs-cro-cop-296">UFC 119: Mir vs. Cro Cop</a> Sep 25th 2010</td></tr><tr class="main-row"><th class="oppcell"><a href="/fighters/frank-mir-123">Frank Mir</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID84">-280</span></td><td class="moneyline"><span id="oID85">-210</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0; padding-right: 7px;"><span id="oID86">-210</span></td><td class="chart-cell" data-sparkline="1.35714, 1.47619, 1.44444, 1.45455, 1.47619, 1.45455, 1.41667, 1.39216, 1.37037, 1.47619" data-li="[3038,1]" rowspan="2"></td><td rowspan="2" class="change-cell"><span class="teamPercChange" data-li="[3038,1]">
+                                                    +8.1%<span class="mv-up" style="color: #4BCA02;position:relative; margin-left: 0">▲</span></span></td><td class="item-non-mobile" scope="row" style="padding-left: 20px"><a href="/events/ufc-119-mir-vs-cro-cop-296" >UFC 119: Mir vs. Cro Cop</a></td></tr><tr><th class="oppcell"><a href="/fighters/mirko-filipovic-59">Mirko Filipovic</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID87">+200</span></td><td class="moneyline"><span id="oID88">+190</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0"><span id="oID89">+190</span></td><td class="item-non-mobile" style="padding-left: 20px; color: #767676">Sep 25th 2010</td></tr><tr class="event-header item-mobile-only-row"><td colspan="8" scope="row"><a href="/events/ufc-111-st-pierre-vs-hardy-236">UFC 111: St-Pierre vs. Hardy</a> Mar 27th 2010</td></tr><tr class="main-row"><th class="oppcell"><a href="/fighters/frank-mir-123">Frank Mir</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID90">-185</span></td><td class="moneyline"><span id="oID91">-150</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0; padding-right: 7px;"><span id="oID92">-150</span></td><td class="chart-cell" data-sparkline="1.54054, 1.76923, 1.74074, 1.68966, 1.66667, 1.74074, 1.71429, 1.74074, 1.76923, 1.66667" data-li="[2294,1]" rowspan="2"></td><td rowspan="2" class="change-cell"><span class="teamPercChange" data-li="[2294,1]">
+                                                    +7.6%<span class="mv-up" style="color: #4BCA02;position:relative; margin-left: 0">▲</span></span></td><td class="item-non-mobile" scope="row" style="padding-left: 20px"><a href="/events/ufc-111-st-pierre-vs-hardy-236" >UFC 111: St-Pierre vs. Hardy</a></td></tr><tr><th class="oppcell"><a href="/fighters/shane-carwin-639">Shane Carwin</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID93">+155</span></td><td class="moneyline"><span id="oID94">+140</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0"><span id="oID95">+140</span></td><td class="item-non-mobile" style="padding-left: 20px; color: #767676">Mar 27th 2010</td></tr><tr class="event-header item-mobile-only-row"><td colspan="8" scope="row"><a href="/events/ufc-107-penn-vs-sanchez-189">UFC 107: Penn vs Sanchez</a> Dec 12th 2009</td></tr><tr class="main-row"><th class="oppcell"><a href="/fighters/frank-mir-123">Frank Mir</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID96">-155</span></td><td class="moneyline"><span id="oID97">-160</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0; padding-right: 7px;"><span id="oID98">-160</span></td><td class="chart-cell" data-sparkline="1.64516, 1.55556, 1.52632, 1.51282, 1.58824, 1.57143, 1.58824, 1.54054, 1.47619, 1.625" data-li="[1855,2]" rowspan="2"></td><td rowspan="2" class="change-cell"><span class="teamPercChange" data-li="[1855,2]">
+                                                    -1.2%<span class="mv-down" style="color: #E93524;position:relative; margin-left: 0">▼</span></span></td><td class="item-non-mobile" scope="row" style="padding-left: 20px"><a href="/events/ufc-107-penn-vs-sanchez-189" >UFC 107: Penn vs Sanchez</a></td></tr><tr><th class="oppcell"><a href="/fighters/cheick-kongo-58">Cheick Kongo</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID99">+125</span></td><td class="moneyline"><span id="oID100">+150</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0"><span id="oID101">+150</span></td><td class="item-non-mobile" style="padding-left: 20px; color: #767676">Dec 12th 2009</td></tr><tr class="event-header item-mobile-only-row"><td colspan="8" scope="row"><a href="/events/ufc-100-137">UFC 100</a> Jul 11th 2009</td></tr><tr class="main-row"><th class="oppcell"><a href="/fighters/frank-mir-123">Frank Mir</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID102">+155</span></td><td class="moneyline"><span id="oID103">+205</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0; padding-right: 7px;"><span id="oID104">+205</span></td><td class="chart-cell" data-sparkline="2.55, 3.25, 3.2, 3.1, 3, 3.15, 2.85, 3, 3.05, 3.05" data-li="[1144,2]" rowspan="2"></td><td rowspan="2" class="change-cell"><span class="teamPercChange" data-li="[1144,2]">
+                                                    +16.4%<span class="mv-up" style="color: #4BCA02;position:relative; margin-left: 0">▲</span></span></td><td class="item-non-mobile" scope="row" style="padding-left: 20px"><a href="/events/ufc-100-137" >UFC 100</a></td></tr><tr><th class="oppcell"><a href="/fighters/brock-lesnar-347">Brock Lesnar</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID105">-185</span></td><td class="moneyline"><span id="oID106">-225</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0"><span id="oID107">-225</span></td><td class="item-non-mobile" style="padding-left: 20px; color: #767676">Jul 11th 2009</td></tr><tr class="event-header item-mobile-only-row"><td colspan="8" scope="row"><a href="/events/ufc-92-the-ultimate-2008-95">UFC 92: The Ultimate 2008</a> Dec 27th 2008</td></tr><tr class="main-row"><th class="oppcell"><a href="/fighters/frank-mir-123">Frank Mir</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID108">+260</span></td><td class="moneyline"><span id="oID109">+325</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0; padding-right: 7px;"><span id="oID110">+325</span></td><td class="chart-cell" data-sparkline="3.6, 3.7, 4, 4.15, 4.1, 4.25, 4.15, 4, 3.95, 4.25" data-li="[839,2]" rowspan="2"></td><td rowspan="2" class="change-cell"><span class="teamPercChange" data-li="[839,2]">
+                                                    +15.3%<span class="mv-up" style="color: #4BCA02;position:relative; margin-left: 0">▲</span></span></td><td class="item-non-mobile" scope="row" style="padding-left: 20px"><a href="/events/ufc-92-the-ultimate-2008-95" >UFC 92: The Ultimate 2008</a></td></tr><tr><th class="oppcell"><a href="/fighters/antonio-rodrigo-nogueira-46">Antonio Rodrigo Nogueira</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID111">-350</span></td><td class="moneyline"><span id="oID112">-400</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0"><span id="oID113">-400</span></td><td class="item-non-mobile" style="padding-left: 20px; color: #767676">Dec 27th 2008</td></tr><tr class="event-header item-mobile-only-row"><td colspan="8" scope="row"><a href="/events/ufc-81-breaking-point-28">UFC 81: Breaking Point</a> Feb 2nd 2008</td></tr><tr class="main-row"><th class="oppcell"><a href="/fighters/frank-mir-123">Frank Mir</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID114">+135</span></td><td class="moneyline"><span id="oID115">+155</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0; padding-right: 7px;"><span id="oID116">+155</span></td><td class="chart-cell" data-sparkline="2.35, 2.4, 2.35, 2.3, 2.25, 2.35, 2.25, 2.25, 2.3, 2.55" data-li="[221,2]" rowspan="2"></td><td rowspan="2" class="change-cell"><span class="teamPercChange" data-li="[221,2]">
+                                                    +7.8%<span class="mv-up" style="color: #4BCA02;position:relative; margin-left: 0">▲</span></span></td><td class="item-non-mobile" scope="row" style="padding-left: 20px"><a href="/events/ufc-81-breaking-point-28" >UFC 81: Breaking Point</a></td></tr><tr><th class="oppcell"><a href="/fighters/brock-lesnar-347">Brock Lesnar</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID117">-155</span></td><td class="moneyline"><span id="oID118">-175</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0"><span id="oID119">-175</span></td><td class="item-non-mobile" style="padding-left: 20px; color: #767676">Feb 2nd 2008</td></tr><tr class="event-header item-mobile-only-row"><td colspan="8" scope="row"><a href="/events/ufc-74-respect-7">UFC 74: Respect</a> Aug 25th 2007</td></tr><tr class="main-row"><th class="oppcell"><a href="/fighters/frank-mir-123">Frank Mir</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID120">-120</span></td><td class="moneyline"><span id="oID121">-165</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0; padding-right: 7px;"><span id="oID122">-165</span></td><td class="chart-cell" data-sparkline="1.83333, 1.47619, 1.46512, 1.54054, 1.60606, 1.625, 1.60606, 1.625, 1.57143, 1.60606" data-li="[71,2]" rowspan="2"></td><td rowspan="2" class="change-cell"><span class="teamPercChange" data-li="[71,2]">
+                                                    -14.2%<span class="mv-down" style="color: #E93524;position:relative; margin-left: 0">▼</span></span></td><td class="item-non-mobile" scope="row" style="padding-left: 20px"><a href="/events/ufc-74-respect-7" >UFC 74: Respect</a></td></tr><tr><th class="oppcell"><a href="/fighters/antoni-hardonk-122">Antoni Hardonk</a></td><td class="moneyline" style="padding-right: 4px;"><span id="oID123">-120</span></td><td class="moneyline"><span id="oID124">+145</span></td><td class="dash-cell">...</td><td class="moneyline" style="text-align: left; padding-left: 0"><span id="oID125">+145</span></td><td class="item-non-mobile" style="padding-left: 20px; color: #767676">Aug 25th 2007</td></tr></tbody></table></div></div></div></div></div><div id="page-bottom"></div>
+<style>
+.bfo-ftr{max-width:1100px;margin:22px auto 8px;padding:0 12px;box-sizing:border-box}
+.bfo-ftr-grid{display:grid;grid-template-columns:2fr 1fr;gap:18px;align-items:start}
+.bfo-ftr-card{border:1px solid #e2e5e9;border-radius:12px;background:#fff;overflow:hidden}
+.bfo-ftr-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #edf0f3;border-left:4px solid #d4202f;background:#f7f8fa}
+.bfo-ftr-head span{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#1a1a1a}
+.bfo-ftr-head a{font-size:12px;font-weight:600;color:#d4202f;text-decoration:none}
+.bfo-ftr-head a:hover{text-decoration:underline}
+.bfo-ftr-newslist{list-style:none;margin:0;padding:0}
+.bfo-ftr-newslist li{border-bottom:1px solid #f0f2f5}
+.bfo-ftr-newslist li:last-child{border-bottom:none}
+.bfo-ftr-newslist a{display:flex;justify-content:space-between;gap:14px;align-items:baseline;padding:12px 16px;text-decoration:none;color:#222;transition:background .12s}
+.bfo-ftr-newslist a:hover{background:#f8f9fc;color:#8b1a1a}
+.bfo-ftr-newslist .t{font-size:14px;font-weight:600;line-height:1.35}
+.bfo-ftr-newslist time{font-size:11.5px;color:#9aa0a6;white-space:nowrap;flex-shrink:0}
+.bfo-ftr-evlist{list-style:none;margin:0;padding:0}
+.bfo-ftr-evlist li{border-bottom:1px solid #f0f2f5}
+.bfo-ftr-evlist a{display:flex;align-items:center;gap:10px;padding:11px 14px;text-decoration:none;color:#222;transition:background .12s}
+.bfo-ftr-evlist a:hover{background:#f8f9fc}
+.bfo-ftr-ev-main{min-width:0;flex:1}
+.bfo-ftr-ev-t{display:block;font-size:13.5px;font-weight:600;line-height:1.3;color:#1a1a1a}
+.bfo-ftr-evlist a:hover .bfo-ftr-ev-t{color:#8b1a1a}
+.bfo-ftr-ev-d{font-size:11px;font-weight:600;color:#9aa0a6;text-transform:uppercase;letter-spacing:.3px}
+.bfo-ftr-ev-c{flex:none;min-width:24px;height:24px;padding:0 7px;border-radius:12px;background:#d4202f;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.bfo-ftr-more{display:block;padding:11px 14px;font-size:12px;font-weight:600;color:#d4202f;text-decoration:none;text-align:center;border-top:1px solid #edf0f3;background:#fbfbfc}
+.bfo-ftr-more:hover{background:#f5f6f8}
+@media(max-width:760px){.bfo-ftr-grid{grid-template-columns:1fr}}
+@media(max-width:600px){.bfo-ftr-newslist time{display:none}}
+</style>
+<section class="bfo-ftr" aria-label="More MMA odds and news">
+    <div class="bfo-ftr-grid">
+                <div class="bfo-ftr-col">
+            <div class="bfo-ftr-card">
+                <div class="bfo-ftr-head"><span>Latest MMA News</span><a href="/news">All news &rarr;</a></div>
+                <ul class="bfo-ftr-newslist">
+                                        <li><a href="/news/ufc-vegas-121-odds-picks-predictions">
+                        <span class="t">UFC Vegas 121 Odds, Picks &amp; Predictions</span>
+                        <time datetime="2026-09-26T06:44:36">Sep 26, 2026</time>                    </a></li>
+                                        <li><a href="/news/contender-series-week-7-picks-odds-predictions">
+                        <span class="t">Contender Series Week 7: Picks, Odds &amp; Predictions</span>
+                        <time datetime="2026-09-21T06:13:49">Sep 21, 2026</time>                    </a></li>
+                                        <li><a href="/news/ufc-331-recap-joshua-van-outclasses-pantoja-as-sean-sharaf-shocks-the-world">
+                        <span class="t">UFC 331 Recap: Joshua Van Outclasses Pantoja as Sean Sharaf Shocks the World</span>
+                        <time datetime="2026-09-20T06:05:41">Sep 20, 2026</time>                    </a></li>
+                                        <li><a href="/news/ufc-331-prediction-markets-picks-predictions">
+                        <span class="t">UFC 331: Prediction Markets, Picks &amp; Predictions</span>
+                        <time datetime="2026-09-19T06:14:25">Sep 19, 2026</time>                    </a></li>
+                                        <li><a href="/news/ufc-331-breakdown-arman-tsarukyan-vs-mauricio-ruffy">
+                        <span class="t">UFC 331 Breakdown: Arman Tsarukyan vs. Mauricio Ruffy</span>
+                        <time datetime="2026-09-17T16:54:10">Sep 17, 2026</time>                    </a></li>
+                                        <li><a href="/news/ufc-331-breakdown-joshua-van-vs-alexandre-pantoja-2">
+                        <span class="t">UFC 331 Breakdown: Joshua Van vs. Alexandre Pantoja 2</span>
+                        <time datetime="2026-09-17T16:07:19">Sep 17, 2026</time>                    </a></li>
+                                    </ul>
+            </div>
+        </div>
+                        <div class="bfo-ftr-col">
+            <div class="bfo-ftr-card">
+                <div class="bfo-ftr-head"><span>Upcoming events</span></div>
+                <ul class="bfo-ftr-evlist">
+                                        <li><a href="/events/dana-4382">
+                        <span class="bfo-ftr-ev-main"><span class="bfo-ftr-ev-t">Dana</span><span class="bfo-ftr-ev-d">SEP 30</span></span>
+                        <span class="bfo-ftr-ev-c" title="3 fights with odds">3</span>
+                    </a></li>
+                                        <li><a href="/events/efc-worldwide-4383">
+                        <span class="bfo-ftr-ev-main"><span class="bfo-ftr-ev-t">EFC Worldwide</span><span class="bfo-ftr-ev-d">OCT 1</span></span>
+                        <span class="bfo-ftr-ev-c" title="8 fights with odds">8</span>
+                    </a></li>
+                                        <li><a href="/events/pfl-mena-4385">
+                        <span class="bfo-ftr-ev-main"><span class="bfo-ftr-ev-t">PFL Mena</span><span class="bfo-ftr-ev-d">OCT 2</span></span>
+                        <span class="bfo-ftr-ev-c" title="10 fights with odds">10</span>
+                    </a></li>
+                                        <li><a href="/events/ufc-4380">
+                        <span class="bfo-ftr-ev-main"><span class="bfo-ftr-ev-t">UFC</span><span class="bfo-ftr-ev-d">OCT 3</span></span>
+                        <span class="bfo-ftr-ev-c" title="9 fights with odds">9</span>
+                    </a></li>
+                                        <li><a href="/events/ufc-332-4330">
+                        <span class="bfo-ftr-ev-main"><span class="bfo-ftr-ev-t">UFC 332</span><span class="bfo-ftr-ev-d">OCT 4</span></span>
+                        <span class="bfo-ftr-ev-c" title="5 fights with odds">5</span>
+                    </a></li>
+                                    </ul>
+                <a class="bfo-ftr-more" href="/archive">More events &rarr;</a>
+            </div>
+        </div>
+            </div>
+</section>
+        </div>
+        <footer class="rd-footer">
+          <div class="rd-foot-links">
+            <a href="/">Home</a><span class="rd-foot-sep">·</span>
+                          <a href="#" onclick="setDesktop(true);">Desktop site</a><span class="rd-foot-sep">·</span>
+                        <a href="https://www.proboxingodds.com" target="_blank" rel="noopener">Boxing Odds</a><span class="rd-foot-sep">·</span><a href="/terms">Terms of service</a><span class="rd-foot-sep">·</span><a href="/privacy">Privacy Policy</a><span class="rd-foot-sep">·</span><a href="#">21+</a><span class="rd-foot-sep">·</span><a href="/responsiblegaming">Responsible Gaming</a><span class="rd-foot-sep">·</span><a href="https://www.begambleaware.org/" target="_blank" rel="noopener">BeGambleAware</a><span class="rd-foot-sep">·</span><a href="/cdn-cgi/l/email-protection#4120252c282f012324323527282629352e2525326f222e2c">Contact</a><span class="rd-foot-sep">·</span><a href="/cdn-cgi/l/email-protection#3352575e5a5d7351564047555a545b475c5757401d505c5e">Copyright &copy; 2026 Pacific Tide Media Inc.</a>
+          </div>
+          <div class="rd-foot-rg">Know your limits. For support with gambling issues, call 1-800-GAMBLER or visit <a href="https://www.ncpgambling.org/" target="_blank" rel="noopener">ncpgambling.org</a></div>
+        </footer>
+      </div>
+    </div>
+    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+    /* Parlay/Settings live on the nav row on desktop, but move up into the
+       header on small screens so they don't add a second line. One DOM node
+       (IDs intact for the odds JS), relocated by viewport. */
+    (function(){
+      var mq = window.matchMedia('(max-width: 768px)');
+      var ctrls = document.querySelector('.rd-header-controls');
+      var nav = document.querySelector('.rd-nav');
+      var header = document.querySelector('.rd-header');
+      if (!ctrls || !nav || !header) return;
+      function place(){ var t = mq.matches ? header : nav; if (ctrls.parentElement !== t) t.appendChild(ctrls); }
+      place();
+      if (mq.addEventListener) mq.addEventListener('change', place); else mq.addListener(place);
+    })();
+    /* Esc exits parlay mode (only when it's active, so it can't toggle it on). */
+    document.addEventListener('keydown', function(e){
+      if (e.key !== 'Escape' && e.keyCode !== 27) return;
+      var box = document.getElementById('parlay-mode-box');
+      var cb = box ? box.querySelector('.bfo-check-box') : null;
+      if (cb && cb.classList.contains('checked')) box.click();
+    });
+    /* Header search type-ahead: debounced fetch to /api/suggest, dropdown of
+       fighters/events with keyboard nav. */
+    (function(){
+      var form = document.querySelector('.rd-search');
+      if (!form) return;
+      var input = form.querySelector('input[name="query"]');
+      if (!input) return;
+      input.setAttribute('autocomplete', 'off');
+      var box = document.createElement('div');
+      box.className = 'rd-suggest';
+      form.appendChild(box);
+      var timer, lastQ = null, items = [], active = -1;
+      function close(){ box.classList.remove('show'); box.innerHTML = ''; active = -1; items = []; }
+      function setActive(i){
+        var links = box.querySelectorAll('a');
+        if (!links.length) return;
+        active = (i + links.length) % links.length;
+        links.forEach(function(a, n){ a.classList.toggle('active', n === active); });
+      }
+      function render(data){
+        items = data || [];
+        box.innerHTML = '';
+        if (!items.length){ close(); return; }
+        items.forEach(function(it){
+          var a = document.createElement('a');
+          a.href = it.url;
+          var n = document.createElement('span'); n.className = 'rd-sug-name'; n.textContent = it.name;
+          var t = document.createElement('span'); t.className = 'rd-sug-type'; t.textContent = it.type;
+          a.appendChild(n); a.appendChild(t);
+          box.appendChild(a);
+        });
+        active = -1;
+        box.classList.add('show');
+      }
+      input.addEventListener('input', function(){
+        var q = input.value.trim();
+        clearTimeout(timer);
+        if (q.length < 2){ close(); return; }
+        timer = setTimeout(function(){
+          if (q === lastQ) return;
+          lastQ = q;
+          fetch('/api/suggest?q=' + encodeURIComponent(q), { headers: { 'Accept': 'application/json' } })
+            .then(function(r){ return r.json(); })
+            .then(render)
+            .catch(function(){ close(); });
+        }, 150);
+      });
+      input.addEventListener('keydown', function(e){
+        if (!box.classList.contains('show')) return;
+        if (e.key === 'ArrowDown'){ e.preventDefault(); setActive(active + 1); }
+        else if (e.key === 'ArrowUp'){ e.preventDefault(); setActive(active - 1); }
+        else if (e.key === 'Enter'){
+          var links = box.querySelectorAll('a');
+          if (active >= 0 && links[active]){ e.preventDefault(); window.location.href = links[active].href; }
+        } else if (e.key === 'Escape'){ close(); }
+      });
+      document.addEventListener('click', function(e){ if (!form.contains(e.target)) close(); });
+    })();
+    /* Risk-disclosure tooltip for the "i" next to a bonus badge. Rendered as a
+       position:fixed node on <body> because the odds table's scroller clips
+       anything positioned inside it. Hover + focus + tap; Esc/scroll/outside
+       click dismiss. Text comes from data-disc ("Heading — body" is split). */
+    (function(){
+      var tip = null;
+      function build(){
+        tip = document.createElement('div');
+        tip.className = 'bfo-disc-tip';
+        document.body.appendChild(tip);
+        return tip;
+      }
+      function show(el){
+        var txt = el.getAttribute('data-disc');
+        if (!txt) return;
+        if (!tip) build();
+        var parts = txt.split(' — ');
+        var head = parts.length > 1 ? parts.shift() : '';
+        tip.innerHTML = '';
+        if (head){ var h = document.createElement('div'); h.className = 'bfo-disc-tip-h'; h.textContent = head; tip.appendChild(h); }
+        var b = document.createElement('div'); b.textContent = parts.join(' — '); tip.appendChild(b);
+        tip.style.display = 'block';
+        var r = el.getBoundingClientRect();
+        var w = tip.offsetWidth, th = tip.offsetHeight;
+        var left = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), window.innerWidth - w - 8);
+        var top = r.bottom + 8;
+        if (top + th > window.innerHeight - 8) top = Math.max(8, r.top - th - 8);
+        tip.style.left = left + 'px';
+        tip.style.top = top + 'px';
+      }
+      function hide(){ if (tip) tip.style.display = 'none'; }
+      document.querySelectorAll('.bonus-info').forEach(function(el){
+        el.removeAttribute('title'); /* JS present -> styled tooltip instead of the native one */
+        el.addEventListener('mouseenter', function(){ show(el); });
+        el.addEventListener('mouseleave', hide);
+        el.addEventListener('focus', function(){ show(el); });
+        el.addEventListener('blur', hide);
+        el.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); show(el); });
+        el.addEventListener('keydown', function(e){ if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); show(el); } });
+      });
+      document.addEventListener('click', function(e){ if (!e.target.closest('.bonus-info')) hide(); });
+      document.addEventListener('keydown', function(e){ if (e.key === 'Escape') hide(); });
+      window.addEventListener('scroll', hide, true);
+    })();
+    /* Featured-odds CTA: recompute the "to win" payout live as the stake changes.
+       data-odds is the American moneyline for the featured side. */
+    (function(){
+      function profit(stake, odds){ if (!stake || !odds) return 0; return odds > 0 ? stake * odds / 100 : stake * 100 / Math.abs(odds); }
+      function money(n){ n = Math.round(n * 100) / 100; return '$' + (Number.isInteger(n) ? n.toLocaleString() : n.toFixed(2)); }
+      document.querySelectorAll('.rd-odds-cta').forEach(function(cta){
+        var input = cta.querySelector('.rd-cta-stake');
+        var pEl = cta.querySelector('.rd-cta-profit');
+        var tEl = cta.querySelector('.rd-cta-total');
+        if (!input || !pEl) return;
+        var odds = parseInt(input.getAttribute('data-odds'), 10);
+        var bonus = parseFloat(pEl.getAttribute('data-bonus')) || 0;
+        function update(){
+          var stake = parseFloat(input.value) || 0;
+          var p = profit(stake, odds);
+          pEl.textContent = money(p);
+          pEl.title = money(stake + p + bonus) + (bonus > 0 ? ' total value (incl. bonus)' : ' total return');
+          if (tEl) tEl.textContent = '· ' + money(stake + p) + ' back';
+        }
+        input.addEventListener('input', update);
+        update();
+      });
+    })();
+    </script>
+    
+    <div id="chart-window" class="popup-window">
+        <div class="popup-header" id="chart-header">
+            <div></div><a href="#" class="cd-popup-close">&#10005;</a>
+        </div>
+        <div id="chart-area"></div><a href="#" target="_blank" rel="noopener">
+            <div id="chart-link" class="highlighted-button">Bet this line at bookie</div>
+        </a>
+        <div id="chart-disc" style="display: none; color: #333">*Currently this Sportsbook does not accept players that reside in the US. 18+ Gamble Responsibly</div>
+    </div>
+    <div id="parlay-window" class="popup-window">
+        <a href="#" class="rd-parlay-close" onclick="var b=document.getElementById('parlay-mode-box');if(b)b.click();return false;" aria-label="Exit parlay mode" title="Exit parlay mode">&#10005;</a>        <div class="popup-header" id="parlay-header">Parlay</div>
+        <div id="parlay-area">Click on a line to add it to your parlay</div>
+    </div>
+    <div id="bookie-settings-window" class="popup-window">
+        <div class="popup-header">Bookie display settings <a href="#" class="cd-popup-close">&#10005;</a></div>
+        <div id="bookie-settings-area">Drag to change order, show/hide using checkbox<ul id="bookie-order-items"></ul><input type="button" class="button" value="Reset to default settings" id="bookieResetDefault"></div>
+    </div>
+            <!-- Google Tag Manager (noscript) -->
+        <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-WGLQH4ZQ" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+        <!-- End Google Tag Manager (noscript) -->
+    </body>
+
+</html>
