@@ -108,13 +108,15 @@ CREATE TABLE round_stats (
     PRIMARY KEY (fight_id, fighter_id, round)
 );
 
--- Reserved: per-judge, per-round scores.
+-- Per-judge, per-round scores from official UFC scorecards (2020-08 to 2024-11 so far).
+-- Rounds after a finish aren't scored, so a finish has rows only for completed rounds.
 CREATE TABLE judge_scores (
     fight_id     TEXT NOT NULL REFERENCES fights(fight_id),
     fighter_id   TEXT NOT NULL REFERENCES fighters(fighter_id),
     round        INTEGER NOT NULL,
     judge        TEXT NOT NULL,
-    score        INTEGER,
+    score        INTEGER,                   -- after point deductions, as on the card
+    deduction    INTEGER NOT NULL DEFAULT 0,  -- points taken off this fighter that round
     source       TEXT NOT NULL,
     PRIMARY KEY (fight_id, fighter_id, round, judge)
 );
