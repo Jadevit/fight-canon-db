@@ -28,11 +28,12 @@ All tables link by UFC Stats ID.
 | `round_stats`        | fighter per round                | `fight_id`, `fighter_id`, `round` |
 | `fighters`           | fighter (bio + pro record)       | `fighter_id`                      |
 | `fighter_aliases`    | spelling of a fighter's name     | `fighter_id`                      |
-| `judge_scores`       | reserved (empty)                 | `fight_id`, `fighter_id`          |
+| `judge_scores`       | judge's score per round          | `fight_id`, `fighter_id`          |
 | `odds`               | fighter's betting line per fight | `fight_id`, `fighter_id`          |
 
 Stats that weren't recorded are `NULL`, not `0`. Odds are American and cover 2007 onward:
-the opening line and the lowest/highest closing line across sportsbooks.
+the opening line and the lowest/highest closing line across sportsbooks. Per-round judge
+scores come from official UFC scorecards and cover UFC fights from 2020-08 to 2024-11.
 
 `fight_participants.corner` is red (0) / blue (1) only from 2010-03-21 on. Before that
 UFC Stats usually lists the winner first, so don't use corner as a feature for older fights.

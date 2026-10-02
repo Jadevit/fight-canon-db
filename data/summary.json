@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-02T22:49:15+00:00",
+  "updated_at": "2026-10-02T23:20:07+00:00",
   "coverage": {
     "first_event_date": "1993-11-12",
     "last_event_date": "2026-09-29",
@@ -7,13 +7,14 @@
     "last_event_id": "7b461ccae8270207"
   },
   "rows": {
+    "promotions": 67,
     "fighters": 4619,
     "fighter_aliases": 8403,
     "events": 1275,
     "fights": 11578,
     "fight_participants": 23156,
     "round_stats": 50864,
-    "judge_scores": 0,
+    "judge_scores": 24450,
     "odds": 18558
   }
 }
