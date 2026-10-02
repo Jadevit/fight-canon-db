@@ -135,5 +135,12 @@ def is_no_contest(method: str | None) -> bool:
     return bool(method) and "no contest" in method.lower()
 
 
-def is_overturned(details: str | None) -> bool:
-    return bool(details) and "overturned" in details.lower()
+def is_overturned(method: str | None, details: str | None, no_contest: bool) -> bool:
+    """The result was changed after the fight. Besides method "Overturned" or "overturned"
+    in the details, a no contest that still shows a finish (e.g. KO/TKO voided for a failed
+    drug test) counts; one from an accidental foul ("Could Not Continue") doesn't."""
+    method = (method or "").lower()
+    if method == "overturned" or "overturned" in (details or "").lower():
+        return True
+    return no_contest and method not in ("", "could not continue", "other") \
+        and not is_no_contest(method)

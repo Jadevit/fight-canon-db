@@ -22,6 +22,7 @@ All tables link by UFC Stats ID.
 | Table                | One row per                      | Keys                              |
 | -------------------- | -------------------------------- | --------------------------------- |
 | `events`             | event (with its `promotion`)     | `event_id`                        |
+| `promotions`         | league (parent, card coverage)   | `promotion`                       |
 | `fights`             | fight                            | `fight_id` → `event_id`           |
 | `fight_participants` | fighter in a fight (2 per fight) | `fight_id`, `fighter_id`          |
 | `round_stats`        | fighter per round                | `fight_id`, `fighter_id`, `round` |
@@ -32,6 +33,9 @@ All tables link by UFC Stats ID.
 
 Stats that weren't recorded are `NULL`, not `0`. Odds are American and cover 2007 onward:
 the opening line and the lowest/highest closing line across sportsbooks.
+
+`fight_participants.corner` is red (0) / blue (1) only from 2010-03-21 on. Before that
+UFC Stats usually lists the winner first, so don't use corner as a feature for older fights.
 
 To filter by promotion, join through `events`:
 

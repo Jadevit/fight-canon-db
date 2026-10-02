@@ -63,6 +63,7 @@ def main() -> None:
                 raw = args.raw / name
                 raw.mkdir(parents=True, exist_ok=True)
                 SOURCES[name].update(conn, source_args, raw)
+            db.sync_promotions(conn)
     except (FileNotFoundError, RuntimeError) as e:
         db.github_output(changed=False)
         sys.exit(f"Update failed, database left untouched: {e}")

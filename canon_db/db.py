@@ -8,8 +8,10 @@ is why the comparison is on content, not bytes.
 
 from __future__ import annotations
 
+import csv
 import hashlib
 import json
+import logging
 import os
 import shutil
 import sqlite3
@@ -21,9 +23,10 @@ ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DB = ROOT / "data" / "canon.db"
 RAW = ROOT / "data" / "raw"
 SCHEMA = Path(__file__).resolve().parent / "schema.sql"
+PROMOTIONS = Path(__file__).resolve().parent / "promotions.csv"
 
-TABLES = ("fighters", "fighter_aliases", "events", "fights", "fight_participants",
-          "round_stats", "judge_scores", "odds")
+TABLES = ("promotions", "fighters", "fighter_aliases", "events", "fights",
+          "fight_participants", "round_stats", "judge_scores", "odds")
 
 
 def digest(conn: sqlite3.Connection) -> str:
@@ -45,6 +48,22 @@ def summary(conn: sqlite3.Connection) -> dict:
                               last_event=name, last_event_id=eid),
                 rows={t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
                       for t in TABLES})
+
+
+def sync_promotions(conn: sqlite3.Connection) -> None:
+    """Make `promotions` match promotions.csv, plus a partial row for any events.promotion
+    label the file doesn't have yet (logged, so it can be added)."""
+    with open(PROMOTIONS, newline="", encoding="utf-8") as fh:
+        rows = {r["promotion"]: (r["promotion"], r["parent"] or None, r["coverage"])
+                for r in csv.DictReader(fh)}
+    for (label,) in conn.execute("SELECT DISTINCT promotion FROM events"):
+        if label not in rows:
+            logging.getLogger("canon_db").warning(
+                "Promotion %r isn't in promotions.csv; added as partial.", label)
+            rows[label] = (label, None, "partial")
+    with conn:
+        conn.execute("DELETE FROM promotions")
+        conn.executemany("INSERT INTO promotions VALUES (?,?,?)", rows.values())
 
 
 class Update:
@@ -97,6 +116,7 @@ def migrate(db: Path) -> dict[str, int]:
     work.unlink(missing_ok=True)
     conn = sqlite3.connect(work)
     conn.executescript(SCHEMA.read_text())
+    conn.execute("PRAGMA foreign_keys = OFF")  # checked once, after promotions are synced
     conn.execute("ATTACH ? AS old", (str(db),))
     counts = {}
     with conn:
@@ -111,6 +131,8 @@ def migrate(db: Path) -> dict[str, int]:
             if n_new != n_old:
                 raise RuntimeError(f"{t}: {n_old} rows before, {n_new} after")
             counts[t] = n_new
+    sync_promotions(conn)
+    counts["promotions"] = conn.execute("SELECT COUNT(*) FROM promotions").fetchone()[0]
     problems = conn.execute("PRAGMA main.foreign_key_check").fetchall()
     conn.execute("DETACH old")
     conn.execute("VACUUM")
