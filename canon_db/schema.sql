@@ -31,12 +31,20 @@ CREATE TABLE fighter_aliases (
     PRIMARY KEY (source, source_id, name)
 );
 
+-- One row per league, from canon_db/promotions.csv (unknown labels are added as partial).
+CREATE TABLE promotions (
+    promotion    TEXT PRIMARY KEY,          -- the label in events.promotion
+    parent       TEXT REFERENCES promotions(promotion),  -- for a sub-series, its promotion
+    coverage     TEXT NOT NULL              -- full: UFC Stats has whole cards; partial: only
+                                            -- the fights of fighters it tracks
+);
+
 CREATE TABLE events (
     event_id     TEXT PRIMARY KEY,
     name         TEXT NOT NULL,
     date         TEXT,                      -- YYYY-MM-DD
     location     TEXT,
-    promotion    TEXT NOT NULL DEFAULT 'UFC',
+    promotion    TEXT NOT NULL DEFAULT 'UFC' REFERENCES promotions(promotion),
     source       TEXT NOT NULL DEFAULT 'ufcstats'
 );
 
@@ -61,7 +69,10 @@ CREATE TABLE fights (
 CREATE TABLE fight_participants (
     fight_id     TEXT NOT NULL REFERENCES fights(fight_id),
     fighter_id   TEXT NOT NULL REFERENCES fighters(fighter_id),
-    corner       INTEGER NOT NULL,          -- 0 or 1, in the order UFC Stats lists them
+    corner       INTEGER NOT NULL,          -- 0 or 1, in the order UFC Stats lists them:
+                                            -- 0 = red from 2010-03-21 on; before that the
+                                            -- winner is usually listed first, so corner
+                                            -- isn't red/blue and gives away the result
     result       TEXT,                      -- W, L, D, NC
     PRIMARY KEY (fight_id, corner)
 );

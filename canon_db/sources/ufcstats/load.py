@@ -66,6 +66,10 @@ def _round_row(fight_id: str, rnd: int, fighter_id: str, c: dict) -> tuple:
             *head, *body, *leg, *dist, *cl, *gr)
 
 
+# Series labelled by how their event names start, ahead of the rules in promotion().
+PROMOTION_PREFIXES = {"PRIDE": "PRIDE", "Road to UFC": "Road to UFC",
+                      "K-1 Hero's": "HERO'S", "K-1 Dynamite": "Dynamite!!"}
+
 # Promotion names the rule in promotion() gets wrong, keyed by the name it would produce.
 PROMOTION_OVERRIDES: dict[str, str] = {
     "K": "K-1", "M": "M-1",                     # the number is part of the name
@@ -77,17 +81,24 @@ PROMOTION_OVERRIDES: dict[str, str] = {
 }
 
 
+# Values UFC Stats has wrong, by fight ID: {parse_fight() key: corrected value}.
+FIGHT_FIXES: dict[str, dict[str, str]] = {
+    "5a91827fe8c1dc26": {"time_format": "3 Rnd (5-5-5)"},  # listed as 10-5-5
+}
+
+
 def promotion(event_name: str) -> str:
     """Promotion of an event missing from UFC Stats' events list, from its name.
 
     Events on that list are always UFC and don't go through this (early UFC names like
-    "Ortiz vs. Shamrock 3" don't say UFC). "PRIDE 33: ..." -> PRIDE, "Road to UFC ..." -> UFC,
-    otherwise the name up to its number or subtitle: "Strikeforce: ..." -> Strikeforce,
-    "Meca 9" -> Meca, "IFC - Global Domination" -> IFC.
+    "Ortiz vs. Shamrock 3" don't say UFC). First PROMOTION_PREFIXES ("PRIDE 33: ..." -> PRIDE),
+    then any name with UFC in it -> UFC, otherwise the name up to its number or subtitle:
+    "Strikeforce: ..." -> Strikeforce, "Meca 9" -> Meca, "IFC - Global Domination" -> IFC.
     """
     name = " ".join(event_name.split())
-    if name.upper().startswith("PRIDE"):
-        return "PRIDE"
+    for prefix, label in PROMOTION_PREFIXES.items():
+        if name.lower().startswith(prefix.lower()):
+            return label
     if re.search(r"\bUFC\b", name, re.I):
         return "UFC"
     head = re.split(r"\s*(?::| - | vs\.? |\d)", name, maxsplit=1, flags=re.I)[0].strip(" -:")
@@ -114,13 +125,14 @@ def load_event(pages: Pages, eid: str, promo: str | None = None) -> dict | None:
         statuses = [p["status"] for p in f["fighters"]]
         if len(f["fighters"]) != 2 or not (any(statuses) or f["method"]):
             continue  # no result yet (upcoming / in progress)
+        f.update(FIGHT_FIXES.get(fid, {}))
         bout, method, details = f["bout"], f["method"], f["details"]
+        nc = F.is_no_contest(method) or statuses == ["NC", "NC"]
         out["fights"].append((
             fid, eid, bout or None, int("title" in bout.lower()),
             _scheduled_rounds(f["time_format"]), method or None, F.parse_int(f["round"]),
             f["time"] or None, f["time_format"] or None, f["referee"] or None,
-            details or None, int(F.is_overturned(details) or method.lower() == "overturned"),
-            int(F.is_no_contest(method) or statuses == ["NC", "NC"])))
+            details or None, int(F.is_overturned(method, details, nc)), int(nc)))
         for corner, p in enumerate(f["fighters"]):
             out["participants"].append((fid, p["fighter_id"], corner, p["status"] or None))
             out["fight_names"].setdefault(p["fighter_id"], set()).add(p["name"])

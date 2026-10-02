@@ -41,6 +41,11 @@ def test_bio_parsers():
 def test_result_flags():
     assert F.is_no_contest("Overturned - No Contest")
     assert not F.is_no_contest("Decision - Unanimous")
+    assert F.is_overturned("Overturned", "", True)
+    assert F.is_overturned("DQ", "Rear Naked Choke Overturned - Failed Drug Test", False)
+    assert F.is_overturned("KO/TKO", "Punches to Head At Distance", True)
+    assert not F.is_overturned("Could Not Continue", "Accidental Eye Poke", True)
+    assert not F.is_overturned("KO/TKO", "Punches to Head At Distance", False)
 
 
 
@@ -54,7 +59,11 @@ def test_promotion_from_event_name():
     from canon_db.sources.ufcstats.load import promotion
     assert promotion("PRIDE 33: The Second Coming") == "PRIDE"
     assert promotion("PRIDE Shockwave 2006") == "PRIDE"
-    assert promotion("Road to UFC 4.5 + 4.6") == "UFC"
+    assert promotion("Road to UFC 4.5 + 4.6") == "Road to UFC"
+    assert promotion("UFC Fight Night: Gane vs. Tu") == "UFC"
+    assert promotion("K-1 Hero's 4") == "HERO'S"
+    assert promotion("K-1 Dynamite!! 2007") == "Dynamite!!"
+    assert promotion("K-1 Beast 2004") == "K-1"
     assert promotion("Strikeforce: Nashville") == "Strikeforce"
     assert promotion("IFC - Global Domination") == "IFC"
     assert promotion("Meca 9") == "Meca"
