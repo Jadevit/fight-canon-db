@@ -1,20 +1,20 @@
 {
-  "updated_at": "2026-10-03T14:36:25+00:00",
+  "updated_at": "2026-10-04T15:10:25+00:00",
   "coverage": {
     "first_event_date": "1993-11-12",
-    "last_event_date": "2026-09-29",
-    "last_event": "DWCS 10.8",
-    "last_event_id": "7b461ccae8270207"
+    "last_event_date": "2026-10-03",
+    "last_event": "UFC 332: Silva vs. Wang",
+    "last_event_id": "ad3fdba28a7540cf"
   },
   "rows": {
     "promotions": 67,
-    "fighters": 4619,
-    "fighter_aliases": 8403,
-    "events": 1275,
-    "fights": 11578,
-    "fight_participants": 23156,
-    "round_stats": 50864,
+    "fighters": 4621,
+    "fighter_aliases": 8408,
+    "events": 1276,
+    "fights": 11592,
+    "fight_participants": 23184,
+    "round_stats": 50914,
     "judge_scores": 24450,
-    "odds": 18558
+    "odds": 18586
   }
 }
