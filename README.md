@@ -1,7 +1,8 @@
 # canon-db
 
 A SQLite database of MMA events, fights and round-by-round stats (UFC, PRIDE and more),
-scraped from [UFC Stats](http://ufcstats.com), with betting lines from
+scraped from [UFC Stats](http://ufcstats.com), with fighters' full pro records from
+[Sherdog](https://www.sherdog.com) and betting lines from
 [BestFightOdds](https://www.bestfightodds.com), updated automatically.
 
 - Browse it: **https://jadevit.github.io/fight-canon-db/** (works on phones)
@@ -17,17 +18,22 @@ curl -L -o canon.db https://raw.githubusercontent.com/jadevit/fight-canon-db/mai
 
 ## Tables
 
-All tables link by UFC Stats ID.
+Everything UFC Stats has keeps its UFC Stats ID. Fights from fighters' other promotions come
+from Sherdog (`source = 'sherdog'`, no stats); fighters and events UFC Stats doesn't know get
+IDs like `sherdog:12345`. Filter `fights.source = 'ufcstats'` for UFC Stats fights only.
 
 | Table                | One row per                      | Keys                              |
 | -------------------- | -------------------------------- | --------------------------------- |
 | `events`             | event (with its `promotion`)     | `event_id`                        |
 | `promotions`         | league (parent, card coverage)   | `promotion`                       |
+| `promotion_aliases`  | league's id in another source    | `promotion`                       |
 | `fights`             | fight                            | `fight_id` → `event_id`           |
 | `fight_participants` | fighter in a fight (2 per fight) | `fight_id`, `fighter_id`          |
 | `round_stats`        | fighter per round                | `fight_id`, `fighter_id`, `round` |
 | `fighters`           | fighter (bio + pro record)       | `fighter_id`                      |
-| `fighter_aliases`    | spelling of a fighter's name     | `fighter_id`                      |
+| `fighter_aliases`    | fighter's name and id per source | `fighter_id`                      |
+| `fighter_redirects`  | old id of a merged fighter       | `old_id` → `new_id`               |
+| `event_aliases`      | event's id in another source     | `event_id`                        |
 | `judge_scores`       | judge's score per round          | `fight_id`, `fighter_id`          |
 | `odds`               | fighter's betting line per fight | `fight_id`, `fighter_id`          |
 
@@ -37,6 +43,12 @@ scores come from official UFC scorecards and cover UFC fights from 2020-08 to 20
 
 `fight_participants.corner` is red (0) / blue (1) only from 2010-03-21 on. Before that
 UFC Stats usually lists the winner first, so don't use corner as a feature for older fights.
+In Sherdog fights corner means nothing. Sherdog events are labelled by their Sherdog
+organization: the label we already use if its events overlap ours, else its full name.
+
+A fighter's Sherdog page is linked only through a fight both sites list (same date, the other
+fighter already linked), never by name alone. If a `sherdog:` fighter later shows up on UFC
+Stats, their rows move to the UFC Stats ID and `fighter_redirects` records the old one.
 
 To filter by promotion, join through `events`:
 
@@ -50,6 +62,7 @@ A GitHub Action runs daily. It fetches any new events from UFC Stats, reloads th
 last 21 days (UFC Stats often posts stats and corrections late), and commits
 `data/canon.db` if something changes. A second, weekly Action picks up events UFC Stats
 leaves off its events list (Dana White's Contender Series, PRIDE and other promotions).
+Sherdog pages of fighters from the last 21 days' cards are read each day too.
 
 ## The website
 

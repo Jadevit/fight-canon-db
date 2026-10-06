@@ -25,8 +25,8 @@ RAW = ROOT / "data" / "raw"
 SCHEMA = Path(__file__).resolve().parent / "schema.sql"
 PROMOTIONS = Path(__file__).resolve().parent / "promotions.csv"
 
-TABLES = ("promotions", "fighters", "fighter_aliases", "events", "fights",
-          "fight_participants", "round_stats", "judge_scores", "odds")
+TABLES = ("promotions", "promotion_aliases", "fighters", "fighter_aliases", "fighter_redirects", "events",
+          "event_aliases", "fights", "fight_participants", "round_stats", "judge_scores", "odds")
 
 
 def digest(conn: sqlite3.Connection) -> str:
@@ -56,13 +56,17 @@ def sync_promotions(conn: sqlite3.Connection) -> None:
     with open(PROMOTIONS, newline="", encoding="utf-8") as fh:
         rows = {r["promotion"]: (r["promotion"], r["parent"] or None, r["coverage"])
                 for r in csv.DictReader(fh)}
-    for (label,) in conn.execute("SELECT DISTINCT promotion FROM events"):
-        if label not in rows:
-            logging.getLogger("canon_db").warning(
-                "Promotion %r isn't in promotions.csv; added as partial.", label)
-            rows[label] = (label, None, "partial")
+    missing = [label for (label,) in conn.execute(
+        "SELECT promotion FROM events UNION SELECT promotion FROM promotion_aliases")
+        if label not in rows]
+    if missing:
+        logging.getLogger("canon_db").info(
+            "%d promotions aren't in promotions.csv; added as partial (e.g. %s).",
+            len(missing), ", ".join(sorted(missing)[:5]))
+    rows.update({label: (label, None, "partial") for label in missing})
     with conn:
         conn.execute("DELETE FROM promotions")
+        conn.execute("PRAGMA defer_foreign_keys = ON")  # parents may come later in the file
         conn.executemany("INSERT INTO promotions VALUES (?,?,?)", rows.values())
 
 

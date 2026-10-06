@@ -1,18 +1,21 @@
 {
-  "updated_at": "2026-10-04T15:10:25+00:00",
+  "updated_at": "2026-10-06T05:04:49+00:00",
   "coverage": {
-    "first_event_date": "1993-11-12",
-    "last_event_date": "2026-10-03",
-    "last_event": "UFC 332: Silva vs. Wang",
-    "last_event_id": "ad3fdba28a7540cf"
+    "first_event_date": "1980-04-25",
+    "last_event_date": "2026-10-04",
+    "last_event": "ACA 208 - Abdulvakhabov vs. Tibau",
+    "last_event_id": "sherdog:114200"
   },
   "rows": {
-    "promotions": 67,
-    "fighters": 4621,
-    "fighter_aliases": 8408,
-    "events": 1276,
-    "fights": 11592,
-    "fight_participants": 23184,
+    "promotions": 4729,
+    "promotion_aliases": 4704,
+    "fighters": 30098,
+    "fighter_aliases": 38080,
+    "fighter_redirects": 73,
+    "events": 25923,
+    "event_aliases": 1282,
+    "fights": 67737,
+    "fight_participants": 135474,
     "round_stats": 50914,
     "judge_scores": 24450,
     "odds": 18586

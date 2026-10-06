@@ -147,15 +147,17 @@ def apply_event(conn: sqlite3.Connection, ev: dict) -> None:
     """Replace one event's rows wholesale (also drops bouts since removed from the card)."""
     eid = ev["event"][0]
     fight_ids = [f[0] for f in ev["fights"]]
-    stale = [r[0] for r in conn.execute("SELECT fight_id FROM fights WHERE event_id = ?", (eid,))]
+    stale = [r[0] for r in conn.execute(
+        "SELECT fight_id FROM fights WHERE event_id = ? AND source = 'ufcstats'", (eid,))]
     for fid in set(stale) | set(fight_ids):
         for table in ("round_stats", "fight_participants", "fights"):
             conn.execute(f"DELETE FROM {table} WHERE fight_id = ?", (fid,))
-    conn.execute("DELETE FROM events WHERE event_id = ?", (eid,))
-    if not ev["fights"]:
+    others = conn.execute("SELECT 1 FROM fights WHERE event_id = ?", (eid,)).fetchone()
+    if not ev["fights"] and not others:  # fights from other sources keep their event
+        conn.execute("DELETE FROM events WHERE event_id = ?", (eid,))
         return
-    conn.execute("INSERT INTO events (event_id, name, date, location, promotion) VALUES (?,?,?,?,?)",
-                 ev["event"])
+    conn.execute("INSERT OR REPLACE INTO events (event_id, name, date, location, promotion) "
+                 "VALUES (?,?,?,?,?)", ev["event"])
     conn.executemany(
         "INSERT INTO fights (fight_id, event_id, weight_class, title_fight, scheduled_rounds, "
         "method, end_round, end_time, time_format, referee, details, overturned, no_contest) "
@@ -239,7 +241,8 @@ def discover(conn: sqlite3.Connection, pages: Pages) -> None:
     known = {r[0] for r in conn.execute("SELECT fight_id FROM fights")}
     scanned: set[str] = set()
     for sweep in range(1, 20):
-        todo = sorted({r[0] for r in conn.execute("SELECT fighter_id FROM fighters")} - scanned)
+        todo = sorted({r[0] for r in conn.execute(
+            "SELECT fighter_id FROM fighters WHERE source = 'ufcstats'")} - scanned)
         log.info("Discovery sweep %d: scanning %d fighter pages.", sweep, len(todo))
         unknown: set[str] = set()
         for i, fid in enumerate(todo, 1):

@@ -1,6 +1,8 @@
 -- Schema of data/canon.db.
 --
--- Every table is keyed by UFC Stats IDs (the 16-character hex slug in each page URL).
+-- Fighters, events and fights from UFC Stats keep their UFC Stats IDs (the 16-character hex
+-- slug in each page URL). Anything UFC Stats doesn't have comes from Sherdog with an id like
+-- `sherdog:<number>` (fights: `sherdog:<event>:<fighter>-<fighter>`) and `source = 'sherdog'`.
 -- Stats that were not recorded are NULL, never 0.
 
 PRAGMA foreign_keys = ON;
@@ -22,7 +24,9 @@ CREATE TABLE fighters (
     source       TEXT NOT NULL DEFAULT 'ufcstats'
 );
 
--- Every spelling of a fighter's name seen in a source.
+-- Every spelling of a fighter's name seen in a source, and their id there. A fighter's
+-- Sherdog id is linked only through a fight both sources list (same date, one fighter
+-- already linked); names just have to agree.
 CREATE TABLE fighter_aliases (
     fighter_id   TEXT NOT NULL REFERENCES fighters(fighter_id),
     source       TEXT NOT NULL,
@@ -39,6 +43,23 @@ CREATE TABLE promotions (
                                             -- the fights of fighters it tracks
 );
 
+-- A promotion's id in another source (e.g. its Sherdog organization number). Several
+-- organizations can share one label when they are one league (e.g. PRIDE and its series).
+CREATE TABLE promotion_aliases (
+    promotion    TEXT NOT NULL REFERENCES promotions(promotion),
+    source       TEXT NOT NULL,
+    source_id    TEXT NOT NULL,
+    name         TEXT,                      -- the organization's name there
+    PRIMARY KEY (source, source_id)
+);
+
+-- Fighters merged into another id: a fighter first seen on Sherdog (`sherdog:<id>`) who
+-- later turns up on UFC Stats moves to their UFC Stats id.
+CREATE TABLE fighter_redirects (
+    old_id       TEXT PRIMARY KEY,
+    new_id       TEXT NOT NULL REFERENCES fighters(fighter_id)
+);
+
 CREATE TABLE events (
     event_id     TEXT PRIMARY KEY,
     name         TEXT NOT NULL,
@@ -46,6 +67,14 @@ CREATE TABLE events (
     location     TEXT,
     promotion    TEXT NOT NULL DEFAULT 'UFC' REFERENCES promotions(promotion),
     source       TEXT NOT NULL DEFAULT 'ufcstats'
+);
+
+-- An event's id in another source (e.g. its Sherdog event number).
+CREATE TABLE event_aliases (
+    event_id     TEXT NOT NULL REFERENCES events(event_id),
+    source       TEXT NOT NULL,
+    source_id    TEXT NOT NULL,
+    PRIMARY KEY (source, source_id)
 );
 
 CREATE TABLE fights (
@@ -72,7 +101,8 @@ CREATE TABLE fight_participants (
     corner       INTEGER NOT NULL,          -- 0 or 1, in the order UFC Stats lists them:
                                             -- 0 = red from 2010-03-21 on; before that the
                                             -- winner is usually listed first, so corner
-                                            -- isn't red/blue and gives away the result
+                                            -- isn't red/blue and gives away the result.
+                                            -- In Sherdog fights it's by fighter id: no meaning
     result       TEXT,                      -- W, L, D, NC
     PRIMARY KEY (fight_id, corner)
 );
