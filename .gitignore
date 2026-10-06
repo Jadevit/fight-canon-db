@@ -4,3 +4,4 @@ __pycache__/
 data/raw/
 data/*.tmp
 CLAUDE.md
+data/canon.db

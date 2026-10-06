@@ -1,6 +1,6 @@
 # Weekly: find and load events that UFC Stats hosts but leaves off its events list
-# (DWCS, PRIDE and other promotions), then commit the database if it changed.
-# Shares the daily job's concurrency group so the two never push at the same time.
+# (DWCS, PRIDE and other promotions), then publish the database as a new release if it
+# changed. Shares the daily job's concurrency group so the two never run at the same time.
 name: Discover events
 
 on:
@@ -29,6 +29,11 @@ jobs:
 
       - run: pip install -r requirements.txt
 
+      - name: Get the current database
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download --pattern canon.db --dir data
+
       - name: Run tests
         run: python -m pytest -q tests/
 
@@ -36,11 +41,17 @@ jobs:
         id: update
         run: python -m canon_db update ufcstats --discover
 
-      - name: Commit database
+      - name: Publish database
         if: steps.update.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          last=$(python -c "import json; print(json.load(open('data/summary.json'))['coverage']['last_event'])")
+          tag="db-$(date -u +%Y-%m-%d-%H%M)"
+          gh release create "$tag" data/canon.db data/summary.json \
+            --title "Data through ${last}" --notes "Weekly discovery of events missing from UFC Stats' events list."
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/canon.db data/summary.json
-          git commit -m "data: add newly discovered events"
+          git add data/summary.json
+          git commit -m "data: update through ${last}"
           git push

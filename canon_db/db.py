@@ -81,7 +81,8 @@ def updating(db: Path):
     over `db` (plus summary.json) only if its content changed; otherwise discard it.
     On an exception, discard it and leave `db` untouched."""
     if not db.exists():
-        raise FileNotFoundError(f"No database at {db}.")
+        raise FileNotFoundError(f"No database at {db}. Get the latest one with: "
+                                "gh release download --pattern canon.db --dir data")
     work = db.with_suffix(".db.tmp")
     shutil.copyfile(db, work)
     conn = sqlite3.connect(work)

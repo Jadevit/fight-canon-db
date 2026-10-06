@@ -6,15 +6,19 @@ scraped from [UFC Stats](http://ufcstats.com), with fighters' full pro records f
 [BestFightOdds](https://www.bestfightodds.com), updated automatically.
 
 - Browse it: **https://jadevit.github.io/fight-canon-db/** (works on phones)
-- Database: [`data/canon.db`](data/canon.db)
+- Database: [latest release](https://github.com/jadevit/fight-canon-db/releases/latest) (`canon.db`)
 - Coverage and row counts: [`data/summary.json`](data/summary.json)
 - Schema: [`canon_db/schema.sql`](canon_db/schema.sql)
 
 ## Use it from another repo
 
 ```bash
-curl -L -o canon.db https://raw.githubusercontent.com/jadevit/fight-canon-db/main/data/canon.db
+curl -L -o canon.db https://github.com/jadevit/fight-canon-db/releases/latest/download/canon.db
 ```
+
+Every update is its own release (`db-YYYY-MM-DD-HHMM`), so you can pin a version:
+`.../releases/download/<tag>/canon.db`. To work on this repo, put the latest one at
+`data/canon.db` first: `gh release download --pattern canon.db --dir data`.
 
 ## Tables
 
@@ -59,8 +63,8 @@ SELECT f.* FROM fights f JOIN events e USING (event_id) WHERE e.promotion = 'PRI
 ## How it updates
 
 A GitHub Action runs daily. It fetches any new events from UFC Stats, reloads the
-last 21 days (UFC Stats often posts stats and corrections late), and commits
-`data/canon.db` if something changes. A second, weekly Action picks up events UFC Stats
+last 21 days (UFC Stats often posts stats and corrections late), and if something
+changed publishes the database as a new release and commits `data/summary.json`. A second, weekly Action picks up events UFC Stats
 leaves off its events list (Dana White's Contender Series, PRIDE and other promotions).
 Sherdog pages of fighters from the last 21 days' cards are read each day too.
 

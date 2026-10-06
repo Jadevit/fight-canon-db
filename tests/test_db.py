@@ -3,6 +3,8 @@
 import shutil
 import sqlite3
 
+import pytest
+
 from canon_db import db
 
 
@@ -12,7 +14,9 @@ def _schema(conn) -> list[str]:
 
 
 def test_published_db_matches_schema_sql():
-    """schema.sql is the contract other repos read against; the committed DB must match it."""
+    """schema.sql is the contract other repos read against; the published DB must match it."""
+    if not db.DEFAULT_DB.exists():
+        pytest.skip("no data/canon.db: gh release download --pattern canon.db --dir data")
     fresh = sqlite3.connect(":memory:")
     fresh.executescript((db.ROOT / "canon_db" / "schema.sql").read_text())
     published = sqlite3.connect(db.DEFAULT_DB)

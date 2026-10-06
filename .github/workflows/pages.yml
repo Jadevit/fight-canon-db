@@ -1,4 +1,4 @@
-# Publishes site/ plus a gzipped copy of the database to GitHub Pages.
+# Publishes site/ plus a gzipped copy of the latest released database to GitHub Pages.
 # Runs when the site changes, after each database update, or by hand.
 name: Deploy site
 
@@ -33,7 +33,10 @@ jobs:
           ref: main
 
       - name: Build site
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          gh release download --pattern canon.db --dir data
           mkdir _site
           cp site/* _site/
           gzip -9 -c data/canon.db > _site/canon.db.gz
