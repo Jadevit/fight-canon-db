@@ -20,7 +20,7 @@ CREATE TABLE fighters (
     losses       INTEGER,
     draws        INTEGER,
     no_contests  INTEGER,
-    nationality  TEXT,                      -- reserved
+    nationality  TEXT,                      -- from Sherdog (sherdog: fighters only)
     source       TEXT NOT NULL DEFAULT 'ufcstats'
 );
 
@@ -77,6 +77,17 @@ CREATE TABLE event_aliases (
     PRIMARY KEY (source, source_id)
 );
 
+-- Events whose whole card was read from a source's card listing. Their fights are in the
+-- database because they were on the card, not because of anyone's later career; Sherdog
+-- fights on other events were found through a fighter's page.
+CREATE TABLE event_cards (
+    event_id     TEXT PRIMARY KEY REFERENCES events(event_id),
+    source       TEXT NOT NULL,             -- whose card: 'sherdog'
+    via          TEXT NOT NULL,             -- 'event_page', or 'kaggle:<dataset> v<N>'
+    complete     INTEGER NOT NULL,          -- 1: every bout the source lists is in the database
+    fetched_at   TEXT                       -- YYYY-MM-DD the card was read
+);
+
 CREATE TABLE fights (
     fight_id         TEXT PRIMARY KEY,
     event_id         TEXT NOT NULL REFERENCES events(event_id),
@@ -91,6 +102,8 @@ CREATE TABLE fights (
     details          TEXT,                  -- finish detail or judges' scores
     overturned       INTEGER NOT NULL DEFAULT 0,
     no_contest       INTEGER NOT NULL DEFAULT 0,
+    bout_type        TEXT,                  -- Sherdog fights: 'pro', 'exhibition' or 'amateur',
+                                            -- as a fighter's Sherdog page lists it; NULL: unchecked
     source           TEXT NOT NULL DEFAULT 'ufcstats'
 );
 

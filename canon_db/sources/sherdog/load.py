@@ -150,13 +150,18 @@ class Pages:
         self.events.mkdir(parents=True, exist_ok=True)
 
     def event(self, sid: str) -> dict | None:
-        """An event's page (read from disk if it's there: events don't change)."""
+        """An event's page, parsed (read from disk if it's there)."""
+        page = self.event_page(sid)
+        return parse_event(page) if page is not None else None
+
+    def event_page(self, sid: str, fresh: bool = False) -> str | None:
+        """An event's page as HTML: from disk unless `fresh` (or not there yet)."""
         path = self.events / f"{sid}.html"
-        if not path.exists() and self.fetcher is not None:
-            page = self.fetcher.get(f"{BASE}/events/x-{sid}")  # needs a slug; any will do
+        if self.fetcher is not None and (fresh or not path.exists()):
+            page = self.fetcher.get(f"{BASE}/events/x-{sid}")
             if page is not None:
                 save(path, page)
-        return parse_event(path.read_text(encoding="utf-8")) if path.exists() else None
+        return path.read_text(encoding="utf-8") if path.exists() else None
 
     def get(self, sid: str) -> dict | None:
         """A fighter's page, fetched fresh unless `cached` and it's on disk already."""
@@ -366,7 +371,7 @@ def write(conn: sqlite3.Connection, st: State, read: dict[str, dict], pages: Pag
                          [(eid, NAME, sid) for sid, eid in st.events.items() if not eid.startswith(PREFIX)])
         # Events now known to be the database's own: move their Sherdog fights over.
         for sid, eid in st.events.items():
-            conn.execute("UPDATE fights SET event_id = ? WHERE event_id = ?", (eid, minted(sid)))
+            move_event(conn, minted(sid), eid)
         # New events (all of them with `relabel`) get their promotion from their page.
         have = {r[0] for r in conn.execute("SELECT event_id FROM events WHERE source = ?", (NAME,))}
         todo = sorted(have | events.keys() if relabel else events.keys() - have)
@@ -387,27 +392,74 @@ def write(conn: sqlite3.Connection, st: State, read: dict[str, dict], pages: Pag
                          sorted({(e[4],) for e in events.values()}))
         conn.executemany("INSERT OR IGNORE INTO events (event_id, name, date, location, promotion, source) "
                          "VALUES (?,?,?,?,?,?)", events.values())
-        # Each read fighter's Sherdog fights are replaced by what their page lists now.
+        # Each read fighter's Sherdog fights are replaced by what their page lists now, except
+        # on events whose whole card was read (the card says what was on it).
         for fid in read:
             for (old,) in conn.execute(
                     "SELECT f.fight_id FROM fights f JOIN fight_participants p USING (fight_id) "
-                    "WHERE p.fighter_id = ? AND f.source = ?", (fid, NAME)).fetchall():
+                    "WHERE p.fighter_id = ? AND f.source = ? AND f.event_id NOT IN "
+                    "(SELECT event_id FROM event_cards)", (fid, NAME)).fetchall():
                 if old not in fights:
                     conn.execute("DELETE FROM fight_participants WHERE fight_id = ?", (old,))
                     conn.execute("DELETE FROM fights WHERE fight_id = ?", (old,))
-        conn.executemany("INSERT OR REPLACE INTO fights (fight_id, event_id, weight_class, title_fight, "
-                         "scheduled_rounds, method, end_round, end_time, time_format, referee, details, "
-                         "overturned, no_contest, source) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                         fights.values())
+        # A fight a card already gave keeps what only the card has (weight class).
+        conn.executemany("""
+            INSERT INTO fights (fight_id, event_id, weight_class, title_fight, scheduled_rounds, method,
+                end_round, end_time, time_format, referee, details, overturned, no_contest, source,
+                bout_type) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,'pro')
+            ON CONFLICT (fight_id) DO UPDATE SET event_id = excluded.event_id,
+                title_fight = excluded.title_fight, method = coalesce(excluded.method, method),
+                end_round = coalesce(excluded.end_round, end_round),
+                end_time = coalesce(excluded.end_time, end_time),
+                referee = coalesce(excluded.referee, referee), overturned = excluded.overturned,
+                no_contest = excluded.no_contest, bout_type = 'pro'""", fights.values())
+        mark_bout_types(conn, {st.sd[fid]: page for fid, page in read.items()})
+        default_pro(conn)
         conn.executemany("DELETE FROM fight_participants WHERE fight_id = ?", [(f,) for f in fights])
         conn.executemany("INSERT INTO fight_participants (fight_id, fighter_id, corner, result) "
                          "VALUES (?,?,?,?)", parts)
         counts["duplicates dropped"] = drop_duplicates(conn)
         conn.execute("DELETE FROM fighter_aliases WHERE fighter_id NOT IN (SELECT fighter_id FROM fighters)")
-        conn.execute("DELETE FROM events WHERE source = ? AND event_id NOT IN "
-                     "(SELECT event_id FROM fights)", (NAME,))
+        drop_empty_events(conn)
     counts.update(fights=len(fights), new_fighters=len(fighters), new_links=len(st.new_links))
     return counts
+
+
+def fight_id(sid: str, f: dict) -> str | None:
+    """The id of fight `f` on Sherdog fighter `sid`'s page."""
+    if not (f["event_id"] and f["opponent_id"]):
+        return None
+    a, b = sorted((sid, f["opponent_id"]), key=int)
+    return f"{PREFIX}{f['event_id']}:{a}-{b}"
+
+
+def mark_bout_types(conn: sqlite3.Connection, pages: dict[str, dict]) -> set[str]:
+    """Set bout_type on the Sherdog fights these pages ({sherdog id: parsed page}) list, by the
+    section they're in. Returns the fight ids listed."""
+    rows = [(kind, fight_id(sid, f), NAME) for sid, page in pages.items()
+            for kind, key in (("pro", "fights"), ("exhibition", "exhibition"), ("amateur", "amateur"))
+            for f in page.get(key, []) if fight_id(sid, f)]
+    conn.executemany("UPDATE fights SET bout_type = ? WHERE fight_id = ? AND source = ?", rows)
+    return {r[1] for r in rows}
+
+
+def default_pro(conn: sqlite3.Connection) -> None:
+    """Sherdog fights not from a card came from a fighter page's pro section."""
+    conn.execute("UPDATE fights SET bout_type = 'pro' WHERE source = ? AND bout_type IS NULL AND "
+                 "event_id NOT IN (SELECT event_id FROM event_cards)", (NAME,))
+
+
+def move_event(conn: sqlite3.Connection, old: str, new: str) -> None:
+    """Move a `sherdog:` event's fights (and its card) to the database event it turned out to be."""
+    conn.execute("UPDATE fights SET event_id = ? WHERE event_id = ?", (new, old))
+    conn.execute("UPDATE OR REPLACE event_cards SET event_id = ? WHERE event_id = ?", (new, old))
+
+
+def drop_empty_events(conn: sqlite3.Connection) -> None:
+    """Delete `sherdog:` events left with no fights, and their cards."""
+    empty = "SELECT event_id FROM events WHERE source = ? AND event_id NOT IN (SELECT event_id FROM fights)"
+    conn.execute(f"DELETE FROM event_cards WHERE event_id IN ({empty})", (NAME,))
+    conn.execute(f"DELETE FROM events WHERE event_id IN ({empty})", (NAME,))
 
 
 def drop_duplicates(conn: sqlite3.Connection) -> int:
@@ -440,6 +492,12 @@ def add_arguments(p: argparse.ArgumentParser) -> None:
     p.add_argument("--limit", type=int, help="read at most N pages (for trying it out)")
     p.add_argument("--cached", action="store_true",
                    help="reuse fighter pages already on disk; fetch only missing ones")
+    p.add_argument("--no-cards", action="store_true",
+                   help="skip reading whole cards of the organizations in cards.ORGS")
+    p.add_argument("--all-cards", action="store_true",
+                   help="list every event of those organizations, not just their latest 100")
+    p.add_argument("--classify-all", action="store_true",
+                   help="check every card fight's bout type on fighter pages, not just recent cards'")
     p.add_argument("--relabel", action="store_true",
                    help="label every Sherdog event from its organization (~25k event pages "
                         "the first time, ~7 h; read from disk after)")
@@ -469,6 +527,13 @@ def update(conn: sqlite3.Connection, args: argparse.Namespace, raw: Path) -> Non
                  len(scope), len(scope & st.sd.keys()))
         read = crawl(st, pages, scope, args.limit)
     counts = write(conn, st, read, pages, args.relabel)
+    if not (args.offline or args.relabel or args.no_cards):
+        from canon_db.sources.sherdog import cards  # it builds on this module
+        c = cards.crawl(conn, pages, args.recent_days, args.all_cards)
+        log.info("Sherdog cards: %s.", ", ".join(f"{k} {v}" for k, v in c.items()))
+        since = None if args.classify_all else (date.today() - timedelta(days=args.recent_days)).isoformat()
+        c = cards.classify(conn, pages, since)
+        log.info("Sherdog bout types: %s.", ", ".join(f"{k} {v}" for k, v in c.items()))
     (raw / "conflicts.tsv").unlink(missing_ok=True)
     if st.conflicts:
         with open(raw / "conflicts.tsv", "w", encoding="utf-8") as fh:

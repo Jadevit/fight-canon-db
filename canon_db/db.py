@@ -26,7 +26,8 @@ SCHEMA = Path(__file__).resolve().parent / "schema.sql"
 PROMOTIONS = Path(__file__).resolve().parent / "promotions.csv"
 
 TABLES = ("promotions", "promotion_aliases", "fighters", "fighter_aliases", "fighter_redirects", "events",
-          "event_aliases", "fights", "fight_participants", "round_stats", "judge_scores", "odds")
+          "event_aliases", "event_cards", "fights", "fight_participants", "round_stats", "judge_scores",
+          "odds")
 
 
 def digest(conn: sqlite3.Connection) -> str:

@@ -1,21 +1,22 @@
 {
-  "updated_at": "2026-10-08T17:19:15+00:00",
+  "updated_at": "2026-10-10T00:43:20+00:00",
   "coverage": {
     "first_event_date": "1980-04-25",
-    "last_event_date": "2026-10-06",
-    "last_event": "DWCS 10.9",
-    "last_event_id": "8e893f269d5696b2"
+    "last_event_date": "2026-10-08",
+    "last_event": "ACA YE 69 - ACA Young Eagles 69",
+    "last_event_id": "sherdog:114706"
   },
   "rows": {
     "promotions": 4730,
     "promotion_aliases": 4705,
-    "fighters": 30137,
-    "fighter_aliases": 38485,
+    "fighters": 37923,
+    "fighter_aliases": 46296,
     "fighter_redirects": 75,
-    "events": 25944,
+    "events": 26210,
     "event_aliases": 1283,
-    "fights": 67795,
-    "fight_participants": 135590,
+    "event_cards": 1752,
+    "fights": 82145,
+    "fight_participants": 164290,
     "round_stats": 50928,
     "judge_scores": 24450,
     "odds": 19418

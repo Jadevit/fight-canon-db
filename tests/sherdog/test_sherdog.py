@@ -126,3 +126,26 @@ def test_merge_keeps_one_row_per_fight():
     conn.execute("INSERT INTO fighters (fighter_id, name, source) VALUES ('sherdog:1', 'Ben Baker', 'sherdog')")
     merge(conn, "sherdog:1", "b" * 16)
     assert conn.execute("SELECT new_id FROM fighter_redirects").fetchall() == [("b" * 16,)]
+
+
+def test_parse_card():
+    from canon_db.sources.sherdog.pages import parse_card, parse_org_events
+    page = (FIXTURES / "event_card.html").read_text(encoding="utf-8")
+    assert parse_event(page)["date"] == "2018-12-08"
+    card = parse_card(page)
+    assert [b["match"] for b in card] == list(range(19, 0, -1))
+    main = card[0]
+    assert [(s["sid"], s["name"], s["result"]) for s in main["sides"]] == [
+        ("110177", "Jack Shore", "W"), ("218081", "Mike Ekundayo", "L")]
+    assert (main["weight_class"], main["title"], main["method"], main["referee"], main["round"], main["time"]) == (
+        "Bantamweight", True, "TKO (Punches)", "Marc Goddard", "3", "4:07")
+    assert sum(b["title"] for b in card) == 2
+    events, older = parse_org_events((FIXTURES / "organization.html").read_text(encoding="utf-8"))
+    assert events[0] == ("114289", "2026-10-30") and len(events) == 102 and older
+
+
+def test_parse_fighter_sections_and_bio():
+    from canon_db.sources.sherdog.pages import bio
+    p = parse_fighter((FIXTURES / "fighter.html").read_text(encoding="utf-8"))
+    assert len(p["fights"]) == 20 and isinstance(p["exhibition"], list) and p["amateur"]
+    assert bio(p) == dict(nickname="Tank", dob="1995-02-06", height_in=69, weight_lbs=145, nationality="Wales")
