@@ -1,24 +1,24 @@
 {
-  "updated_at": "2026-10-10T00:43:20+00:00",
+  "updated_at": "2026-10-10T15:50:48+00:00",
   "coverage": {
     "first_event_date": "1980-04-25",
-    "last_event_date": "2026-10-08",
-    "last_event": "ACA YE 69 - ACA Young Eagles 69",
-    "last_event_id": "sherdog:114706"
+    "last_event_date": "2026-10-09",
+    "last_event": "LFA 243 - Maximov vs. Santos",
+    "last_event_id": "sherdog:114325"
   },
   "rows": {
     "promotions": 4730,
     "promotion_aliases": 4705,
-    "fighters": 37923,
-    "fighter_aliases": 46296,
+    "fighters": 37932,
+    "fighter_aliases": 46744,
     "fighter_redirects": 75,
-    "events": 26210,
+    "events": 26211,
     "event_aliases": 1283,
-    "event_cards": 1752,
-    "fights": 82145,
-    "fight_participants": 164290,
+    "event_cards": 1753,
+    "fights": 82155,
+    "fight_participants": 164310,
     "round_stats": 50928,
     "judge_scores": 24450,
-    "odds": 19418
+    "odds": 20326
   }
 }
