@@ -2,8 +2,8 @@
 
 A SQLite database of MMA events, fights and round-by-round stats (UFC, PRIDE and more),
 scraped from [UFC Stats](http://ufcstats.com), with fighters' full pro records from
-[Sherdog](https://www.sherdog.com) and betting lines from
-[BestFightOdds](https://www.bestfightodds.com), updated automatically.
+[Sherdog](https://www.sherdog.com), PFL's own stats from [PFL](https://pflmma.com) and betting
+lines from [BestFightOdds](https://www.bestfightodds.com), updated automatically.
 
 - Browse it: **https://jadevit.github.io/fight-canon-db/** (works on phones)
 - Database: [latest release](https://github.com/jadevit/fight-canon-db/releases/latest) (`canon.db`)
@@ -34,6 +34,7 @@ know get IDs like `sherdog:12345`. Filter `fights.source = 'ufcstats'` for UFC S
 | `fights`             | fight                            | `fight_id` → `event_id`           |
 | `fight_participants` | fighter in a fight (2 per fight) | `fight_id`, `fighter_id`          |
 | `round_stats`        | fighter per round                | `fight_id`, `fighter_id`, `round` |
+| `smartcage_round_stats` | fighter per round (older PFL) | `fight_id`, `fighter_id`, `round` |
 | `fighters`           | fighter (bio + pro record)       | `fighter_id`                      |
 | `fighter_aliases`    | fighter's name and id per source | `fighter_id`                      |
 | `fighter_redirects`  | old id of a merged fighter       | `old_id` → `new_id`               |
@@ -41,6 +42,12 @@ know get IDs like `sherdog:12345`. Filter `fights.source = 'ufcstats'` for UFC S
 | `event_cards`        | event whose whole card was read  | `event_id`                        |
 | `judge_scores`       | judge's score per round          | `fight_id`, `fighter_id`          |
 | `odds`               | fighter's betting line per fight | `fight_id`, `fighter_id`          |
+
+`round_stats.source` says who counted: `ufcstats`, or `pfl` for PFL events from 2025-12 on (same
+columns, no per-round reversals). Different crews score fights, so filter on it when the
+numbers have to be comparable. PFL's earlier events (2018 to 2025-11) have a different set of
+stats (strikes by arm / leg / ground, ground and standing time), kept in `smartcage_round_stats`.
+PFL stats attach to the Sherdog fight, so those fights have `fights.source = 'sherdog'`.
 
 Stats that weren't recorded are `NULL`, not `0`. Odds are American and cover 2007 onward:
 the opening line and the lowest/highest closing line across sportsbooks. Per-round judge

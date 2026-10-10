@@ -7,7 +7,8 @@
 To add a source, create sources/<name>/ with those three and register it below.
 """
 
-from canon_db.sources import bestfightodds, sherdog, ufcstats
+from canon_db.sources import bestfightodds, pfl, sherdog, ufcstats
 
-# ufcstats first: Sherdog links through its fights, and odds match against both.
-SOURCES = {s.NAME: s for s in (ufcstats, sherdog, bestfightodds)}
+# ufcstats first: Sherdog links through its fights, and odds match against both. pfl after
+# sherdog: its stats attach to the fights Sherdog's cards give.
+SOURCES = {s.NAME: s for s in (ufcstats, sherdog, pfl, bestfightodds)}

@@ -317,7 +317,8 @@ def label_events(pages: Pages, labels: Labels, event_ids: list[str]) -> list[tup
 
 def merge(conn: sqlite3.Connection, old: str, new: str) -> None:
     """Move every row of fighter `old` to `new`, and leave a redirect."""
-    for table in ("fight_participants", "round_stats", "judge_scores", "odds", "fighter_aliases"):
+    for table in ("fight_participants", "round_stats", "smartcage_round_stats", "judge_scores", "odds",
+                  "fighter_aliases"):
         conn.execute(f"UPDATE OR IGNORE {table} SET fighter_id = ? WHERE fighter_id = ?", (new, old))
         conn.execute(f"DELETE FROM {table} WHERE fighter_id = ?", (old,))
     conn.execute("UPDATE fighter_redirects SET new_id = ? WHERE new_id = ?", (new, old))
@@ -400,8 +401,7 @@ def write(conn: sqlite3.Connection, st: State, read: dict[str, dict], pages: Pag
                     "WHERE p.fighter_id = ? AND f.source = ? AND f.event_id NOT IN "
                     "(SELECT event_id FROM event_cards)", (fid, NAME)).fetchall():
                 if old not in fights:
-                    conn.execute("DELETE FROM fight_participants WHERE fight_id = ?", (old,))
-                    conn.execute("DELETE FROM fights WHERE fight_id = ?", (old,))
+                    delete_fight(conn, old)
         # A fight a card already gave keeps what only the card has (weight class).
         conn.executemany("""
             INSERT INTO fights (fight_id, event_id, weight_class, title_fight, scheduled_rounds, method,
@@ -423,6 +423,12 @@ def write(conn: sqlite3.Connection, st: State, read: dict[str, dict], pages: Pag
         drop_empty_events(conn)
     counts.update(fights=len(fights), new_fighters=len(fighters), new_links=len(st.new_links))
     return counts
+
+
+def delete_fight(conn: sqlite3.Connection, fight: str) -> None:
+    """Delete a Sherdog fight and whatever other sources attached to it."""
+    for table in ("round_stats", "smartcage_round_stats", "odds", "fight_participants", "fights"):
+        conn.execute(f"DELETE FROM {table} WHERE fight_id = ?", (fight,))
 
 
 def fight_id(sid: str, f: dict) -> str | None:
@@ -474,8 +480,7 @@ def drop_duplicates(conn: sqlite3.Connection) -> int:
         JOIN events ue ON ue.event_id = u.event_id
         WHERE s.source = ? AND abs(julianday(se.date) - julianday(ue.date)) <= 1""", (NAME, NAME))]
     for fid in dups:
-        conn.execute("DELETE FROM fight_participants WHERE fight_id = ?", (fid,))
-        conn.execute("DELETE FROM fights WHERE fight_id = ?", (fid,))
+        delete_fight(conn, fid)
     return len(dups)
 
 

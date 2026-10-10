@@ -120,7 +120,10 @@ CREATE TABLE fight_participants (
     PRIMARY KEY (fight_id, corner)
 );
 
--- One row per fighter per round. *_land = landed, *_att = attempted.
+-- One row per fighter per round. *_land = landed, *_att = attempted. `source` says who counted:
+-- 'ufcstats', or 'pfl' (PFL's own stats from 2025-12, same columns; it has no per-round
+-- reversals). Different crews score fights, so the same column isn't guaranteed the same
+-- judgment across sources.
 CREATE TABLE round_stats (
     fight_id       TEXT NOT NULL REFERENCES fights(fight_id),
     fighter_id     TEXT NOT NULL REFERENCES fighters(fighter_id),
@@ -148,6 +151,33 @@ CREATE TABLE round_stats (
     ground_land    INTEGER,
     ground_att     INTEGER,
     source         TEXT NOT NULL DEFAULT 'ufcstats',
+    PRIMARY KEY (fight_id, fighter_id, round)
+);
+
+-- PFL's older SmartCage stats (2018 to 2025-11), one row per fighter per round. A different
+-- set from round_stats: strikes are split by arm / leg / ground (all strikes, not only
+-- significant ones), and there is ground and standing time instead of control time.
+CREATE TABLE smartcage_round_stats (
+    fight_id           TEXT NOT NULL REFERENCES fights(fight_id),
+    fighter_id         TEXT NOT NULL REFERENCES fighters(fighter_id),
+    round              INTEGER NOT NULL,
+    knockdowns         INTEGER,
+    total_str_land     INTEGER,
+    total_str_att      INTEGER,
+    arm_land           INTEGER,
+    arm_att            INTEGER,
+    leg_land           INTEGER,
+    leg_att            INTEGER,
+    ground_land        INTEGER,
+    ground_att         INTEGER,
+    power_land         INTEGER,             -- NULL on events that recorded none
+    td_land            INTEGER,
+    td_att             INTEGER,
+    sub_att            INTEGER,
+    dominant_positions INTEGER,             -- NULL on events that recorded none
+    ground_sec         INTEGER,             -- time the fight spent on the ground
+    standing_sec       INTEGER,
+    source             TEXT NOT NULL DEFAULT 'pfl',
     PRIMARY KEY (fight_id, fighter_id, round)
 );
 
