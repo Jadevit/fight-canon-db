@@ -1,25 +1,25 @@
 {
-  "updated_at": "2026-10-10T16:36:50+00:00",
+  "updated_at": "2026-10-11T16:19:07+00:00",
   "coverage": {
     "first_event_date": "1980-04-25",
-    "last_event_date": "2026-10-09",
-    "last_event": "LFA 243 - Maximov vs. Santos",
-    "last_event_id": "sherdog:114325"
+    "last_event_date": "2026-10-10",
+    "last_event": "UFC Fight Night: Allen vs. Duncan",
+    "last_event_id": "7f98d9d5a10fa25c"
   },
   "rows": {
     "promotions": 4730,
     "promotion_aliases": 4705,
-    "fighters": 37932,
-    "fighter_aliases": 47767,
+    "fighters": 37936,
+    "fighter_aliases": 47909,
     "fighter_redirects": 75,
-    "events": 26211,
-    "event_aliases": 1418,
-    "event_cards": 1753,
-    "fights": 82155,
-    "fight_participants": 164310,
-    "round_stats": 51930,
+    "events": 26214,
+    "event_aliases": 1420,
+    "event_cards": 1755,
+    "fights": 82187,
+    "fight_participants": 164374,
+    "round_stats": 52026,
     "smartcage_round_stats": 3562,
     "judge_scores": 24450,
-    "odds": 20326
+    "odds": 20714
   }
 }
