@@ -39,6 +39,26 @@ const record = (r) => `${r.w || 0}-${r.l || 0}-${r.d || 0}` + (r.nc ? ` (${r.nc}
 // Pro MMA record from the fighter's UFC Stats page; falls back to the fights in the DB.
 const proRecord = (f, fallback) => f.wins != null
   ? record({ w: f.wins, l: f.losses, d: f.draws, nc: f.no_contests }) : record(fallback);
+const tag = (text) => `<span class="tag">${esc(text)}</span>`;
+// Amateur and exhibition bouts are marked, and don't count toward records or leaderboards.
+const boutTags = (x) => (x.title_fight ? tag("Title") : "") +
+  (x.bout_type && x.bout_type !== "pro" ? tag(x.bout_type[0].toUpperCase() + x.bout_type.slice(1)) : "");
+
+// Links to the pages a row came from. Only UFC Stats ids (16 hex characters) exist on UFC
+// Stats; everything else is on Sherdog, under the id in ours or in the aliases tables.
+const isUfcStats = (id) => /^[0-9a-f]{16}$/.test(id);
+const ext = (url, label) => `<a href="${esc(url)}" target="_blank" rel="noopener">${label}</a>`;
+const sourceLine = (links) => links.length ? `<p><small>Source: ${links.join(" · ")}</small></p>` : "";
+const SOURCE_NAMES = { ufcstats: "UFC Stats", pfl: "PFL", sherdog: "Sherdog" };
+function eventSources(id) {
+  const links = isUfcStats(id) ? [ext(`http://ufcstats.com/event-details/${id}`, "UFC Stats")] : [];
+  const sherdog = id.startsWith("sherdog:") ? [id.slice(8)]
+    : q("SELECT source_id FROM event_aliases WHERE event_id = ? AND source = 'sherdog'", [id]).map((r) => r.source_id);
+  sherdog.forEach((s) => links.push(ext(`https://www.sherdog.com/events/x-${s}`, "Sherdog")));
+  q("SELECT source_id FROM event_aliases WHERE event_id = ? AND source = 'pfl'", [id])
+    .forEach((r) => links.push(ext(`https://pflmma.com/event/${r.source_id}`, "PFL")));
+  return links;
+}
 
 function debounce(fn, ms = 150) {
   let t;
@@ -52,14 +72,16 @@ function setParams(p) {
   history.replaceState(null, "", `${base}?${p.toString()}`);
 }
 
-const promotions = () => q("SELECT promotion FROM events GROUP BY promotion ORDER BY COUNT(*) DESC")
+// Promotions with enough events to list (there are thousands of one-off shows).
+const promotions = () => q("SELECT promotion FROM events GROUP BY promotion HAVING COUNT(*) >= 25 ORDER BY COUNT(*) DESC")
   .map((r) => r.promotion);
 
 // Weight classes are stored as the bout title ("UFC Lightweight Title Bout");
-// division() reduces them to the division name.
+// division() reduces them to the division name. Sherdog doesn't say which bouts are women's.
 const DIVISIONS = ["Women's Strawweight", "Women's Flyweight", "Women's Bantamweight",
-  "Women's Featherweight", "Flyweight", "Bantamweight", "Featherweight", "Lightweight",
-  "Welterweight", "Middleweight", "Light Heavyweight", "Heavyweight", "Catch Weight", "Open Weight"];
+  "Women's Featherweight", "Atomweight", "Strawweight", "Flyweight", "Bantamweight", "Featherweight",
+  "Lightweight", "Welterweight", "Middleweight", "Light Heavyweight", "Super Heavyweight", "Heavyweight",
+  "Catch Weight", "Open Weight"];
 function division(wc) {
   if (!wc) return "Other";
   const s = wc.replace(/Catchweight/i, "Catch Weight");
@@ -74,7 +96,7 @@ function fightSeconds(timeFormat, endRound, endTime) {
   const last = m * 60 + s;
   if (endRound === 1) return last;
   const lens = ((timeFormat || "").match(/\(([\d-]+)\)/) || [])[1];
-  if (!lens) return null;
+  if (!lens) return timeFormat ? null : (endRound - 1) * 300 + last;  // no format on record: 5-minute rounds
   const mins = lens.split("-").map(Number);
   if (mins.length < endRound - 1) return null;
   return mins.slice(0, endRound - 1).reduce((a, b) => a + b, 0) * 60 + last;
@@ -127,8 +149,10 @@ async function loadDb() {
     db.create_function("norm", norm);
     const last = q("SELECT name, date FROM events ORDER BY date DESC LIMIT 1")[0];
     document.getElementById("footer").innerHTML =
-      `Data from <a href="http://ufcstats.com">UFC Stats</a>, updated daily. ` +
-      `Latest event: ${esc(last.name)} (${esc(last.date)}).`;
+      `Data from <a href="http://ufcstats.com">UFC Stats</a>, <a href="https://www.sherdog.com">Sherdog</a>, ` +
+      `<a href="https://pflmma.com">PFL</a> and <a href="https://www.bestfightodds.com">BestFightOdds</a>, updated daily. ` +
+      `Latest event: ${esc(last.name)} (${esc(last.date)}). ` +
+      `<a href="https://github.com/jadevit/fight-canon-db">About and download</a>.`;
     window.addEventListener("hashchange", route);
     route();
   } catch (e) {
@@ -154,7 +178,8 @@ function home() {
   const recent = q("SELECT event_id, name, date, location FROM events ORDER BY date DESC LIMIT 10");
   app.innerHTML = `
     <h1>MMA fights, round by round</h1>
-    <p>${num(c.ev)} events, ${num(c.fi)} fights and ${num(c.fr)} fighters since ${esc(c.first)}, from UFC, PRIDE and more.
+    <p>${num(c.ev)} events, ${num(c.fi)} fights and ${num(c.fr)} fighters since ${esc(c.first)}: the UFC and PRIDE
+       round by round, and results from thousands of other promotions.
        Search a fighter, open any card, or rank fighters by their stats.</p>
     <form id="s"><input type="search" name="q" placeholder="Search fighters…" autofocus></form>
     <h2>Latest events</h2>
@@ -186,7 +211,7 @@ function fighters() {
       GROUP BY f.fighter_id ORDER BY n DESC, f.name LIMIT 50`, [term, `%${term}%`]);
     document.getElementById("results").innerHTML =
       (term ? "" : `<p class="muted">Most fights in the database:</p>`) +
-      table(["Fighter", "Pro record", "Fights here"], rows.map((r) =>
+      table(["Fighter", "Record", "Fights here"], rows.map((r) =>
         `<tr><td>${fighterLink(r.fighter_id, r.name)}${r.nickname ? ` <span class="muted">“${esc(r.nickname)}”</span>` : ""}</td>
              <td>${proRecord(r, r)}</td><td class="num">${r.n}</td></tr>`));
   };
@@ -199,7 +224,7 @@ function fighter(id) {
   if (!f) { app.innerHTML = "<p>Fighter not found.</p>"; return; }
   const fights = q(`
     SELECT e.date, e.event_id, e.name AS event, e.promotion, x.fight_id, x.weight_class, x.method, x.end_round,
-           x.end_time, x.time_format, me.result, o.fighter_id AS opp_id, of.name AS opp
+           x.end_time, x.time_format, x.bout_type, x.title_fight, me.result, o.fighter_id AS opp_id, of.name AS opp
     FROM fight_participants me
     JOIN fights x USING (fight_id) JOIN events e USING (event_id)
     JOIN fight_participants o ON o.fight_id = me.fight_id AND o.corner <> me.corner
@@ -213,7 +238,7 @@ function fighter(id) {
                  WHERE r.fighter_id <> ?`, [id, id])[0];
 
   const rec = { w: 0, l: 0, d: 0, nc: 0 };
-  fights.forEach((x) => { if (x.result) rec[x.result.toLowerCase()]++; });
+  fights.forEach((x) => { if (x.result && (x.bout_type || "pro") === "pro") rec[x.result.toLowerCase()]++; });
   const t = { kd: 0, sl: 0, sa: 0, tl: 0, ta: 0, sub: 0, ctrl: 0 };
   let secs = 0, slTimed = 0;
   const byFight = Object.fromEntries(fights.map((x) => [x.fight_id, x]));
@@ -231,29 +256,35 @@ function fighter(id) {
     f.reach_in && `${f.reach_in}″ reach`,
     f.weight_lbs && `${f.weight_lbs} lbs`,
     f.stance && esc(f.stance),
+    f.nationality && esc(f.nationality),
   ].filter(Boolean).join(" · ");
+  const sherdog = q("SELECT DISTINCT source_id FROM fighter_aliases WHERE fighter_id = ? AND source = 'sherdog'", [id]);
+  const links = (isUfcStats(id) ? [ext(`http://ufcstats.com/fighter-details/${id}`, "UFC Stats")] : [])
+    .concat(sherdog.map((r) => ext(`https://www.sherdog.com/fighter/x-${r.source_id}`, "Sherdog")));
   const stat = (label, value) => `<div class="stat"><small class="muted">${label}</small><b>${value}</b></div>`;
 
   app.innerHTML = `
     <h1>${esc(f.name)}</h1>
     <p>${bio}</p>
     <div class="grid2">
-      ${stat("Pro record", proRecord(f, rec))}
+      ${stat(f.wins != null ? "Pro record" : "Pro record (fights here)", proRecord(f, rec))}
+      ${own.length ? `
       ${stat("Sig. strikes / min", secs ? (slTimed / (secs / 60)).toFixed(2) : "—")}
       ${stat("Sig. strike accuracy", pct(t.sl, t.sa))}
       ${stat("Sig. strike defense", opp.sa ? pct(opp.sa - opp.sl, opp.sa) : "—")}
       ${stat("Takedowns", `${t.tl} of ${t.ta}`)}
       ${stat("Knockdowns", t.kd)}
       ${stat("Sub. attempts", t.sub)}
-      ${stat("Control time", hmm(t.ctrl))}
+      ${stat("Control time", hmm(t.ctrl))}` : ""}
     </div>
+    ${own.length ? `<p class="muted"><small>Stats are from the ${own.length} of ${fights.length} fights that have round-by-round stats.</small></p>` : ""}
     <h2>Fights</h2>
     ${table(["", "Opponent", "Method", "Rd", "Time", "Event", "Promotion", "Date"], fights.map((x) => `
-      <tr><td>${badge(x.result)}</td><td>${fighterLink(x.opp_id, x.opp)}</td>
+      <tr><td>${badge(x.result)}</td><td>${fighterLink(x.opp_id, x.opp)} ${boutTags(x)}</td>
           <td>${fightLink(x.fight_id, x.method || "—")}</td><td>${dash(x.end_round)}</td>
           <td>${dash(x.end_time)}</td><td>${eventLink(x.event_id, x.event)}</td>
           <td>${esc(x.promotion)}</td><td>${esc(x.date)}</td></tr>`))}
-    <p><small><a href="http://ufcstats.com/fighter-details/${esc(id)}">View on UFC Stats</a></small></p>`;
+    ${sourceLine(links)}`;
 }
 
 function events() {
@@ -296,7 +327,9 @@ function event(id) {
   const e = q("SELECT * FROM events WHERE event_id = ?", [id])[0];
   if (!e) { app.innerHTML = "<p>Event not found.</p>"; return; }
   const fights = q(`
-    SELECT x.fight_id, x.weight_class, x.method, x.end_round, x.end_time,
+    SELECT x.fight_id, x.weight_class, x.method, x.end_round, x.end_time, x.bout_type, x.title_fight,
+           EXISTS (SELECT 1 FROM round_stats r WHERE r.fight_id = x.fight_id)
+             OR EXISTS (SELECT 1 FROM smartcage_round_stats r WHERE r.fight_id = x.fight_id) AS has_stats,
            a.fighter_id a_id, fa.name a_name, a.result a_res,
            b.fighter_id b_id, fb.name b_name, b.result b_res
     FROM fights x
@@ -305,15 +338,20 @@ function event(id) {
     JOIN fighters fa ON fa.fighter_id = a.fighter_id
     JOIN fighters fb ON fb.fighter_id = b.fighter_id
     WHERE x.event_id = ? ORDER BY x.rowid`, [id]);
+  // The whole card is here if UFC Stats covers the promotion's cards or the card was read whole.
+  const whole = q(`SELECT ((SELECT coverage = 'full' FROM promotions WHERE promotion = ?1) AND ?2 = 'ufcstats')
+                     OR EXISTS (SELECT 1 FROM event_cards WHERE event_id = ?3 AND complete = 1) AS yes`,
+                  [e.promotion, e.source, id])[0].yes;
   app.innerHTML = `
     <h1>${esc(e.name)}</h1>
-    <p>${esc(e.promotion)} · ${esc(e.date)} · ${esc(e.location)}</p>
+    <p>${[e.promotion, e.date, e.location].filter(Boolean).map(esc).join(" · ")}</p>
+    ${whole ? "" : `<p class="muted"><small>Partial card: only the bouts of fighters this database follows.</small></p>`}
     ${table(["Fighters", "Weight class", "Method", "Rd", "Time", ""], fights.map((x) => `
       <tr><td>${badge(x.a_res)} ${fighterLink(x.a_id, x.a_name)}<br>${badge(x.b_res)} ${fighterLink(x.b_id, x.b_name)}</td>
-          <td>${esc(division(x.weight_class))}</td><td>${esc(x.method || "—")}</td>
+          <td>${x.weight_class ? esc(division(x.weight_class)) : "—"} ${boutTags(x)}</td><td>${esc(x.method || "—")}</td>
           <td>${dash(x.end_round)}</td><td>${dash(x.end_time)}</td>
-          <td>${fightLink(x.fight_id, "Stats →")}</td></tr>`))}
-    <p><small><a href="http://ufcstats.com/event-details/${esc(id)}">View on UFC Stats</a></small></p>`;
+          <td>${fightLink(x.fight_id, x.has_stats ? "Stats →" : "Details →")}</td></tr>`))}
+    ${sourceLine(eventSources(id))}`;
 }
 
 const ROUND_ROWS = [
@@ -334,14 +372,35 @@ const ROUND_ROWS = [
   ["Ground", (r) => of(r.ground_land, r.ground_att)],
 ];
 
+const SMARTCAGE_ROWS = [
+  ["Knockdowns", (r) => dash(r.knockdowns)],
+  ["Total strikes", (r) => of(r.total_str_land, r.total_str_att)],
+  ["Strike %", (r) => pct(r.total_str_land, r.total_str_att)],
+  ["Arm strikes", (r) => of(r.arm_land, r.arm_att)],
+  ["Leg strikes", (r) => of(r.leg_land, r.leg_att)],
+  ["Ground strikes", (r) => of(r.ground_land, r.ground_att)],
+  ["Power strikes landed", (r) => dash(r.power_land)],
+  ["Takedowns", (r) => of(r.td_land, r.td_att)],
+  ["Sub. attempts", (r) => dash(r.sub_att)],
+  ["Dominant positions", (r) => dash(r.dominant_positions)],
+  ["Time on the ground", (r) => mmss(r.ground_sec)],
+  ["Time standing", (r) => mmss(r.standing_sec)],
+];
+
 function fight(id) {
   const x = q(`SELECT x.*, e.name event, e.date FROM fights x JOIN events e USING (event_id)
                WHERE fight_id = ?`, [id])[0];
   if (!x) { app.innerHTML = "<p>Fight not found.</p>"; return; }
   const ps = q(`SELECT p.corner, p.result, p.fighter_id, f.name FROM fight_participants p
                 JOIN fighters f USING (fighter_id) WHERE fight_id = ? ORDER BY corner`, [id]);
-  const rounds = q("SELECT * FROM round_stats WHERE fight_id = ? ORDER BY round", [id]);
+  // Round stats in UFC Stats' columns, or PFL's older SmartCage set (its own columns).
+  let rounds = q("SELECT * FROM round_stats WHERE fight_id = ? ORDER BY round", [id]);
+  const smartcage = !rounds.length;
+  if (smartcage) rounds = q("SELECT * FROM smartcage_round_stats WHERE fight_id = ? ORDER BY round", [id]);
   const nums = [...new Set(rounds.map((r) => r.round))];
+  const statsFrom = rounds.length ? (smartcage ? "PFL (SmartCage)" : SOURCE_NAMES[rounds[0].source] || rounds[0].source) : "";
+  const links = isUfcStats(id) ? [ext(`http://ufcstats.com/fight-details/${id}`, "UFC Stats")] : [];
+  eventSources(x.event_id).filter((l) => !l.includes("ufcstats.com")).forEach((l) => links.push(l));
 
   // Totals: sum each column over rounds; stays NULL if every round is NULL.
   const total = (fid) => {
@@ -361,21 +420,24 @@ function fight(id) {
   app.innerHTML = `
     <p>${eventLink(x.event_id, x.event)} · ${esc(x.date)}</p>
     <h1>${ps.map((p) => `${fighterLink(p.fighter_id, p.name)} ${badge(p.result)}`).join(" vs ")}</h1>
-    <p>${esc(x.weight_class || "")}<br>
+    <p>${esc(x.weight_class || "")} ${boutTags(x)}<br>
        ${esc(x.method || "—")} · Round ${dash(x.end_round)} · ${dash(x.end_time)}
        ${x.time_format ? ` · ${esc(x.time_format)}` : ""}${x.referee ? ` · Referee: ${esc(x.referee)}` : ""}
        ${x.details ? `<br><small class="muted">${esc(x.details)}</small>` : ""}</p>
     ${rounds.length ? `
       <select id="rsel"><option value="t">Totals</option>${nums.map((n) => `<option value="${n}">Round ${n}</option>`).join("")}</select>
-      <div id="stats"></div>` : `<p class="muted">No round-by-round stats recorded for this fight.</p>`}
-    <p><small><a href="http://ufcstats.com/fight-details/${esc(id)}">View on UFC Stats</a></small></p>`;
+      <div id="stats"></div>
+      <p class="muted"><small>Stats counted by ${esc(statsFrom)}.${smartcage
+        ? " This older PFL system counts all strikes by arm, leg and ground, not significant strikes." : ""}</small></p>`
+      : `<p class="muted">No round-by-round stats recorded for this fight.</p>`}
+    ${sourceLine(links)}`;
   if (!rounds.length) return;
   const sel = document.getElementById("rsel");
   const render = () => {
     const [a, b] = pick(sel.value);
     document.getElementById("stats").innerHTML = table(
       ["", esc(ps[0].name), esc(ps[1]?.name || "")],
-      ROUND_ROWS.map(([label, fmt]) =>
+      (smartcage ? SMARTCAGE_ROWS : ROUND_ROWS).map(([label, fmt]) =>
         `<tr><td class="muted">${label}</td><td class="num">${fmt(a)}</td><td class="num">${fmt(b)}</td></tr>`));
   };
   sel.onchange = render;
@@ -426,12 +488,12 @@ function leaders() {
       WITH ff AS (
         SELECT x.fight_id, x.method FROM fights x JOIN events e USING (event_id)
         WHERE (?1 = '' OR division(x.weight_class) = ?1) AND substr(e.date, 1, 4) BETWEEN ?2 AND ?3
-          AND (?5 = '' OR e.promotion = ?5)),
+          AND (?5 = '' OR e.promotion = ?5) AND coalesce(x.bout_type, 'pro') = 'pro'),
       per AS (
         SELECT p.fighter_id, COUNT(*) n, SUM(p.result = 'W') w,
-               SUM(p.result = 'W' AND (ff.method LIKE '%KO%' OR ff.method = 'Submission')) fin,
+               SUM(p.result = 'W' AND (ff.method LIKE '%KO%' OR ff.method LIKE '%Submission%')) fin,
                SUM(p.result = 'W' AND ff.method LIKE '%KO%') ko,
-               SUM(p.result = 'W' AND ff.method = 'Submission') subw
+               SUM(p.result = 'W' AND ff.method LIKE '%Submission%') subw
         FROM fight_participants p JOIN ff USING (fight_id) GROUP BY p.fighter_id),
       rs AS (
         SELECT r.fighter_id, SUM(knockdowns) kd, SUM(sig_str_land) sl, SUM(sig_str_att) sa,
@@ -444,7 +506,10 @@ function leaders() {
     const show = (v) => s.fmt === "pct" ? Math.round(v * 1000) / 10 + "%" : s.fmt === "time" ? hmm(v) : num(v);
     document.getElementById("results").innerHTML = table(["#", "Fighter", "Fights", esc(s.label)],
       rows.map((r, i) => `<tr><td class="num">${i + 1}</td><td>${fighterLink(r.fighter_id, r.name)}</td>
-                          <td class="num">${r.n}</td><td class="num">${show(r.val)}</td></tr>`));
+                          <td class="num">${r.n}</td><td class="num">${show(r.val)}</td></tr>`)) +
+      `<p class="muted"><small>${s.expr.startsWith("per.")
+        ? "Counts pro fights in this database, which doesn't have every fighter's whole career."
+        : "Counts only fights with round-by-round stats: the UFC and the promotions UFC Stats covers, and PFL from December 2025."}</small></p>`;
   };
   app.querySelectorAll("select, input").forEach((el) => (el.onchange = render));
   render();
@@ -464,6 +529,10 @@ ORDER BY kd DESC LIMIT 20;`,
 FROM fights x JOIN events e USING (event_id)
 WHERE x.title_fight = 1 GROUP BY year ORDER BY year;`,
   "Fights per division": "SELECT division(weight_class) AS division, COUNT(*) AS fights FROM fights GROUP BY division ORDER BY fights DESC;",
+  "Promotions with whole cards": `SELECT e.promotion, COUNT(*) AS events, MIN(e.date) AS first, MAX(e.date) AS last
+FROM event_cards c JOIN events e USING (event_id)
+WHERE c.complete = 1 GROUP BY e.promotion ORDER BY events DESC;`,
+  "Where round stats come from": "SELECT source, COUNT(DISTINCT fight_id) AS fights, COUNT(*) AS fighter_rounds FROM round_stats GROUP BY source;",
   "All tables and columns": "SELECT name, sql FROM sqlite_master WHERE type = 'table';",
 };
 

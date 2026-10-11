@@ -24,6 +24,8 @@ td.wrap { white-space: normal; }
 .res-W  { background: #1f8a4c; color: #fff; }
 .res-L  { background: #b3261e; color: #fff; }
 .res-D, .res-NC { background: #777; color: #fff; }
+.tag { display: inline-block; border: 1px solid var(--pico-muted-border-color); border-radius: 4px;
+       font-size: .75em; padding: 0 .35em; color: var(--pico-muted-color); }
 
 .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .5rem 1rem; }
 .stat b { display: block; font-size: 1.3em; }
