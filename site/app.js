@@ -23,7 +23,7 @@ function q(sql, params = []) {
 }
 
 const dash = (v) => (v == null ? "—" : v);
-const of = (l, a) => (l == null ? "—" : `${l} of ${a}`);
+const of = (l, a) => (l == null ? "—" : a == null ? `${l}` : `${l} of ${a}`);
 const pct = (l, a) => (l == null || !a ? "—" : Math.round((100 * l) / a) + "%");
 const mmss = (s) => (s == null ? "—" : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`);
 const hmm = (s) => (s == null ? "—" : `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`);
@@ -49,7 +49,7 @@ const boutTags = (x) => (x.title_fight ? tag("Title") : "") +
 const isUfcStats = (id) => /^[0-9a-f]{16}$/.test(id);
 const ext = (url, label) => `<a href="${esc(url)}" target="_blank" rel="noopener">${label}</a>`;
 const sourceLine = (links) => links.length ? `<p><small>Source: ${links.join(" · ")}</small></p>` : "";
-const SOURCE_NAMES = { ufcstats: "UFC Stats", pfl: "PFL", sherdog: "Sherdog" };
+const SOURCE_NAMES = { ufcstats: "UFC Stats", pfl: "PFL", oktagon: "Oktagon", sherdog: "Sherdog" };
 function eventSources(id) {
   const links = isUfcStats(id) ? [ext(`http://ufcstats.com/event-details/${id}`, "UFC Stats")] : [];
   const sherdog = id.startsWith("sherdog:") ? [id.slice(8)]
@@ -150,7 +150,8 @@ async function loadDb() {
     const last = q("SELECT name, date FROM events ORDER BY date DESC LIMIT 1")[0];
     document.getElementById("footer").innerHTML =
       `Data from <a href="http://ufcstats.com">UFC Stats</a>, <a href="https://www.sherdog.com">Sherdog</a>, ` +
-      `<a href="https://pflmma.com">PFL</a> and <a href="https://www.bestfightodds.com">BestFightOdds</a>, updated daily. ` +
+      `<a href="https://pflmma.com">PFL</a>, <a href="https://oktagonmma.com">Oktagon</a> and ` +
+      `<a href="https://www.bestfightodds.com">BestFightOdds</a>, updated daily. ` +
       `Latest event: ${esc(last.name)} (${esc(last.date)}). ` +
       `<a href="https://github.com/jadevit/fight-canon-db">About and download</a>.`;
     window.addEventListener("hashchange", route);
@@ -230,20 +231,25 @@ function fighter(id) {
     JOIN fight_participants o ON o.fight_id = me.fight_id AND o.corner <> me.corner
     JOIN fighters of ON of.fighter_id = o.fighter_id
     WHERE me.fighter_id = ? ORDER BY e.date DESC`, [id]);
+  // Some sources count only what landed, so accuracy uses the rounds that have attempts.
   const own = q(`SELECT fight_id, SUM(knockdowns) kd, SUM(sig_str_land) sl, SUM(sig_str_att) sa,
-                        SUM(td_land) tl, SUM(td_att) ta, SUM(sub_att) sub, SUM(ctrl_sec) ctrl
+                        SUM(CASE WHEN sig_str_att IS NOT NULL THEN sig_str_land END) sla,
+                        SUM(td_land) tl, SUM(td_att) ta, SUM(CASE WHEN td_att IS NOT NULL THEN td_land END) tla,
+                        SUM(sub_att) sub, SUM(ctrl_sec) ctrl
                  FROM round_stats WHERE fighter_id = ? GROUP BY fight_id`, [id]);
   const opp = q(`SELECT SUM(r.sig_str_land) sl, SUM(r.sig_str_att) sa FROM round_stats r
                  JOIN fight_participants p ON p.fight_id = r.fight_id AND p.fighter_id = ?
-                 WHERE r.fighter_id <> ?`, [id, id])[0];
+                 WHERE r.fighter_id <> ? AND r.sig_str_att IS NOT NULL`, [id, id])[0];
 
   const rec = { w: 0, l: 0, d: 0, nc: 0 };
   fights.forEach((x) => { if (x.result && (x.bout_type || "pro") === "pro") rec[x.result.toLowerCase()]++; });
-  const t = { kd: 0, sl: 0, sa: 0, tl: 0, ta: 0, sub: 0, ctrl: 0 };
+  const t = { kd: 0, sl: 0, sa: 0, sla: 0, tl: 0, ta: 0, tla: 0, sub: 0, ctrl: 0 };
+  const has = { kd: false, ctrl: false };
   let secs = 0, slTimed = 0;
   const byFight = Object.fromEntries(fights.map((x) => [x.fight_id, x]));
   for (const r of own) {
     for (const k in t) t[k] += r[k] || 0;
+    for (const k in has) has[k] = has[k] || r[k] != null;
     const x = byFight[r.fight_id];
     const s = x && fightSeconds(x.time_format, x.end_round, x.end_time);
     if (s && r.sl != null) { secs += s; slTimed += r.sl; }
@@ -270,12 +276,12 @@ function fighter(id) {
       ${stat(f.wins != null ? "Pro record" : "Pro record (fights here)", proRecord(f, rec))}
       ${own.length ? `
       ${stat("Sig. strikes / min", secs ? (slTimed / (secs / 60)).toFixed(2) : "—")}
-      ${stat("Sig. strike accuracy", pct(t.sl, t.sa))}
+      ${stat("Sig. strike accuracy", pct(t.sla, t.sa))}
       ${stat("Sig. strike defense", opp.sa ? pct(opp.sa - opp.sl, opp.sa) : "—")}
-      ${stat("Takedowns", `${t.tl} of ${t.ta}`)}
-      ${stat("Knockdowns", t.kd)}
+      ${stat("Takedowns", t.ta ? `${t.tl} (${pct(t.tla, t.ta)})` : t.tl)}
+      ${stat("Knockdowns", has.kd ? t.kd : "—")}
       ${stat("Sub. attempts", t.sub)}
-      ${stat("Control time", hmm(t.ctrl))}` : ""}
+      ${stat("Control time", has.ctrl ? hmm(t.ctrl) : "—")}` : ""}
     </div>
     ${own.length ? `<p class="muted"><small>Stats are from the ${own.length} of ${fights.length} fights that have round-by-round stats.</small></p>` : ""}
     <h2>Fights</h2>
@@ -428,7 +434,8 @@ function fight(id) {
       <select id="rsel"><option value="t">Totals</option>${nums.map((n) => `<option value="${n}">Round ${n}</option>`).join("")}</select>
       <div id="stats"></div>
       <p class="muted"><small>Stats counted by ${esc(statsFrom)}.${smartcage
-        ? " This older PFL system counts all strikes by arm, leg and ground, not significant strikes." : ""}</small></p>`
+        ? " This older PFL system counts all strikes by arm, leg and ground, not significant strikes."
+        : rounds[0].sig_str_att == null ? " Only what landed is counted: no attempts, knockdowns or control time." : ""}</small></p>`
       : `<p class="muted">No round-by-round stats recorded for this fight.</p>`}
     ${sourceLine(links)}`;
   if (!rounds.length) return;
@@ -444,20 +451,58 @@ function fight(id) {
   render();
 }
 
-// Leaderboards. Each stat is a fixed SQL expression over the per-fighter aggregates below.
-const LEADER_STATS = {
+// Leaderboards, one board per source of numbers: results come from every fight, and each
+// stats source (they count differently) ranks only its own fights, with the stats it has.
+// Each stat is a fixed SQL expression over the per-fighter aggregates `per` and `rs`.
+const RESULT_STATS = {
   wins:   { label: "Wins", expr: "per.w" },
   fin:    { label: "Finishes (KO/TKO + submission wins)", expr: "per.fin" },
   ko:     { label: "KO/TKO wins", expr: "per.ko" },
   subw:   { label: "Submission wins", expr: "per.subw" },
-  kd:     { label: "Knockdowns", expr: "rs.kd" },
-  sig:    { label: "Sig. strikes landed", expr: "rs.sl" },
-  sigacc: { label: "Sig. strike accuracy (min. 100 attempted)", expr: "1.0 * rs.sl / rs.sa", where: "rs.sa >= 100", fmt: "pct" },
-  td:     { label: "Takedowns landed", expr: "rs.tl" },
-  tdacc:  { label: "Takedown accuracy (min. 10 attempted)", expr: "1.0 * rs.tl / rs.ta", where: "rs.ta >= 10", fmt: "pct" },
-  subatt: { label: "Submission attempts", expr: "rs.suba" },
-  ctrl:   { label: "Control time", expr: "rs.ctrl", fmt: "time" },
   fights: { label: "Fights", expr: "per.n" },
+};
+const LANDED_STATS = {
+  sig:    { label: "Sig. strikes landed", expr: "rs.sl" },
+  total:  { label: "Total strikes landed", expr: "rs.tsl" },
+  td:     { label: "Takedowns landed", expr: "rs.tl" },
+  subatt: { label: "Submission attempts", expr: "rs.suba" },
+};
+const FULL_STATS = {
+  kd:     { label: "Knockdowns", expr: "rs.kd" },
+  sig:    LANDED_STATS.sig,
+  sigacc: { label: "Sig. strike accuracy (min. 100 attempted)", expr: "1.0 * rs.sl / rs.sa", where: "rs.sa >= 100", fmt: "pct" },
+  total:  LANDED_STATS.total,
+  td:     LANDED_STATS.td,
+  tdacc:  { label: "Takedown accuracy (min. 10 attempted)", expr: "1.0 * rs.tl / rs.ta", where: "rs.ta >= 10", fmt: "pct" },
+  subatt: LANDED_STATS.subatt,
+  ctrl:   { label: "Control time", expr: "rs.ctrl", fmt: "time" },
+};
+const ROUND_SUMS = `SUM(knockdowns) kd, SUM(sig_str_land) sl, SUM(sig_str_att) sa, SUM(total_str_land) tsl,
+  SUM(td_land) tl, SUM(td_att) ta, SUM(sub_att) suba, SUM(ctrl_sec) ctrl`;
+const BOARDS = {
+  results:   { label: "Results (all fights)", stats: RESULT_STATS,
+               note: "Counts pro fights in this database, which doesn't have every fighter's whole career." },
+  ufcstats:  { label: "UFC Stats", stats: FULL_STATS, table: "round_stats", source: "ufcstats", sums: ROUND_SUMS,
+               note: "Fights counted by UFC Stats: the UFC, and the other promotions it covers." },
+  pfl:       { label: "PFL (from Dec 2025)", stats: FULL_STATS, table: "round_stats", source: "pfl", sums: ROUND_SUMS,
+               note: "PFL's own stats, from December 2025 on." },
+  smartcage: { label: "PFL SmartCage (2018–2025)", table: "smartcage_round_stats", source: "pfl",
+               sums: `SUM(knockdowns) kd, SUM(total_str_land) tsl, SUM(total_str_att) tsa, SUM(arm_land) arm,
+                      SUM(leg_land) leg, SUM(ground_land) grd, SUM(td_land) tl, SUM(td_att) ta, SUM(sub_att) suba`,
+               stats: {
+                 kd:     { label: "Knockdowns", expr: "rs.kd" },
+                 total:  LANDED_STATS.total,
+                 totacc: { label: "Strike accuracy (min. 100 thrown)", expr: "1.0 * rs.tsl / rs.tsa", where: "rs.tsa >= 100", fmt: "pct" },
+                 arm:    { label: "Arm strikes landed", expr: "rs.arm" },
+                 leg:    { label: "Leg strikes landed", expr: "rs.leg" },
+                 ground: { label: "Ground strikes landed", expr: "rs.grd" },
+                 td:     LANDED_STATS.td,
+                 tdacc:  FULL_STATS.tdacc,
+                 subatt: LANDED_STATS.subatt,
+               },
+               note: "PFL's older system, 2018 to November 2025. It counts all strikes, not significant ones." },
+  oktagon:   { label: "Oktagon", stats: LANDED_STATS, table: "round_stats", source: "oktagon", sums: ROUND_SUMS,
+               note: "Oktagon's own stats. Only what landed is counted, so there are no accuracy, knockdown or control boards." },
 };
 
 function leaders() {
@@ -466,12 +511,15 @@ function leaders() {
   const years = [];
   for (let y = Number(maxY); y >= Number(minY); y--) years.push(String(y));
   const opt = (v, label, cur) => `<option value="${esc(v)}" ${cur === v ? "selected" : ""}>${esc(label)}</option>`;
-  const cur = { stat: p.get("stat") || "wins", promo: p.get("promo") || "", div: p.get("div") || "", from: p.get("from") || minY,
-                to: p.get("to") || maxY, min: p.get("min") || "1" };
+  const board0 = BOARDS[p.get("board")] ? p.get("board") : "results";
+  const cur = { board: board0, stat: p.get("stat") || "", promo: p.get("promo") || "", div: p.get("div") || "",
+                from: p.get("from") || minY, to: p.get("to") || maxY, min: p.get("min") || "1" };
+  const statOptions = (board, stat) => Object.entries(BOARDS[board].stats).map(([k, s]) => opt(k, s.label, stat)).join("");
   app.innerHTML = `
     <h1>Leaders</h1>
     <div class="filters">
-      <label>Stat<select id="stat">${Object.entries(LEADER_STATS).map(([k, s]) => opt(k, s.label, cur.stat)).join("")}</select></label>
+      <label>Board<select id="board">${Object.entries(BOARDS).map(([k, b]) => opt(k, b.label, cur.board)).join("")}</select></label>
+      <label>Stat<select id="stat">${statOptions(cur.board, cur.stat)}</select></label>
       <label>Promotion<select id="promo">${opt("", "All promotions", cur.promo)}${promotions().map((x) => opt(x, x, cur.promo)).join("")}</select></label>
       <label>Division<select id="div">${opt("", "All divisions", cur.div)}${DIVISIONS.map((d) => opt(d, d, cur.div)).join("")}</select></label>
       <label>From<select id="from">${years.map((y) => opt(y, y, cur.from)).join("")}</select></label>
@@ -481,37 +529,47 @@ function leaders() {
     <div id="results"></div>`;
   const val = (k) => document.getElementById(k).value;
   const render = () => {
-    const f = { stat: val("stat"), promo: val("promo"), div: val("div"), from: val("from"), to: val("to"), min: val("min") || "1" };
+    const f = { board: val("board"), stat: val("stat"), promo: val("promo"), div: val("div"), from: val("from"),
+                to: val("to"), min: val("min") || "1" };
     setParams(new URLSearchParams(f));
-    const s = LEADER_STATS[f.stat];
+    const b = BOARDS[f.board];
+    const s = b.stats[f.stat] || Object.values(b.stats)[0];
+    // A stats board only looks at the fights that source counted.
+    const counted = b.table
+      ? `AND EXISTS (SELECT 1 FROM ${b.table} r WHERE r.fight_id = x.fight_id AND r.source = '${b.source}')` : "";
+    const rs = b.table
+      ? `SELECT r.fighter_id, ${b.sums} FROM ${b.table} r JOIN ff USING (fight_id)
+         WHERE r.source = '${b.source}' GROUP BY r.fighter_id`
+      : "SELECT NULL fighter_id WHERE 0";
     const rows = q(`
       WITH ff AS (
         SELECT x.fight_id, x.method FROM fights x JOIN events e USING (event_id)
         WHERE (?1 = '' OR division(x.weight_class) = ?1) AND substr(e.date, 1, 4) BETWEEN ?2 AND ?3
-          AND (?5 = '' OR e.promotion = ?5) AND coalesce(x.bout_type, 'pro') = 'pro'),
+          AND (?5 = '' OR e.promotion = ?5) AND coalesce(x.bout_type, 'pro') = 'pro' ${counted}),
       per AS (
         SELECT p.fighter_id, COUNT(*) n, SUM(p.result = 'W') w,
                SUM(p.result = 'W' AND (ff.method LIKE '%KO%' OR ff.method LIKE '%Submission%')) fin,
                SUM(p.result = 'W' AND ff.method LIKE '%KO%') ko,
                SUM(p.result = 'W' AND ff.method LIKE '%Submission%') subw
         FROM fight_participants p JOIN ff USING (fight_id) GROUP BY p.fighter_id),
-      rs AS (
-        SELECT r.fighter_id, SUM(knockdowns) kd, SUM(sig_str_land) sl, SUM(sig_str_att) sa,
-               SUM(td_land) tl, SUM(td_att) ta, SUM(sub_att) suba, SUM(ctrl_sec) ctrl
-        FROM round_stats r JOIN ff USING (fight_id) GROUP BY r.fighter_id)
+      rs AS (${rs})
       SELECT f.fighter_id, f.name, per.n, ${s.expr} AS val
       FROM per JOIN fighters f USING (fighter_id) LEFT JOIN rs USING (fighter_id)
       WHERE per.n >= ?4 AND ${s.expr} IS NOT NULL ${s.where ? `AND ${s.where}` : ""}
       ORDER BY val DESC, per.n ASC LIMIT 50`, [f.div, f.from, f.to, Number(f.min), f.promo]);
     const show = (v) => s.fmt === "pct" ? Math.round(v * 1000) / 10 + "%" : s.fmt === "time" ? hmm(v) : num(v);
-    document.getElementById("results").innerHTML = table(["#", "Fighter", "Fights", esc(s.label)],
+    document.getElementById("results").innerHTML = table(["#", "Fighter", b.table ? "Fights counted" : "Fights", esc(s.label)],
       rows.map((r, i) => `<tr><td class="num">${i + 1}</td><td>${fighterLink(r.fighter_id, r.name)}</td>
                           <td class="num">${r.n}</td><td class="num">${show(r.val)}</td></tr>`)) +
-      `<p class="muted"><small>${s.expr.startsWith("per.")
-        ? "Counts pro fights in this database, which doesn't have every fighter's whole career."
-        : "Counts only fights with round-by-round stats: the UFC and the promotions UFC Stats covers, and PFL from December 2025."}</small></p>`;
+      `<p class="muted"><small>${esc(b.note)}</small></p>`;
   };
   app.querySelectorAll("select, input").forEach((el) => (el.onchange = render));
+  // Each board has its own stats: changing board refills the stat list.
+  document.getElementById("board").onchange = () => {
+    const stat = document.getElementById("stat");
+    stat.innerHTML = statOptions(val("board"), stat.value);
+    render();
+  };
   render();
 }
 
