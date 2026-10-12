@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-12T19:48:35+00:00",
+  "updated_at": "2026-10-12T20:41:51+00:00",
   "coverage": {
     "first_event_date": "1980-04-25",
     "last_event_date": "2026-10-10",
@@ -10,14 +10,14 @@
     "promotions": 4730,
     "promotion_aliases": 4705,
     "fighters": 37936,
-    "fighter_aliases": 47909,
+    "fighter_aliases": 48617,
     "fighter_redirects": 75,
     "events": 26214,
-    "event_aliases": 1420,
+    "event_aliases": 1519,
     "event_cards": 1755,
     "fights": 82187,
     "fight_participants": 164374,
-    "round_stats": 52026,
+    "round_stats": 56610,
     "smartcage_round_stats": 3562,
     "judge_scores": 24450,
     "odds": 20716

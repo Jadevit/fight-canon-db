@@ -290,6 +290,17 @@ def add_arguments(p: argparse.ArgumentParser) -> None:
     p.add_argument("--delay", type=float, default=1.0, help="seconds between requests")
 
 
+def fill_sex(conn: sqlite3.Connection) -> None:
+    """Set fighters.sex where UFC Stats' bout titles say it: 'F' for anyone in a women's
+    bout, 'M' for anyone else in a named division (catch weight and open weight don't say)."""
+    bouts = ("SELECT p.fighter_id FROM fight_participants p JOIN fights f USING (fight_id) "
+             "WHERE f.source = 'ufcstats' AND f.weight_class LIKE ")
+    with conn:
+        conn.execute(f"UPDATE fighters SET sex = 'F' WHERE sex IS NULL AND fighter_id IN ({bouts} '%Women%')")
+        conn.execute(f"UPDATE fighters SET sex = 'M' WHERE sex IS NULL AND fighter_id IN ({bouts} '%weight%' "
+                     "AND f.weight_class NOT LIKE '%Catch%' AND f.weight_class NOT LIKE '%Open%')")
+
+
 def update(conn: sqlite3.Connection, args: argparse.Namespace, raw: Path) -> None:
     """Bring `conn` up to date with UFC Stats. Raises if nothing could be loaded."""
     pages = Pages(raw, None if args.offline else Fetcher(args.delay))
@@ -318,3 +329,4 @@ def update(conn: sqlite3.Connection, args: argparse.Namespace, raw: Path) -> Non
                                   {eid for eid, _ in completed})
     if skipped and not loaded:
         raise RuntimeError(f"All {len(skipped)} target events failed to download.")
+    fill_sex(conn)

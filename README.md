@@ -2,8 +2,9 @@
 
 A SQLite database of MMA events, fights and round-by-round stats (UFC, PRIDE and more),
 scraped from [UFC Stats](http://ufcstats.com), with fighters' full pro records from
-[Sherdog](https://www.sherdog.com), PFL's own stats from [PFL](https://pflmma.com) and betting
-lines from [BestFightOdds](https://www.bestfightodds.com), updated automatically.
+[Sherdog](https://www.sherdog.com), their own stats from [PFL](https://pflmma.com) and
+[Oktagon](https://oktagonmma.com), and betting lines from
+[BestFightOdds](https://www.bestfightodds.com), updated automatically.
 
 - Browse it: **https://jadevit.github.io/fight-canon-db/** (works on phones)
 - Database: [latest release](https://github.com/jadevit/fight-canon-db/releases/latest) (`canon.db`)
@@ -43,11 +44,15 @@ know get IDs like `sherdog:12345`. Filter `fights.source = 'ufcstats'` for UFC S
 | `judge_scores`       | judge's score per round          | `fight_id`, `fighter_id`          |
 | `odds`               | fighter's betting line per fight | `fight_id`, `fighter_id`          |
 
-`round_stats.source` says who counted: `ufcstats`, or `pfl` for PFL events from 2025-12 on (same
-columns, no per-round reversals). Different crews score fights, so filter on it when the
-numbers have to be comparable. PFL's earlier events (2018 to 2025-11) have a different set of
+`round_stats.source` says who counted: `ufcstats`; `pfl` for PFL events from 2025-12 on (same
+columns, no per-round reversals); or `oktagon`, which only has what landed (strikes, significant
+strikes by target, takedowns) and submission attempts, with every other column NULL. Different
+crews score fights, so filter on it when the numbers have to be comparable. PFL's earlier events (2018 to 2025-11) have a different set of
 stats (strikes by arm / leg / ground, ground and standing time), kept in `smartcage_round_stats`.
-PFL stats attach to the Sherdog fight, so those fights have `fights.source = 'sherdog'`.
+PFL and Oktagon stats attach to the Sherdog fight, so those fights have `fights.source = 'sherdog'`.
+
+`fighters.sex` is `M` or `F` where a source says so (UFC Stats' divisions, Oktagon's bouts), and
+NULL otherwise.
 
 Stats that weren't recorded are `NULL`, not `0`. Odds are American and cover 2007 onward:
 the opening line and the lowest/highest closing line across sportsbooks. Per-round judge

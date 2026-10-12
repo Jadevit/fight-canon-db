@@ -21,6 +21,8 @@ CREATE TABLE fighters (
     draws        INTEGER,
     no_contests  INTEGER,
     nationality  TEXT,                      -- from Sherdog (sherdog: fighters only)
+    sex          TEXT,                      -- 'M' or 'F', where a source says so (UFC Stats'
+                                            -- divisions, Oktagon's bouts); NULL: not known
     source       TEXT NOT NULL DEFAULT 'ufcstats'
 );
 
@@ -121,9 +123,10 @@ CREATE TABLE fight_participants (
 );
 
 -- One row per fighter per round. *_land = landed, *_att = attempted. `source` says who counted:
--- 'ufcstats', or 'pfl' (PFL's own stats from 2025-12, same columns; it has no per-round
--- reversals). Different crews score fights, so the same column isn't guaranteed the same
--- judgment across sources.
+-- 'ufcstats'; 'pfl' (PFL's own stats from 2025-12, same columns; it has no per-round
+-- reversals); or 'oktagon' (Oktagon's own stats: only strikes landed, by significance and
+-- target, takedowns landed and submission attempts; every other column is NULL). Different
+-- crews score fights, so the same column isn't guaranteed the same judgment across sources.
 CREATE TABLE round_stats (
     fight_id       TEXT NOT NULL REFERENCES fights(fight_id),
     fighter_id     TEXT NOT NULL REFERENCES fighters(fighter_id),
