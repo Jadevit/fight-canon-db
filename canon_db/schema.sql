@@ -3,7 +3,8 @@
 -- Fighters, events and fights from UFC Stats keep their UFC Stats IDs (the 16-character hex
 -- slug in each page URL). Anything UFC Stats doesn't have comes from Sherdog with an id like
 -- `sherdog:<number>` (fights: `sherdog:<event>:<fighter>-<fighter>`) and `source = 'sherdog'`.
--- Stats that were not recorded are NULL, never 0.
+-- Other sources (PFL, Oktagon, BestFightOdds, scorecards) attach rows to those fights and
+-- say so in their own `source` column. Stats that were not recorded are NULL, never 0.
 
 PRAGMA foreign_keys = ON;
 

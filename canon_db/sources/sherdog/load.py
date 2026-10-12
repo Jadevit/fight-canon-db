@@ -11,16 +11,22 @@ Names only have to agree (see name_ok); a Sherdog id already linked to someone e
 reported in conflicts.tsv and left alone.
 
 Fights. Every pro fight on a linked fighter's page that the database doesn't have becomes a
-`source = 'sherdog'` fight. Opponents UFC Stats doesn't know become `sherdog:<id>` fighters;
-events are the database's own when one of their fights matched (event_aliases), else
-`sherdog:<id>`. When a `sherdog:` fighter later turns up on UFC Stats, their rows move to the
-UFC Stats id (fighter_redirects), and a Sherdog fight that UFC Stats also has is dropped.
+`source = 'sherdog'` fight (`bout_type = 'pro'`). Opponents UFC Stats doesn't know become
+`sherdog:<id>` fighters; events are the database's own when one of their fights matched
+(event_aliases), else `sherdog:<id>`. When a `sherdog:` fighter later turns up on UFC Stats,
+their rows move to the UFC Stats id (fighter_redirects), and a Sherdog fight that UFC Stats
+also has is dropped.
+
+Cards. After the fighter pages, the same update reads whole cards for some organizations and
+checks those fights' bout types (see cards.py). A fight on such an event belongs to its card:
+this loader fills it in but never deletes it.
 
 Which pages:
   default     fighters on UFC Stats cards from the last --recent-days days, plus anyone
               linked during the run (their page holds their earlier career)
   --all       every UFC Stats fighter with a fight (~4.5k pages, ~1.5 h)
   --offline   every page already on disk, no network
+  --relabel   no fighter pages: label every Sherdog event from its organization
 """
 
 from __future__ import annotations
@@ -502,7 +508,7 @@ def add_arguments(p: argparse.ArgumentParser) -> None:
     p.add_argument("--all-cards", action="store_true",
                    help="list every event of those organizations, not just their latest 100")
     p.add_argument("--classify-all", action="store_true",
-                   help="check every card fight's bout type on fighter pages, not just recent cards'")
+                   help="check every card fight's bout type on fighter pages, not just recent cards")
     p.add_argument("--relabel", action="store_true",
                    help="label every Sherdog event from its organization (~25k event pages "
                         "the first time, ~7 h; read from disk after)")

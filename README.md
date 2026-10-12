@@ -6,7 +6,7 @@ scraped from [UFC Stats](http://ufcstats.com), with fighters' full pro records f
 [Oktagon](https://oktagonmma.com), and betting lines from
 [BestFightOdds](https://www.bestfightodds.com), updated automatically.
 
-- Browse it: **https://jadevit.github.io/fight-canon-db/** (works on phones)
+- Browse it: **https://jadevit.github.io/fight-canon-db/**
 - Database: [latest release](https://github.com/jadevit/fight-canon-db/releases/latest) (`canon.db`)
 - Coverage and row counts: [`data/summary.json`](data/summary.json)
 - Schema: [`canon_db/schema.sql`](canon_db/schema.sql)
@@ -88,7 +88,7 @@ last 21 days (UFC Stats often posts stats and corrections late), and if somethin
 changed publishes the database as a new release and commits `data/summary.json`. A second, weekly Action picks up events UFC Stats
 leaves off its events list (Dana White's Contender Series, PRIDE and other promotions).
 Sherdog pages of fighters from the last 21 days' cards are read each day too, and so are the
-new and recent cards of the promotions above.
+new and recent cards of the promotions above, with PFL's and Oktagon's stats for theirs.
 
 ## The website
 

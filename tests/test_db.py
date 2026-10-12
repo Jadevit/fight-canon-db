@@ -1,6 +1,5 @@
 """Tests for the source-agnostic database plumbing and the published schema."""
 
-import shutil
 import sqlite3
 
 import pytest
