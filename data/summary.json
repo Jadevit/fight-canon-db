@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-12T20:41:51+00:00",
+  "updated_at": "2026-10-13T17:31:40+00:00",
   "coverage": {
     "first_event_date": "1980-04-25",
     "last_event_date": "2026-10-10",
@@ -10,7 +10,7 @@
     "promotions": 4730,
     "promotion_aliases": 4705,
     "fighters": 37936,
-    "fighter_aliases": 48617,
+    "fighter_aliases": 48618,
     "fighter_redirects": 75,
     "events": 26214,
     "event_aliases": 1519,
