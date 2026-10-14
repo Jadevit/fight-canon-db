@@ -32,11 +32,14 @@ from canon_db.sources.sherdog.pages import bio, parse_card, parse_event, parse_o
 ORGS = {
     "8185": "Absolute Championship Akhmat",
     "1960": "Bellator MMA",
+    "11227": "Brave Combat Federation",
     "186": "Cage Warriors",
+    "15829": "Fight Nation Championship",
     "351": "Jungle Fight",
     "668": "Konfrontacja Sztuk Walki",
     "11339": "Legacy Fighting Alliance (LFA)",
     "5383": "Oktagon MMA",
+    "3877": "One Championship",
     "12241": "Professional Fighters League",
     "10333": "Rizin Fighting Federation",
 }

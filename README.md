@@ -3,8 +3,9 @@
 A SQLite database of MMA events, fights and round-by-round stats (UFC, PRIDE and more),
 scraped from [UFC Stats](http://ufcstats.com), with fighters' full pro records from
 [Sherdog](https://www.sherdog.com), their own stats from [PFL](https://pflmma.com) and
-[Oktagon](https://oktagonmma.com), and betting lines from
-[BestFightOdds](https://www.bestfightodds.com), updated automatically.
+[Oktagon](https://oktagonmma.com), [Sofascore](https://www.sofascore.com)'s stats for promotions
+that publish none, and betting lines from [BestFightOdds](https://www.bestfightodds.com),
+updated automatically.
 
 - Browse it: **https://jadevit.github.io/fight-canon-db/**
 - Database: [latest release](https://github.com/jadevit/fight-canon-db/releases/latest) (`canon.db`)
@@ -36,6 +37,7 @@ know get IDs like `sherdog:12345`. Filter `fights.source = 'ufcstats'` for UFC S
 | `fight_participants` | fighter in a fight (2 per fight) | `fight_id`, `fighter_id`          |
 | `round_stats`        | fighter per round                | `fight_id`, `fighter_id`, `round` |
 | `smartcage_round_stats` | fighter per round (older PFL) | `fight_id`, `fighter_id`, `round` |
+| `sofascore_round_stats` | fighter per round (Sofascore's extras) | `fight_id`, `fighter_id`, `round` |
 | `fighters`           | fighter (bio + pro record)       | `fighter_id`                      |
 | `fighter_aliases`    | fighter's name and id per source | `fighter_id`                      |
 | `fighter_redirects`  | old id of a merged fighter       | `old_id` → `new_id`               |
@@ -45,11 +47,17 @@ know get IDs like `sherdog:12345`. Filter `fights.source = 'ufcstats'` for UFC S
 | `odds`               | fighter's betting line per fight | `fight_id`, `fighter_id`          |
 
 `round_stats.source` says who counted: `ufcstats`; `pfl` for PFL events from 2025-12 on (same
-columns, no per-round reversals); or `oktagon`, which only has what landed (strikes, significant
-strikes by target, takedowns) and submission attempts, with every other column NULL. Different
+columns, no per-round reversals); `oktagon`, which only has what landed (strikes, significant
+strikes by target, takedowns) and submission attempts, with every other column NULL; or
+`sofascore`, a third party's count for promotions with no official stats (ONE, RIZIN, KSW, ACA,
+BRAVE, Cage Warriors, Fight Nation, Jungle Fight) and for Oktagon fights in place of
+Oktagon's: significant strikes landed and by target, total strikes thrown (not landed),
+knockdowns, takedowns, submission attempts and control time. Its strikes by position and time
+in each position are in `sofascore_round_stats`. A fight's stats come from one source. Different
 crews score fights, so filter on it when the numbers have to be comparable. PFL's earlier events (2018 to 2025-11) have a different set of
 stats (strikes by arm / leg / ground, ground and standing time), kept in `smartcage_round_stats`.
-PFL and Oktagon stats attach to the Sherdog fight, so those fights have `fights.source = 'sherdog'`.
+PFL, Oktagon and Sofascore stats attach to the Sherdog fight, so those fights have
+`fights.source = 'sherdog'`.
 
 `fighters.sex` is `M` or `F` where a source says so (UFC Stats' divisions, Oktagon's bouts), and
 NULL otherwise.
@@ -63,8 +71,8 @@ UFC Stats usually lists the winner first, so don't use corner as a feature for o
 In Sherdog fights corner means nothing. Sherdog events are labelled by their Sherdog
 organization: the label we already use if its events overlap ours, else its full name.
 
-Sherdog fights get in two ways. For some promotions (ACA, Bellator, Cage Warriors, Jungle Fight,
-KSW, LFA, Oktagon, PFL, RIZIN) every card is read whole, and those events are in `event_cards`.
+Sherdog fights get in two ways. For some promotions (ACA, Bellator, BRAVE, Cage Warriors,
+Fight Nation, Jungle Fight, KSW, LFA, Oktagon, ONE, PFL, RIZIN) every card is read whole, and those events are in `event_cards`.
 Other Sherdog fights come from the pages of fighters linked to UFC Stats, so they are there
 because of who fought in them: filter on `event_cards` when that matters. Event pages don't say
 whether a bout was pro, so `fights.bout_type` (`pro`, `exhibition`, `amateur`) comes from the
@@ -88,7 +96,7 @@ last 21 days (UFC Stats often posts stats and corrections late), and if somethin
 changed publishes the database as a new release and commits `data/summary.json`. A second, weekly Action picks up events UFC Stats
 leaves off its events list (Dana White's Contender Series, PRIDE and other promotions).
 Sherdog pages of fighters from the last 21 days' cards are read each day too, and so are the
-new and recent cards of the promotions above, with PFL's and Oktagon's stats for theirs.
+new and recent cards of the promotions above, with PFL's, Oktagon's and Sofascore's stats.
 
 ## The website
 

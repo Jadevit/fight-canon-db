@@ -125,9 +125,13 @@ CREATE TABLE fight_participants (
 
 -- One row per fighter per round. *_land = landed, *_att = attempted. `source` says who counted:
 -- 'ufcstats'; 'pfl' (PFL's own stats from 2025-12, same columns; it has no per-round
--- reversals); or 'oktagon' (Oktagon's own stats: only strikes landed, by significance and
--- target, takedowns landed and submission attempts; every other column is NULL). Different
--- crews score fights, so the same column isn't guaranteed the same judgment across sources.
+-- reversals); 'oktagon' (Oktagon's own stats: only strikes landed, by significance and
+-- target, takedowns landed and submission attempts; every other column is NULL); or
+-- 'sofascore' (a third party's count, for promotions with no official stats: significant
+-- strikes landed and by target, total strikes thrown but not landed, knockdowns, takedowns,
+-- submission attempts and control; the rest is NULL, the split by position included).
+-- Different crews score fights, so the same column isn't guaranteed the same judgment
+-- across sources. A fight's rows all come from one source.
 CREATE TABLE round_stats (
     fight_id       TEXT NOT NULL REFERENCES fights(fight_id),
     fighter_id     TEXT NOT NULL REFERENCES fighters(fighter_id),
@@ -182,6 +186,28 @@ CREATE TABLE smartcage_round_stats (
     ground_sec         INTEGER,             -- time the fight spent on the ground
     standing_sec       INTEGER,
     source             TEXT NOT NULL DEFAULT 'pfl',
+    PRIMARY KEY (fight_id, fighter_id, round)
+);
+
+-- What Sofascore counts beyond round_stats' columns, for the fights whose round_stats are
+-- Sofascore's: significant strikes landed by position (the parts overlap and don't add up
+-- to sig_str_land, unlike round_stats' dist/clinch/ground), time spent in each position
+-- (the same for both fighters), and control split into clinch and ground
+-- (round_stats.ctrl_sec is their sum).
+CREATE TABLE sofascore_round_stats (
+    fight_id          TEXT NOT NULL REFERENCES fights(fight_id),
+    fighter_id        TEXT NOT NULL REFERENCES fighters(fighter_id),
+    round             INTEGER NOT NULL,
+    sig_distance_land INTEGER,
+    sig_clinch_land   INTEGER,
+    sig_ground_land   INTEGER,
+    distance_sec      INTEGER,
+    clinch_sec        INTEGER,
+    ground_sec        INTEGER,
+    clinch_ctrl_sec   INTEGER,
+    ground_ctrl_sec   INTEGER,
+    transitions       INTEGER,              -- position changes the fighter made
+    source            TEXT NOT NULL DEFAULT 'sofascore',
     PRIMARY KEY (fight_id, fighter_id, round)
 );
 

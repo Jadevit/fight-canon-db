@@ -5,7 +5,8 @@ Oktagon logs every strike, takedown and submission attempt of a fight. Those log
 disk (data/raw/oktagon/matches/); the database takes their per-round totals, in round_stats
 with `source = 'oktagon'`. Only what the log reliably has is filled: strikes landed (all,
 significant, and significant by target), takedowns landed, submission attempts. Attempts,
-knockdowns, control time and position are NULL.
+knockdowns, control time and position are NULL. Sofascore counts more (attempts, control),
+so a fight it has gets its stats instead (sofascore/load.py), and this loader skips it.
 
 A bout is matched to our fight like a PFL bout (see pfl/load.py): date within a day and
 both names, then the one unclaimed fight on the linked event that has one of its fighters.

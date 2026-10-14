@@ -27,7 +27,7 @@ PROMOTIONS = Path(__file__).resolve().parent / "promotions.csv"
 
 TABLES = ("promotions", "promotion_aliases", "fighters", "fighter_aliases", "fighter_redirects", "events",
           "event_aliases", "event_cards", "fights", "fight_participants", "round_stats",
-          "smartcage_round_stats", "judge_scores", "odds")
+          "smartcage_round_stats", "sofascore_round_stats", "judge_scores", "odds")
 
 
 def digest(conn: sqlite3.Connection) -> str:

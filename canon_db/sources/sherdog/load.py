@@ -323,8 +323,8 @@ def label_events(pages: Pages, labels: Labels, event_ids: list[str]) -> list[tup
 
 def merge(conn: sqlite3.Connection, old: str, new: str) -> None:
     """Move every row of fighter `old` to `new`, and leave a redirect."""
-    for table in ("fight_participants", "round_stats", "smartcage_round_stats", "judge_scores", "odds",
-                  "fighter_aliases"):
+    for table in ("fight_participants", "round_stats", "smartcage_round_stats", "sofascore_round_stats",
+                  "judge_scores", "odds", "fighter_aliases"):
         conn.execute(f"UPDATE OR IGNORE {table} SET fighter_id = ? WHERE fighter_id = ?", (new, old))
         conn.execute(f"DELETE FROM {table} WHERE fighter_id = ?", (old,))
     conn.execute("UPDATE fighter_redirects SET new_id = ? WHERE new_id = ?", (new, old))
@@ -433,7 +433,8 @@ def write(conn: sqlite3.Connection, st: State, read: dict[str, dict], pages: Pag
 
 def delete_fight(conn: sqlite3.Connection, fight: str) -> None:
     """Delete a Sherdog fight and whatever other sources attached to it."""
-    for table in ("round_stats", "smartcage_round_stats", "odds", "fight_participants", "fights"):
+    for table in ("round_stats", "smartcage_round_stats", "sofascore_round_stats", "odds",
+                  "fight_participants", "fights"):
         conn.execute(f"DELETE FROM {table} WHERE fight_id = ?", (fight,))
 
 

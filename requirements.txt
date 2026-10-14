@@ -1,6 +1,7 @@
-# Runtime: requests is the only dependency (for fetching pages). Parsing and the
-# database layer are pure standard library.
+# Runtime: requests fetches pages; curl_cffi fetches Sofascore, which only answers clients
+# with a browser's fingerprint. Parsing and the database layer are pure standard library.
 requests>=2.31
+curl_cffi>=0.7
 
 # Tests
 pytest>=8

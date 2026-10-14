@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-14T18:06:08+00:00",
+  "updated_at": "2026-10-14T22:35:48+00:00",
   "coverage": {
     "first_event_date": "1980-04-25",
     "last_event_date": "2026-10-13",
@@ -7,18 +7,19 @@
     "last_event_id": "eb04b9d31e938edb"
   },
   "rows": {
-    "promotions": 4730,
-    "promotion_aliases": 4705,
-    "fighters": 37938,
-    "fighter_aliases": 48624,
-    "fighter_redirects": 75,
-    "events": 26215,
-    "event_aliases": 1519,
-    "event_cards": 1755,
-    "fights": 82192,
-    "fight_participants": 164384,
-    "round_stats": 56636,
+    "promotions": 4734,
+    "promotion_aliases": 4709,
+    "fighters": 39410,
+    "fighter_aliases": 54276,
+    "fighter_redirects": 81,
+    "events": 26504,
+    "event_aliases": 2149,
+    "event_cards": 2326,
+    "fights": 85147,
+    "fight_participants": 170294,
+    "round_stats": 72476,
     "smartcage_round_stats": 3562,
+    "sofascore_round_stats": 19748,
     "judge_scores": 24450,
     "odds": 20716
   }

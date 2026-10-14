@@ -23,7 +23,7 @@ function q(sql, params = []) {
 }
 
 const dash = (v) => (v == null ? "—" : v);
-const of = (l, a) => (l == null ? "—" : a == null ? `${l}` : `${l} of ${a}`);
+const of = (l, a) => (l == null ? (a == null ? "—" : `${a} thrown`) : a == null ? `${l}` : `${l} of ${a}`);
 const pct = (l, a) => (l == null || !a ? "—" : Math.round((100 * l) / a) + "%");
 const mmss = (s) => (s == null ? "—" : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`);
 const hmm = (s) => (s == null ? "—" : `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`);
@@ -49,7 +49,12 @@ const boutTags = (x) => (x.title_fight ? tag("Title") : "") +
 const isUfcStats = (id) => /^[0-9a-f]{16}$/.test(id);
 const ext = (url, label) => `<a href="${esc(url)}" target="_blank" rel="noopener">${label}</a>`;
 const sourceLine = (links) => links.length ? `<p><small>Source: ${links.join(" · ")}</small></p>` : "";
-const SOURCE_NAMES = { ufcstats: "UFC Stats", pfl: "PFL", oktagon: "Oktagon", sherdog: "Sherdog" };
+const SOURCE_NAMES = { ufcstats: "UFC Stats", pfl: "PFL", oktagon: "Oktagon", sofascore: "Sofascore", sherdog: "Sherdog" };
+// What a stats source leaves out, said under a fight's stats.
+const STATS_NOTES = {
+  oktagon: "Only what landed is counted: no attempts, knockdowns or control time.",
+  sofascore: "A third party's count, not the promotion's. Total strikes are only counted thrown, not landed.",
+};
 function eventSources(id) {
   const links = isUfcStats(id) ? [ext(`http://ufcstats.com/event-details/${id}`, "UFC Stats")] : [];
   const sherdog = id.startsWith("sherdog:") ? [id.slice(8)]
@@ -150,7 +155,8 @@ async function loadDb() {
     const last = q("SELECT name, date FROM events ORDER BY date DESC LIMIT 1")[0];
     document.getElementById("footer").innerHTML =
       `Data from <a href="http://ufcstats.com">UFC Stats</a>, <a href="https://www.sherdog.com">Sherdog</a>, ` +
-      `<a href="https://pflmma.com">PFL</a>, <a href="https://oktagonmma.com">Oktagon</a> and ` +
+      `<a href="https://pflmma.com">PFL</a>, <a href="https://oktagonmma.com">Oktagon</a>, ` +
+      `<a href="https://www.sofascore.com">Sofascore</a> and ` +
       `<a href="https://www.bestfightodds.com">BestFightOdds</a>, updated daily. ` +
       `Latest event: ${esc(last.name)} (${esc(last.date)}). ` +
       `<a href="https://github.com/jadevit/fight-canon-db">About and download</a>.`;
@@ -435,7 +441,7 @@ function fight(id) {
       <div id="stats"></div>
       <p class="muted"><small>Stats counted by ${esc(statsFrom)}.${smartcage
         ? " This older PFL system counts all strikes by arm, leg and ground, not significant strikes."
-        : rounds[0].sig_str_att == null ? " Only what landed is counted: no attempts, knockdowns or control time." : ""}</small></p>`
+        : STATS_NOTES[rounds[0].source] ? ` ${STATS_NOTES[rounds[0].source]}` : ""}</small></p>`
       : `<p class="muted">No round-by-round stats recorded for this fight.</p>`}
     ${sourceLine(links)}`;
   if (!rounds.length) return;
@@ -502,7 +508,19 @@ const BOARDS = {
                },
                note: "PFL's older system, 2018 to November 2025. It counts all strikes, not significant ones." },
   oktagon:   { label: "Oktagon", stats: LANDED_STATS, table: "round_stats", source: "oktagon", sums: ROUND_SUMS,
-               note: "Oktagon's own stats. Only what landed is counted, so there are no accuracy, knockdown or control boards." },
+               note: "Oktagon's own stats, on the Oktagon fights Sofascore doesn't have. Only what landed is counted, so there are no accuracy, knockdown or control boards." },
+  sofascore: { label: "Sofascore", table: "round_stats", source: "sofascore",
+               sums: `${ROUND_SUMS}, SUM(total_str_att) tsa`,
+               stats: {
+                 kd:     FULL_STATS.kd,
+                 sig:    LANDED_STATS.sig,
+                 thrown: { label: "Total strikes thrown", expr: "rs.tsa" },
+                 td:     LANDED_STATS.td,
+                 tdacc:  FULL_STATS.tdacc,
+                 subatt: LANDED_STATS.subatt,
+                 ctrl:   FULL_STATS.ctrl,
+               },
+               note: "Sofascore's count for promotions with no official stats (ONE, RIZIN, KSW, ACA, BRAVE, Cage Warriors and others), and for Oktagon. Not comparable with the other boards." },
 };
 
 function leaders() {
