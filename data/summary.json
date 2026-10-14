@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-14T22:35:48+00:00",
+  "updated_at": "2026-10-14T23:21:28+00:00",
   "coverage": {
     "first_event_date": "1980-04-25",
     "last_event_date": "2026-10-13",
@@ -10,7 +10,7 @@
     "promotions": 4734,
     "promotion_aliases": 4709,
     "fighters": 39410,
-    "fighter_aliases": 54276,
+    "fighter_aliases": 54361,
     "fighter_redirects": 81,
     "events": 26504,
     "event_aliases": 2149,
@@ -21,6 +21,6 @@
     "smartcage_round_stats": 3562,
     "sofascore_round_stats": 19748,
     "judge_scores": 24450,
-    "odds": 20716
+    "odds": 20864
   }
 }
