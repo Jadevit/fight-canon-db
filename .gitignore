@@ -6,3 +6,5 @@ data/*.tmp
 CLAUDE.md
 data/canon.db
 **/SYSTEM.md
+.stfolder
+.stignore
