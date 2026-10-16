@@ -39,6 +39,20 @@ def test_all_zero_stats_are_not_recorded():
         for it in p["groups"][0]["statisticsItems"]:
             it["homeValue"] = it["awayValue"] = 0
     assert rounds(zero) == []
+    # Totals with something in them don't help when no round has anything counted.
+    zero["statistics"][0]["groups"][0]["statisticsItems"].append(dict(name="Distance Seconds", homeValue=40, awayValue=40))
+    zero["statistics"][1]["groups"][0]["statisticsItems"].append(dict(name="Distance Seconds", homeValue=40, awayValue=40))
+    assert rounds(zero) == []
+
+
+def test_rounds_after_the_last_counted_one_are_dropped():
+    s = _stats((5, 2), (9, 4))
+    for name in ("2ND", "3RD"):
+        empty = [dict(name=n, homeValue=0, awayValue=0) for n in
+                 ("Significant Strikes", "Strikes", "Clinch Control Seconds", "Ground Clinch Control Seconds")]
+        s["statistics"].append(dict(period=name, groups=[dict(groupName="Strikes", statisticsItems=empty)]))
+    s["statistics"][2]["groups"][0]["statisticsItems"][0]["homeValue"] = 1  # round 2 has a strike, round 3 nothing
+    assert sorted({r["round"] for r in rounds(s)}) == [1, 2]
 
 
 def test_bouts_keep_finished_mma():
@@ -125,3 +139,30 @@ def test_disagreeing_winner_and_differing_copies_get_no_stats(tmp_path):
     assert load(conn, tmp_path)["fights with differing copies"] == 1
     (tmp_path / "stats" / "13.json").write_text(json.dumps(_stats((7, 3), (20, 15))), encoding="utf-8")  # the same numbers
     assert load(conn, tmp_path)["fights with stats"] == 1
+
+
+def test_a_bout_that_stops_matching_loses_its_stats(tmp_path):
+    conn = _db()
+    _raw(tmp_path)
+    load(conn, tmp_path)
+    assert conn.execute("SELECT count(*) FROM round_stats WHERE source = 'sofascore'").fetchone() == (2,)
+    # The season now names someone else for the first bout: no match, so its stats go.
+    season = json.loads((tmp_path / "events" / "500.json").read_text(encoding="utf-8"))
+    season["events"][0]["homeTeam"] = dict(id=9, name="Zed Zane")
+    season["events"][0]["awayTeam"] = dict(id=8, name="Yan Yates")
+    (tmp_path / "events" / "500.json").write_text(json.dumps(season), encoding="utf-8")
+    counts = load(conn, tmp_path)
+    assert counts["fights whose stats were cleared"] == 1
+    assert conn.execute("SELECT count(*) FROM round_stats WHERE source = 'sofascore'").fetchone() == (0,)
+    assert conn.execute("SELECT count(*) FROM sofascore_round_stats").fetchone() == (0,)
+
+
+def test_a_name_that_disagrees_isnt_saved_as_an_alias(tmp_path):
+    conn = _db()
+    _raw(tmp_path)
+    season = json.loads((tmp_path / "events" / "500.json").read_text(encoding="utf-8"))
+    season["events"][0]["awayTeam"] = dict(id=2, name="Somebody Else")  # matched by Alan Able, the other by elimination
+    (tmp_path / "events" / "500.json").write_text(json.dumps(season), encoding="utf-8")
+    counts = load(conn, tmp_path)
+    assert counts["fights with stats"] == 1 and counts["names not saved as aliases"] == 1
+    assert conn.execute("SELECT count(*) FROM fighter_aliases WHERE source = 'sofascore' AND source_id = '2'").fetchone() == (0,)

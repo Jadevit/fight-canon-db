@@ -3,7 +3,8 @@
     events/<season>.json       a season's bouts
     stats/<bout>.json          a bout's stats, per round and in total
 The API only answers clients that look like a browser, so requests go through curl_cffi
-with Chrome's fingerprint.
+with Chrome's fingerprint. It also refuses whole networks (HTTP 403), GitHub's runners among
+them; that raises Refused at once, so a run there skips the fetch instead of retrying.
 """
 
 from __future__ import annotations
@@ -19,13 +20,18 @@ BASE = "https://www.sofascore.com/api/v1"
 log = logging.getLogger("sofascore")
 
 
+class Refused(Exception):
+    """Sofascore answers this machine with 403: it won't serve it anything."""
+
+
 class Site:
     def __init__(self, delay: float):
         self.delay, self.last = delay, 0.0
         self.session = requests.Session(impersonate="chrome")
 
     def get(self, path: str):
-        """The JSON at BASE + path, or None (404, or still failing after retries)."""
+        """The JSON at BASE + path; {} if there is none (404); None if still failing after
+        retries. Raises Refused on a 403."""
         for attempt in range(1, 5):
             wait = self.delay - (time.monotonic() - self.last)
             if wait > 0:
@@ -36,7 +42,9 @@ class Site:
                 if r.status_code == 200:
                     return r.json()
                 if r.status_code == 404:
-                    return None
+                    return {}
+                if r.status_code == 403:
+                    raise Refused(path)
                 log.warning("HTTP %s on %s (attempt %d)", r.status_code, path, attempt)
             except (requests.RequestsError, ValueError) as e:
                 log.warning("%s on %s (attempt %d)", type(e).__name__, path, attempt)
@@ -52,7 +60,7 @@ def save(path: Path, data) -> None:
 def fetch_seasons(site: Site, raw: Path, promotion: int) -> list[dict]:
     """[{id, name, year}] of a promotion's seasons, newest first, saved to disk."""
     data = site.get(f"/unique-tournament/{promotion}/seasons")
-    if data is None:
+    if not data:
         log.warning("Sofascore: couldn't read the seasons of promotion %s.", promotion)
         return []
     save(raw / "seasons" / f"{promotion}.json", data)
@@ -64,7 +72,7 @@ def fetch_events(site: Site, raw: Path, promotion: int, season: int) -> bool:
     events, page = [], 0
     while True:
         data = site.get(f"/unique-tournament/{promotion}/season/{season}/events/last/{page}")
-        if data is None:
+        if not data:
             break
         events += data.get("events") or []
         if not data.get("hasNextPage"):
@@ -77,7 +85,8 @@ def fetch_events(site: Site, raw: Path, promotion: int, season: int) -> bool:
 
 
 def fetch_stats(site: Site, raw: Path, bout: int) -> None:
-    """Save a bout's stats; a bout with none (404) saves nothing."""
+    """Save a bout's stats. A bout with none (404) saves an empty file, so it isn't asked for
+    again every run (a recent one still is)."""
     data = site.get(f"/event/{bout}/statistics")
     if data is not None:
         save(raw / "stats" / f"{bout}.json", data)

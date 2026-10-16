@@ -40,6 +40,9 @@ EXTRA = {
 }
 ROUND_COLS = (*ROUND, "ctrl_sec")
 EXTRA_COLS = tuple(EXTRA)
+# Counts of things that happened. Time in each position is left out: it runs in rounds
+# where nothing was counted.
+ACTIVITY = (*ROUND, *(c for c in EXTRA if not c.endswith("_sec") or "ctrl" in c))
 PERIOD_RE = re.compile(r"^(\d+)(ST|ND|RD|TH)$")
 
 
@@ -71,13 +74,12 @@ def _value(item: dict, side: int):
 
 def rounds(stats: dict) -> list[dict]:
     """Per-round rows of a bout's stats: [{side (0 home, 1 away), round, *ROUND_COLS, *EXTRA_COLS}].
-    ctrl_sec is clinch plus ground control, as UFC Stats' control time counts both. A bout
-    whose totals are all zero wasn't counted (Sofascore lists such bouts): it gives nothing."""
+    ctrl_sec is clinch plus ground control, as UFC Stats' control time counts both. Only
+    rounds up to the last one with anything counted are kept (Sofascore also lists rounds
+    that weren't fought); a bout with nothing counted in any round wasn't counted at all
+    (Sofascore lists such bouts) and gives nothing."""
     periods = {p.get("period"): {it["name"]: it for g in p.get("groups") or [] for it in g.get("statisticsItems") or []}
                for p in stats.get("statistics") or []}
-    total = periods.get("ALL") or {}
-    if not any(_value(it, s) for it in total.values() for s in (0, 1)):
-        return []
     out = []
     for period, items in periods.items():
         m = PERIOD_RE.match(period or "")
@@ -90,4 +92,5 @@ def rounds(stats: dict) -> list[dict]:
             parts = (row["clinch_ctrl_sec"], row["ground_ctrl_sec"])
             row["ctrl_sec"] = None if None in parts else sum(parts)
             out.append(row)
-    return sorted(out, key=lambda r: (r["round"], r["side"]))
+    active = [r["round"] for r in out if any(r[c] for c in ACTIVITY)]
+    return sorted((r for r in out if active and r["round"] <= max(active)), key=lambda r: (r["round"], r["side"]))

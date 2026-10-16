@@ -11,13 +11,15 @@ round_stats rows get `source = 'sofascore'` and the columns in pages.ROUND plus 
 strikes thrown, not landed). Significant strikes by position (its parts overlap, so they
 aren't round_stats' dist/clinch/ground), time at distance, in the clinch and on the ground,
 and the two kinds of control, go in sofascore_round_stats. A bout Sofascore lists with all-zero stats
-wasn't counted and gets no rows. Nor does a bout whose winner is our loser (its sides may be
+wasn't counted and gets no rows, nor do rounds after the last one with anything counted. Nor does a bout whose winner is our loser (its sides may be
 swapped), or a fight Sofascore lists twice with different numbers.
 
 A bout is matched to our fight like a PFL bout (see pfl/load.py): date within a day and
 both names, then the one unclaimed fight on the linked event that has one of its fighters.
 That links Sofascore's fighter ids (fighter_aliases) and the event (event_aliases, the
-season id).
+season id). A Sofascore name is saved as an alias only if it agrees with our fighter's: after
+the leftover pass the other side can be a different name (a late replacement one source got
+wrong), and an alias would let that name match the wrong fighter later.
 
 Which events:
   default     this year's seasons not linked yet, and those from the last --recent-days days again
@@ -37,6 +39,7 @@ from pathlib import Path
 
 from canon_db.sources.bestfightodds.match import Matcher
 from canon_db.sources.pfl.load import leftover
+from canon_db.sources.sherdog.load import name_ok
 from canon_db.sources.sofascore.pages import EXTRA_COLS, ROUND_COLS, bouts, rounds
 
 NAME = "sofascore"
@@ -111,7 +114,11 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
                 counts["bouts not matched"] += 1
                 continue
             fight_id, ids = matched[b["id"]]
-            aliases.update((ids[f["slug"]], NAME, f["slug"], f["name"]) for f in b["fighters"])
+            for f in b["fighters"]:
+                if name_ok(f["name"], names.get(ids[f["slug"]], [])):
+                    aliases.add((ids[f["slug"]], NAME, f["slug"], f["name"]))
+                else:
+                    counts["names not saved as aliases"] += 1
             stats = read(raw / "stats" / f"{b['id']}.json")
             if stats is None:
                 continue
@@ -148,7 +155,14 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
                          "VALUES (?,?,?,?)", sorted(aliases))
         conn.executemany("INSERT OR REPLACE INTO event_aliases (event_id, source, source_id) VALUES (?,?,?)",
                          [(eid, NAME, sid) for sid, eid in event_alias.items()])
-        for fid in touched:  # each fight's rows are replaced by what's on disk
+        # Each fight's rows are replaced by what's on disk, and a fight on a loaded event that
+        # no longer gets stats (its bout no longer matches, say) loses the ones it had.
+        linked = set(event_alias.values())
+        gone = {f for f, e in conn.execute("SELECT DISTINCT r.fight_id, f.event_id FROM round_stats r "
+                                           "JOIN fights f USING (fight_id) WHERE r.source = ?", (NAME,))
+                if e in linked and f not in fights}
+        counts["fights whose stats were cleared"] = len(gone - touched)
+        for fid in touched | gone:
             conn.execute("DELETE FROM round_stats WHERE fight_id = ? AND source = ?", (fid, NAME))
             conn.execute("DELETE FROM sofascore_round_stats WHERE fight_id = ?", (fid,))
         replaced = sum(conn.execute("DELETE FROM round_stats WHERE fight_id = ? AND source = ?",
@@ -177,7 +191,12 @@ def add_arguments(p: argparse.ArgumentParser) -> None:
 
 def update(conn: sqlite3.Connection, args: argparse.Namespace, raw: Path) -> None:
     if not args.offline:
-        fetch(conn, args, raw)
+        from canon_db.sources.sofascore.fetch import Refused
+        try:
+            fetch(conn, args, raw)
+        except Refused:
+            log.warning("Sofascore refuses this machine (HTTP 403): nothing fetched. It runs from "
+                        "scripts/sofascore-update.sh on a machine it serves.")
     counts = load(conn, raw)
     log.info("Sofascore: %s.", ", ".join(f"{k} {v}" for k, v in counts.items()))
 
@@ -203,13 +222,15 @@ def fetch(conn: sqlite3.Connection, args: argparse.Namespace, raw: Path) -> None
         log.info("Sofascore: %s: %d events listed, %d to fetch.", label, len(seasons), len(todo))
         for s in todo:
             fetch_events(site, raw, promotion, s["id"])
-        for s in seasons:  # stats of bouts on events we have: those not loaded yet, and recent ones
+        for s in seasons:  # stats of bouts matching our fights: those not on disk yet, and recent ones
             season = read(raw / "events" / f"{s['id']}.json")
             listed = bouts(season) if season else []
             found = {b["id"]: matcher.match(b)[0] for b in listed}
             if not any(found.values()):
                 continue
             for b in listed:
+                if found[b["id"]] is None:
+                    continue
                 path = raw / "stats" / f"{b['id']}.json"
                 if args.refresh or b["date"] >= since or not (path.exists() or found[b["id"]] in with_stats):
                     fetch_stats(site, raw, b["id"])

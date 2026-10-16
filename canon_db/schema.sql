@@ -193,7 +193,8 @@ CREATE TABLE smartcage_round_stats (
 -- Sofascore's: significant strikes landed by position (the parts overlap and don't add up
 -- to sig_str_land, unlike round_stats' dist/clinch/ground), time spent in each position
 -- (the same for both fighters), and control split into clinch and ground
--- (round_stats.ctrl_sec is their sum).
+-- (round_stats.ctrl_sec is their sum). Time in a position seems to run on the real clock,
+-- stoppages included: in about half of 5-minute rounds the three add up to more than 300.
 CREATE TABLE sofascore_round_stats (
     fight_id          TEXT NOT NULL REFERENCES fights(fight_id),
     fighter_id        TEXT NOT NULL REFERENCES fighters(fighter_id),
