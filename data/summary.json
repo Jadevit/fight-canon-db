@@ -1,26 +1,26 @@
 {
-  "updated_at": "2026-10-16T00:30:01+00:00",
+  "updated_at": "2026-10-16T14:42:36+00:00",
   "coverage": {
     "first_event_date": "1980-04-25",
-    "last_event_date": "2026-10-13",
-    "last_event": "DWCS 10.10",
-    "last_event_id": "eb04b9d31e938edb"
+    "last_event_date": "2026-10-16",
+    "last_event": "One Championship - One Friday Fights 175",
+    "last_event_id": "sherdog:114701"
   },
   "rows": {
     "promotions": 4734,
     "promotion_aliases": 4709,
-    "fighters": 39410,
-    "fighter_aliases": 54345,
+    "fighters": 39412,
+    "fighter_aliases": 54349,
     "fighter_redirects": 81,
-    "events": 26504,
+    "events": 26505,
     "event_aliases": 2149,
-    "event_cards": 2326,
-    "fights": 85147,
-    "fight_participants": 170294,
+    "event_cards": 2327,
+    "fights": 85148,
+    "fight_participants": 170296,
     "round_stats": 71744,
     "smartcage_round_stats": 3562,
     "sofascore_round_stats": 19012,
     "judge_scores": 24450,
-    "odds": 20864
+    "odds": 20866
   }
 }
