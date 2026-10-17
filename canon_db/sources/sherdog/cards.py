@@ -19,14 +19,21 @@ only `dob`.
 from __future__ import annotations
 
 import logging
+import re
 import sqlite3
+import time
 from collections import Counter
+from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from datetime import date, timedelta
 
 from canon_db.sources.sherdog.load import (BASE, NAME, PREFIX, Labels, Pages, State, drop_duplicates,
-                                           drop_empty_events, mark_bout_types, merge, minted, move_event,
-                                           name_ok)
-from canon_db.sources.sherdog.pages import bio, parse_card, parse_event, parse_org_events
+                                           drop_empty_events, drop_non_pro, fight_id, mark_bout_types, merge,
+                                           minted, move_event, name_ok, sherdog_promotion)
+from canon_db.sources.sherdog.pages import (bio, parse_card, parse_event, parse_event_sitemap,
+                                            parse_org_events)
+from canon_db.sources.ufcstats.client import save
 
 # Sherdog organizations whose every event is read (id: name on Sherdog).
 ORGS = {
@@ -190,56 +197,168 @@ def org_events(pages: Pages, org: str, every_page: bool) -> list[tuple[str, str]
         n += 1
 
 
-def card_bouts(page: str, sid: str, label: str, today: str) -> list[dict]:
+@contextmanager
+def threads(workers: int) -> Iterator[ThreadPoolExecutor]:
+    """A thread pool that drops its queued work if the caller fails (a plain `with` would
+    first finish every queued fetch)."""
+    pool = ThreadPoolExecutor(max(1, workers))
+    try:
+        yield pool
+    finally:
+        pool.shutdown(cancel_futures=True)
+
+
+def sitemap_events(pages: Pages, tries: int = 8, wait: float = 30) -> list[str]:
+    """Every event id in Sherdog's event sitemaps (those its sitemap index lists). Sherdog
+    sometimes answers with an empty one, so each is retried, and the last good copy on disk
+    is used if it never comes."""
+    index = pages.fetcher.get(f"{BASE}/sitemap.xml") or ""
+    out = set()
+    saved = pages.events.parent / "sitemaps"
+    saved.mkdir(exist_ok=True)
+    for url in re.findall(r"<loc>([^<]*/sitemap-events\d*\.xml)</loc>", index):
+        path = saved / url.rsplit("/", 1)[1]
+        for n in range(tries):
+            xml = pages.fetcher.get(url) or ""
+            ids = parse_event_sitemap(xml)
+            if ids:
+                save(path, xml)
+                break
+            time.sleep(wait * (n + 1))
+        else:
+            ids = parse_event_sitemap(path.read_text(encoding="utf-8")) if path.exists() else []
+            log.warning("Couldn't read %s; %s.", url,
+                        "using the copy on disk" if ids else "its events are left for the next run")
+        out.update(ids)
+    if not out:
+        log.warning("Couldn't read Sherdog's event sitemaps; no cards are read this run.")
+    return sorted(out, key=int)
+
+
+def read_event(pages: Pages, sid: str, settle: int) -> tuple[dict, list[dict], str] | None:
+    """(page info, card, day fetched) of an event page. A copy on disk is used if it was saved
+    more than `settle` days after the event (its results had settled); else it's fetched."""
+    path = pages.events / f"{sid}.html"
+    try:
+        if path.exists():
+            page = path.read_text(encoding="utf-8")
+            info, saved = parse_event(page), date.fromtimestamp(path.stat().st_mtime)
+            if info["date"] and saved > date.fromisoformat(info["date"]) + timedelta(days=settle):
+                return info, parse_card(page), saved.isoformat()
+        page = pages.event_page(sid, fresh=True)
+        if page is None:
+            return None
+        return parse_event(page), parse_card(page), date.fromtimestamp(path.stat().st_mtime).isoformat()
+    except Exception as e:  # one bad page shouldn't end a days-long run
+        log.warning("Couldn't read event %s: %s: %s", sid, type(e).__name__, e)
+        return None
+
+
+def card_bouts(info: dict, card: list[dict], sid: str, label: str, fetched: str) -> list[dict]:
     """The bouts of an event page in write()'s shape; a bout with no result yet isn't placed."""
-    info = parse_event(page)
     out = []
-    for c in parse_card(page):
+    for c in card:
         out.append(dict(
             event=sid, event_name=info["name"], date=info["date"], location=info["location"] or None,
-            label=label, via="event_page", fetched_at=today, weight_class=c["weight_class"] or None,
+            label=label, via="event_page", fetched_at=fetched, weight_class=c["weight_class"] or None,
             method=c["method"] or None, referee=c["referee"] or None,
             round=int(c["round"]) if c["round"].isdigit() else None, time=c["time"] or None,
             title=c["title"], placed=all(s["result"] for s in c["sides"]), sides=c["sides"]))
     return out
 
 
-def crawl(conn: sqlite3.Connection, pages: Pages, recent_days: int, every_page: bool) -> Counter:
-    """Read the cards of ORGS: events with no card yet, and every event from the last
-    `recent_days` days again (results get corrected)."""
+def pages_read(conn: sqlite3.Connection) -> dict[str, tuple[str | None, str]]:
+    """Sherdog event id -> (date, day fetched) of every event page read before, including
+    the cards read before event_pages existed."""
+    seen = {s: (d, f) for s, d, f in conn.execute(
+        "SELECT source_id, date, fetched_at FROM event_pages WHERE source = ?", (NAME,))}
+    for s, d, f in conn.execute("""
+            SELECT coalesce(a.source_id, substr(k.event_id, ?)), e.date, coalesce(k.fetched_at, '')
+            FROM event_cards k JOIN events e USING (event_id)
+            LEFT JOIN event_aliases a ON a.event_id = k.event_id AND a.source = ?
+            WHERE k.source = ? AND k.complete = 1""", (len(PREFIX) + 1, NAME, NAME)):
+        seen.setdefault(s, (d, f))
+    return seen
+
+
+def due(seen: dict, sid: str, day: str | None, today: str, settle: int) -> bool:
+    """Whether to read an event: never read, or last read less than `settle` days after it
+    (results get corrected) and it has happened. `day`: its date if known without reading."""
+    if sid not in seen:
+        return True
+    day = day or seen[sid][0]
+    if day is None:
+        return True
+    return day <= today and seen[sid][1] <= (date.fromisoformat(day) + timedelta(days=settle)).isoformat()
+
+
+def crawl(conn: sqlite3.Connection, pages: Pages, recent_days: int, every_page: bool,
+          every_event: bool = False, workers: int = 1, chunk: int = 1000) -> Counter:
+    """Read cards: of every event in Sherdog's sitemaps with `every_event`, else of ORGS'
+    events. An event is read if due(); pages are fetched `workers` at a time and written
+    `chunk` events at a time."""
     today = date.today().isoformat()
-    since = (date.today() - timedelta(days=recent_days)).isoformat()
-    st = State(conn)
-    carded = {r[0] for r in conn.execute("SELECT event_id FROM event_cards WHERE source = ? AND complete = 1",
-                                         (NAME,))}
-    labels = Labels(conn)
-    bouts = []
-    for org, org_name in ORGS.items():
-        listed = [(e, d) for e, d in org_events(pages, org, every_page) if d <= today]
-        todo = [e for e, d in listed if d >= since or st.events.get(e, minted(e)) not in carded]
-        log.info("Sherdog cards: %s: %d events listed, %d to read.", org_name, len(listed), len(todo))
-        for e in todo:
-            page = pages.event_page(e, fresh=True)
-            if page is None:
-                continue
-            info = parse_event(page)
-            label = labels.label(info["org_id"] or org, info["org"] or org_name)
-            bouts += card_bouts(page, e, label, today)
-    with conn:
-        conn.executemany("INSERT OR IGNORE INTO promotions (promotion, coverage) VALUES (?, 'partial')",
-                         sorted({(label,) for label, _ in labels.new.values()}))
-        conn.executemany("INSERT OR REPLACE INTO promotion_aliases (promotion, source, source_id, name) "
-                         "VALUES (?,?,?,?)", [(label, NAME, o, n) for o, (label, n) in labels.new.items()])
-    return write(conn, st, bouts, fresh=True)
+    seen = pages_read(conn)
+    if every_event:
+        listed = sitemap_events(pages)
+        todo = {e: None for e in listed if due(seen, e, None, today, recent_days)}
+        log.info("Sherdog cards: %d events in the sitemaps, %d to read.", len(listed), len(todo))
+    else:
+        todo = {}
+        for org, org_name in ORGS.items():
+            listed = [(e, d) for e, d in org_events(pages, org, every_page) if d <= today]
+            mine = [e for e, d in listed if due(seen, e, d, today, recent_days)]
+            log.info("Sherdog cards: %s: %d events listed, %d to read.", org_name, len(listed), len(mine))
+            todo.update({e: org for e in mine if e not in todo})
+    st, labels, counts = State(conn), Labels(conn), Counter()
+    ours = {p.casefold(): p for (p,) in conn.execute("SELECT promotion FROM promotions")}
+    bouts, read = [], []
+
+    def flush() -> None:
+        with conn:
+            conn.executemany("INSERT OR IGNORE INTO promotions (promotion, coverage) VALUES (?, 'partial')",
+                             sorted({(label,) for label, _ in labels.new.values()}))
+            conn.executemany("INSERT OR REPLACE INTO promotion_aliases (promotion, source, source_id, name) "
+                             "VALUES (?,?,?,?)", [(label, NAME, o, n) for o, (label, n) in labels.new.items()])
+            conn.executemany("INSERT OR REPLACE INTO event_pages (source, source_id, date, fetched_at) "
+                             "VALUES (?,?,?,?)", read)
+        counts.update(write(conn, st, bouts, fresh=True))
+        bouts.clear()
+        read.clear()
+
+    start = time.monotonic()
+    with threads(workers) as pool:
+        got = pool.map(lambda e: read_event(pages, e, recent_days), todo)
+        for i, (e, page) in enumerate(zip(todo, got), 1):
+            if page is not None:
+                info, card, fetched = page
+                if info["org_id"]:
+                    label = labels.label(info["org_id"], info["org"])
+                elif todo[e]:
+                    label = labels.label(todo[e], ORGS[todo[e]])
+                else:
+                    label = sherdog_promotion(info["name"], ours)
+                bouts += card_bouts(info, card, e, label, fetched)
+                read.append((NAME, e, info["date"], fetched))
+                counts["pages read"] += 1
+            if i % chunk == 0 or i == len(todo):
+                flush()
+            if i % 500 == 0:
+                left = (time.monotonic() - start) / i * (len(todo) - i)
+                log.info("  event pages: %d/%d (%.1f h left)", i, len(todo), left / 3600)
+    counts["new links"] = len(st.new_links)
+    return counts
 
 
 # --- pro, exhibition or amateur -----------------------------------------------------------
 
-def classify(conn: sqlite3.Connection, pages: Pages, since: str | None) -> Counter:
+def classify(conn: sqlite3.Connection, pages: Pages, since: str | None, workers: int = 1) -> Counter:
     """Event pages don't say whether a bout was pro: read fighter pages to set bout_type on
-    card fights that don't have it (cards read since `since`, or all of them if None), and
-    fill those fighters' bios. One fighter's page covers both sides of a bout, so fighters
-    with the most such bouts go first and anyone whose bouts are all covered is skipped."""
+    card fights that don't have it (cards read since `since`, or all of them if None), fill
+    those fighters' bios, then delete the amateur and exhibition fights. One fighter's page
+    covers both sides of a bout, so fighters with the most such bouts go first and anyone
+    whose bouts are all covered is skipped. A page on disk is used if it lists one of the
+    bouts; else it's fetched (`workers` at a time)."""
     counts = Counter()
     todo: dict[str, set[str]] = {}
     for (fight,) in conn.execute(
@@ -249,26 +368,52 @@ def classify(conn: sqlite3.Connection, pages: Pages, since: str | None) -> Count
             todo.setdefault(sid, set()).add(fight)
     owner = dict(conn.execute("SELECT source_id, fighter_id FROM fighter_aliases WHERE source = ?", (NAME,)))
     done: set[str] = set()
-    log.info("Sherdog bout types: %d card fights to check.", len(set().union(*todo.values())) if todo else 0)
-    for sid in sorted(todo, key=lambda s: -len(todo[s])):
-        if not todo[sid] - done:
-            continue
-        page = pages.get(sid)
-        if page is None:
-            continue
-        counts["pages read"] += 1
-        with conn:
-            done |= mark_bout_types(conn, {sid: page}) & todo[sid]
-            fid, b = owner.get(sid), bio(page)
-            if fid is not None:
-                conn.execute("UPDATE fighters SET " + ", ".join(f"{c} = coalesce({c}, ?)" for c in BIO)
-                             + " WHERE fighter_id = ? AND source = ?", (*(b[c] for c in BIO), fid, NAME))
-                if b["dob"]:
-                    conn.execute("UPDATE fighters SET dob = ? WHERE fighter_id = ? AND dob IS NULL",
-                                 (b["dob"], fid))
-        if counts["pages read"] % 250 == 0:
-            log.info("  pages read: %d, fights checked: %d", counts["pages read"], len(done))
+    total = len(set().union(*todo.values())) if todo else 0
+    log.info("Sherdog bout types: %d card fights to check.", total)
+
+    def listed(sid: str, page: dict) -> set[str]:
+        return {fight_id(sid, f) for key in ("fights", "exhibition", "amateur") for f in page[key]}
+
+    def fetch(sid: str) -> dict | None:
+        try:
+            on_disk = (pages.dir / f"{sid}.html").exists()
+            page = pages.get(sid, cached=True)
+            if on_disk and page is not None and not listed(sid, page) & todo[sid]:
+                page = pages.get(sid, cached=False)  # saved before these bouts
+            return page
+        except Exception as e:  # one bad page shouldn't end a days-long run
+            log.warning("Couldn't read fighter %s: %s: %s", sid, type(e).__name__, e)
+            return None
+
+    order = sorted(todo, key=lambda s: -len(todo[s]))
+    start, i = time.monotonic(), 0
+    with threads(workers) as pool:
+        while i < len(order):
+            batch = []
+            while i < len(order) and len(batch) < max(1, workers) * 8:
+                if todo[order[i]] - done:
+                    batch.append(order[i])
+                i += 1
+            for sid, page in zip(batch, pool.map(fetch, batch)):
+                if page is None or not todo[sid] - done:
+                    continue
+                counts["pages read"] += 1
+                with conn:
+                    done |= mark_bout_types(conn, {sid: page}) & todo[sid]
+                    fid, b = owner.get(sid), bio(page)
+                    if fid is not None:
+                        conn.execute("UPDATE fighters SET " + ", ".join(f"{c} = coalesce({c}, ?)" for c in BIO)
+                                     + " WHERE fighter_id = ? AND source = ?", (*(b[c] for c in BIO), fid, NAME))
+                        if b["dob"]:
+                            conn.execute("UPDATE fighters SET dob = ? WHERE fighter_id = ? AND dob IS NULL",
+                                         (b["dob"], fid))
+                if counts["pages read"] % 250 == 0:
+                    left = (time.monotonic() - start) / i * (len(order) - i)
+                    log.info("  pages read: %d, fights checked: %d/%d (at most %.1f h left)",
+                             counts["pages read"], len(done), total, left / 3600)
     counts["fights checked"] = len(done)
+    with conn:
+        counts["non-pro dropped"] = drop_non_pro(conn)
     counts.update(dict(conn.execute(
         "SELECT 'card fights ' || coalesce(bout_type, 'unchecked'), count(*) FROM fights "
         "WHERE event_id IN (SELECT event_id FROM event_cards) AND source = ? GROUP BY 1", (NAME,))))

@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
+import threading
 import time
 from pathlib import Path
 
@@ -32,7 +33,8 @@ log = logging.getLogger("fetcher")
 
 
 class Fetcher:
-    """Fixed delay between requests, retries with exponential backoff."""
+    """Fixed delay between requests, retries with exponential backoff. Threads may share one:
+    the delay is between any two requests, whichever thread makes them."""
 
     def __init__(self, delay: float = 1.0, retries: int = 4, timeout: float = 30):
         self.session = requests.Session()
@@ -41,16 +43,18 @@ class Fetcher:
         self.retries = retries
         self.timeout = timeout
         self.last_request = 0.0
+        self.lock = threading.Lock()
         self.requests_made = 0
         self.walls_solved = 0
         self.failures: list[str] = []
 
     def _throttle(self) -> None:
         """Hold the fixed delay between requests, then mark this moment as the last one."""
-        wait = self.delay - (time.monotonic() - self.last_request)
-        if wait > 0:
-            time.sleep(wait)
-        self.last_request = time.monotonic()
+        with self.lock:
+            wait = self.delay - (time.monotonic() - self.last_request)
+            if wait > 0:
+                time.sleep(wait)
+            self.last_request = time.monotonic()
 
     def _solve_wall(self, html: str) -> bool:
         """Clear the hashcash challenge for this session (a few hundred hashes)."""
@@ -92,6 +96,9 @@ class Fetcher:
                     # Cookie missing or expired: solve and retry without backoff.
                     if self._solve_wall(r.text):
                         continue
+                elif r.status_code == 404:  # no such page: asking again won't help
+                    log.warning("HTTP 404 on %s", url)
+                    break
                 else:
                     log.warning("HTTP %s on %s (attempt %d)", r.status_code, url, attempt)
             except requests.RequestException as e:

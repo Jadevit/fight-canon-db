@@ -169,10 +169,11 @@ class Pages:
                 save(path, page)
         return path.read_text(encoding="utf-8") if path.exists() else None
 
-    def get(self, sid: str) -> dict | None:
-        """A fighter's page, fetched fresh unless `cached` and it's on disk already."""
+    def get(self, sid: str, cached: bool | None = None) -> dict | None:
+        """A fighter's page, fetched fresh unless `cached` (default: self.cached) and it's on
+        disk already."""
         path = self.dir / f"{sid}.html"
-        if self.fetcher is not None and not (self.cached and path.exists()):
+        if self.fetcher is not None and not ((self.cached if cached is None else cached) and path.exists()):
             page = self.fetcher.get(f"{BASE}/fighter/{sid}")
             if page is not None:
                 save(path, page)
@@ -425,6 +426,7 @@ def write(conn: sqlite3.Connection, st: State, read: dict[str, dict], pages: Pag
         conn.executemany("INSERT INTO fight_participants (fight_id, fighter_id, corner, result) "
                          "VALUES (?,?,?,?)", parts)
         counts["duplicates dropped"] = drop_duplicates(conn)
+        counts["non-pro dropped"] = drop_non_pro(conn)
         conn.execute("DELETE FROM fighter_aliases WHERE fighter_id NOT IN (SELECT fighter_id FROM fighters)")
         drop_empty_events(conn)
     counts.update(fights=len(fights), new_fighters=len(fighters), new_links=len(st.new_links))
@@ -469,10 +471,25 @@ def move_event(conn: sqlite3.Connection, old: str, new: str) -> None:
 
 
 def drop_empty_events(conn: sqlite3.Connection) -> None:
-    """Delete `sherdog:` events left with no fights, and their cards."""
+    """Delete `sherdog:` events left with no fights, their cards and other sources' links to them."""
     empty = "SELECT event_id FROM events WHERE source = ? AND event_id NOT IN (SELECT event_id FROM fights)"
-    conn.execute(f"DELETE FROM event_cards WHERE event_id IN ({empty})", (NAME,))
-    conn.execute(f"DELETE FROM events WHERE event_id IN ({empty})", (NAME,))
+    for table in ("event_cards", "event_aliases", "events"):
+        conn.execute(f"DELETE FROM {table} WHERE event_id IN ({empty})", (NAME,))
+
+
+def drop_non_pro(conn: sqlite3.Connection) -> int:
+    """Delete amateur and exhibition fights (pro MMA only), then the `sherdog:` fighters and
+    events left with no fights. Returns the number of fights deleted."""
+    gone = [r[0] for r in conn.execute(
+        "SELECT fight_id FROM fights WHERE source = ? AND bout_type IN ('amateur', 'exhibition')", (NAME,))]
+    for fight in gone:
+        delete_fight(conn, fight)
+    idle = ("SELECT fighter_id FROM fighters WHERE source = ? AND fighter_id NOT IN "
+            "(SELECT fighter_id FROM fight_participants)")
+    for table in ("fighter_aliases", "fighters"):
+        conn.execute(f"DELETE FROM {table} WHERE fighter_id IN ({idle})", (NAME,))
+    drop_empty_events(conn)
+    return len(gone)
 
 
 def drop_duplicates(conn: sqlite3.Connection) -> int:
@@ -510,6 +527,11 @@ def add_arguments(p: argparse.ArgumentParser) -> None:
                    help="list every event of those organizations, not just their latest 100")
     p.add_argument("--classify-all", action="store_true",
                    help="check every card fight's bout type on fighter pages, not just recent cards")
+    p.add_argument("--every-event", action="store_true",
+                   help="read the card of every event in Sherdog's sitemaps (~78k pages, days), then "
+                        "check every card fight's bout type; rerun to resume (pages stay on disk)")
+    p.add_argument("--workers", type=int, default=4,
+                   help="pages fetched at once for cards and bout types (the delay still holds)")
     p.add_argument("--relabel", action="store_true",
                    help="label every Sherdog event from its organization (~25k event pages "
                         "the first time, ~7 h; read from disk after)")
@@ -541,10 +563,11 @@ def update(conn: sqlite3.Connection, args: argparse.Namespace, raw: Path) -> Non
     counts = write(conn, st, read, pages, args.relabel)
     if not (args.offline or args.relabel or args.no_cards):
         from canon_db.sources.sherdog import cards  # it builds on this module
-        c = cards.crawl(conn, pages, args.recent_days, args.all_cards)
+        c = cards.crawl(conn, pages, args.recent_days, args.all_cards, args.every_event, args.workers)
         log.info("Sherdog cards: %s.", ", ".join(f"{k} {v}" for k, v in c.items()))
-        since = None if args.classify_all else (date.today() - timedelta(days=args.recent_days)).isoformat()
-        c = cards.classify(conn, pages, since)
+        since = (None if args.classify_all or args.every_event
+                 else (date.today() - timedelta(days=args.recent_days)).isoformat())
+        c = cards.classify(conn, pages, since, args.workers)
         log.info("Sherdog bout types: %s.", ", ".join(f"{k} {v}" for k, v in c.items()))
     (raw / "conflicts.tsv").unlink(missing_ok=True)
     if st.conflicts:
@@ -552,9 +575,10 @@ def update(conn: sqlite3.Connection, args: argparse.Namespace, raw: Path) -> Non
             fh.write("fighter_id\tsherdog_id\tfighter_has\tsherdog_has\twhy\n")
             fh.writelines("\t".join(c) + "\n" for c in st.conflicts)
     log.info("Sherdog: %d pages read; %d new links, %d merged; %d Sherdog fights written, "
-             "%d new fighters, %d new promotions, %d duplicates of UFC Stats fights dropped; "
-             "%d conflicts%s.",
+             "%d new fighters, %d new promotions, %d duplicates of UFC Stats fights dropped, "
+             "%d amateur or exhibition fights dropped; %d conflicts%s.",
              len(read), counts["new_links"], counts["merged"], counts["fights"],
              counts["new_fighters"], counts["new promotions"], counts["duplicates dropped"],
+             counts["non-pro dropped"],
              len(st.conflicts),
              " (see conflicts.tsv)" if st.conflicts else "")

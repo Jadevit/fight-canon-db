@@ -128,3 +128,40 @@ def test_bout_types():
     assert mark_bout_types(conn, {"300": page}) == {"sherdog:901:100-300", "sherdog:902:300-400"}
     assert dict(conn.execute("SELECT fight_id, bout_type FROM fights WHERE source = 'sherdog'")) == {
         "sherdog:901:100-300": "pro", "sherdog:902:300-400": "exhibition"}
+
+
+def test_non_pro_fights_are_dropped():
+    from canon_db.sources.sherdog.load import drop_non_pro, mark_bout_types
+    conn = _db()
+    write(conn, [_row(901, "2019-05-05", ("Carl Cole", "300"), ("Alan Able", "100")),
+                 _row(902, "2019-06-06", ("Carl Cole", "300"), ("Dan Dent", "400")),
+                 _row(903, "2019-07-07", ("Carl Cole", "300"), ("Eve East", "500"))])
+    conn.execute("INSERT INTO event_aliases VALUES ('sherdog:902', 'sofascore', '77')")
+    conn.execute("INSERT INTO round_stats (fight_id, fighter_id, round, source) "
+                 "VALUES ('sherdog:902:300-400', 'sherdog:400', 1, 'sofascore')")
+    page = dict(fights=[dict(event_id="901", opponent_id="100")],
+                exhibition=[dict(event_id="903", opponent_id="500")],
+                amateur=[dict(event_id="902", opponent_id="400")])
+    mark_bout_types(conn, {"300": page})
+    assert drop_non_pro(conn) == 2
+    assert conn.execute("SELECT fight_id FROM fights WHERE source = 'sherdog'").fetchall() == [
+        ("sherdog:901:100-300",)]
+    # Their events and the fighters who had nothing else go with them; Carl Cole stays.
+    assert conn.execute("SELECT event_id FROM events WHERE source = 'sherdog'").fetchall() == [("sherdog:901",)]
+    assert conn.execute("SELECT fighter_id FROM fighters WHERE source = 'sherdog'").fetchall() == [
+        ("sherdog:300",)]
+    assert conn.execute("SELECT count(*) FROM round_stats").fetchone() == (0,)
+    assert conn.execute("SELECT count(*) FROM event_aliases WHERE source = 'sofascore'").fetchone() == (0,)
+    assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+
+
+def test_event_pages_due():
+    seen = {"1": ("2026-01-01", "2026-03-01"),   # read long after: settled
+            "2": ("2026-01-01", "2026-01-05"),   # read before its results settled
+            "3": ("2026-12-01", "2026-01-05")}   # not held yet
+    due = [e for e in ("1", "2", "3", "4") if cards.due(seen, e, None, "2026-02-01", 21)]
+    assert due == ["2", "4"]
+    assert cards.due(seen, "3", None, "2026-12-02", 21)
+    conn = _db()
+    write(conn, [_row(901, "2019-05-05", ("Carl Cole", "300"), ("Alan Able", "100"))])
+    assert "901" in cards.pages_read(conn)  # cards read before event_pages count as read

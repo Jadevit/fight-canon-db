@@ -87,8 +87,20 @@ CREATE TABLE event_cards (
     event_id     TEXT PRIMARY KEY REFERENCES events(event_id),
     source       TEXT NOT NULL,             -- whose card: 'sherdog'
     via          TEXT NOT NULL,             -- 'event_page', or 'kaggle:<dataset> v<N>'
-    complete     INTEGER NOT NULL,          -- 1: every bout the source lists is in the database
+    complete     INTEGER NOT NULL,          -- 1: every bout the source lists was written (amateur
+                                            -- and exhibition bouts are removed after)
     fetched_at   TEXT                       -- YYYY-MM-DD the card was read
+);
+
+-- Event pages a source's card reader has read, whatever came of them: an event that left
+-- nothing in the database (not held yet, or only amateur and exhibition bouts) is still here,
+-- so it isn't read again.
+CREATE TABLE event_pages (
+    source       TEXT NOT NULL,             -- 'sherdog'
+    source_id    TEXT NOT NULL,             -- the source's event id
+    date         TEXT,                      -- YYYY-MM-DD, as the page gives it
+    fetched_at   TEXT NOT NULL,             -- YYYY-MM-DD the page was fetched
+    PRIMARY KEY (source, source_id)
 );
 
 CREATE TABLE fights (
@@ -105,8 +117,9 @@ CREATE TABLE fights (
     details          TEXT,                  -- finish detail or judges' scores
     overturned       INTEGER NOT NULL DEFAULT 0,
     no_contest       INTEGER NOT NULL DEFAULT 0,
-    bout_type        TEXT,                  -- Sherdog fights: 'pro', 'exhibition' or 'amateur',
-                                            -- as a fighter's Sherdog page lists it; NULL: unchecked
+    bout_type        TEXT,                  -- Sherdog fights: 'pro' once a fighter's Sherdog page
+                                            -- lists it as pro (amateur and exhibition bouts are
+                                            -- deleted); NULL: unchecked, and UFC Stats fights
     source           TEXT NOT NULL DEFAULT 'ufcstats'
 );
 

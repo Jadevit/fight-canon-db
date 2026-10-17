@@ -166,6 +166,11 @@ def parse_org_events(page: str) -> tuple[list[tuple[str, str]], bool]:
     return [(eid, day) for day, eid in rows], "Older Events" in page
 
 
+def parse_event_sitemap(xml: str) -> list[str]:
+    """Sherdog event ids from an event sitemap."""
+    return re.findall(r"/events/[^<]*?-(\d+)</loc>", xml)
+
+
 def parse_sitemap(xml: str) -> list[tuple[str, str]]:
     """[(sherdog_id, name from the URL slug)] from a fighter sitemap."""
     return [(sid, slug.replace("-", " "))

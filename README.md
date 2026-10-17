@@ -74,9 +74,10 @@ organization: the label we already use if its events overlap ours, else its full
 Sherdog fights get in two ways. For some promotions (ACA, Bellator, BRAVE, Cage Warriors,
 Fight Nation, Jungle Fight, KSW, LFA, Oktagon, ONE, PFL, RIZIN) every card is read whole, and those events are in `event_cards`.
 Other Sherdog fights come from the pages of fighters linked to UFC Stats, so they are there
-because of who fought in them: filter on `event_cards` when that matters. Event pages don't say
-whether a bout was pro, so `fights.bout_type` (`pro`, `exhibition`, `amateur`) comes from the
-fighters' Sherdog pages; it is NULL for UFC Stats fights and for card fights not yet checked.
+because of who fought in them: filter on `event_cards` when that matters. Only pro MMA fights
+are kept. Event pages don't say whether a bout was pro, so card fights are checked on the
+fighters' Sherdog pages and amateur and exhibition bouts are removed; `fights.bout_type` is
+`pro` once checked, and NULL for UFC Stats fights and for card fights not yet checked.
 
 A fighter's Sherdog page is linked only through a fight both sites list (same date, the other
 fighter already linked), never by name alone. If a `sherdog:` fighter later shows up on UFC

@@ -40,9 +40,7 @@ const record = (r) => `${r.w || 0}-${r.l || 0}-${r.d || 0}` + (r.nc ? ` (${r.nc}
 const proRecord = (f, fallback) => f.wins != null
   ? record({ w: f.wins, l: f.losses, d: f.draws, nc: f.no_contests }) : record(fallback);
 const tag = (text) => `<span class="tag">${esc(text)}</span>`;
-// Amateur and exhibition bouts are marked, and don't count toward records or leaderboards.
-const boutTags = (x) => (x.title_fight ? tag("Title") : "") +
-  (x.bout_type && x.bout_type !== "pro" ? tag(x.bout_type[0].toUpperCase() + x.bout_type.slice(1)) : "");
+const boutTags = (x) => (x.title_fight ? tag("Title") : "");
 
 // Links to the pages a row came from. Only UFC Stats ids (16 hex characters) exist on UFC
 // Stats; everything else is on Sherdog, under the id in ours or in the aliases tables.
@@ -231,7 +229,7 @@ function fighter(id) {
   if (!f) { app.innerHTML = "<p>Fighter not found.</p>"; return; }
   const fights = q(`
     SELECT e.date, e.event_id, e.name AS event, e.promotion, x.fight_id, x.weight_class, x.method, x.end_round,
-           x.end_time, x.time_format, x.bout_type, x.title_fight, me.result, o.fighter_id AS opp_id, of.name AS opp
+           x.end_time, x.time_format, x.title_fight, me.result, o.fighter_id AS opp_id, of.name AS opp
     FROM fight_participants me
     JOIN fights x USING (fight_id) JOIN events e USING (event_id)
     JOIN fight_participants o ON o.fight_id = me.fight_id AND o.corner <> me.corner
@@ -248,7 +246,7 @@ function fighter(id) {
                  WHERE r.fighter_id <> ? AND r.sig_str_att IS NOT NULL`, [id, id])[0];
 
   const rec = { w: 0, l: 0, d: 0, nc: 0 };
-  fights.forEach((x) => { if (x.result && (x.bout_type || "pro") === "pro") rec[x.result.toLowerCase()]++; });
+  fights.forEach((x) => { if (x.result) rec[x.result.toLowerCase()]++; });
   const t = { kd: 0, sl: 0, sa: 0, sla: 0, tl: 0, ta: 0, tla: 0, sub: 0, ctrl: 0 };
   const has = { kd: false, ctrl: false };
   let secs = 0, slTimed = 0;
@@ -339,7 +337,7 @@ function event(id) {
   const e = q("SELECT * FROM events WHERE event_id = ?", [id])[0];
   if (!e) { app.innerHTML = "<p>Event not found.</p>"; return; }
   const fights = q(`
-    SELECT x.fight_id, x.weight_class, x.method, x.end_round, x.end_time, x.bout_type, x.title_fight,
+    SELECT x.fight_id, x.weight_class, x.method, x.end_round, x.end_time, x.title_fight,
            EXISTS (SELECT 1 FROM round_stats r WHERE r.fight_id = x.fight_id)
              OR EXISTS (SELECT 1 FROM smartcage_round_stats r WHERE r.fight_id = x.fight_id) AS has_stats,
            a.fighter_id a_id, fa.name a_name, a.result a_res,
@@ -563,7 +561,7 @@ function leaders() {
       WITH ff AS (
         SELECT x.fight_id, x.method FROM fights x JOIN events e USING (event_id)
         WHERE (?1 = '' OR division(x.weight_class) = ?1) AND substr(e.date, 1, 4) BETWEEN ?2 AND ?3
-          AND (?5 = '' OR e.promotion = ?5) AND coalesce(x.bout_type, 'pro') = 'pro' ${counted}),
+          AND (?5 = '' OR e.promotion = ?5) ${counted}),
       per AS (
         SELECT p.fighter_id, COUNT(*) n, SUM(p.result = 'W') w,
                SUM(p.result = 'W' AND (ff.method LIKE '%KO%' OR ff.method LIKE '%Submission%')) fin,

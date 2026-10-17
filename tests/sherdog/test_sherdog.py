@@ -32,6 +32,13 @@ def test_labels():
     assert labels.label("2", "Absolute Fighting Championship") == "Absolute Fighting Championship"
 
 
+def test_parse_event_sitemap():
+    from canon_db.sources.sherdog.pages import parse_event_sitemap
+    xml = ("<url><loc>https://www.sherdog.com/events/UFC-1-The-Beginning-7</loc></url>"
+           "<url><loc>https://www.sherdog.com/events/Cage-Warriors-180-114941</loc></url>")
+    assert parse_event_sitemap(xml) == ["7", "114941"]
+
+
 def test_parse_sitemap():
     xml = "<url><loc>https://www.sherdog.com/fighter/Jack-Shore-110177</loc></url>"
     assert parse_sitemap(xml) == [("110177", "Jack Shore")]
