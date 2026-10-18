@@ -1,27 +1,27 @@
 {
-  "updated_at": "2026-10-17T13:49:08+00:00",
+  "updated_at": "2026-10-18T13:59:00+00:00",
   "coverage": {
     "first_event_date": "1980-04-25",
     "last_event_date": "2026-10-17",
-    "last_event": "One Championship - ONE Samurai 4",
-    "last_event_id": "sherdog:114281"
+    "last_event": "UFC Fight Night: Buckley vs. Malott",
+    "last_event_id": "55e94a9b525dcf45"
   },
   "rows": {
     "promotions": 4734,
     "promotion_aliases": 4709,
-    "fighters": 37232,
-    "fighter_aliases": 52227,
-    "fighter_redirects": 81,
-    "events": 26460,
-    "event_aliases": 2151,
-    "event_cards": 2282,
+    "fighters": 37246,
+    "fighter_aliases": 52425,
+    "fighter_redirects": 83,
+    "events": 26469,
+    "event_aliases": 2154,
+    "event_cards": 2284,
     "event_pages": 86,
-    "fights": 83240,
-    "fight_participants": 166480,
-    "round_stats": 71696,
+    "fights": 83283,
+    "fight_participants": 166566,
+    "round_stats": 71798,
     "smartcage_round_stats": 3548,
-    "sofascore_round_stats": 18946,
+    "sofascore_round_stats": 18960,
     "judge_scores": 24450,
-    "odds": 21148
+    "odds": 21566
   }
 }
