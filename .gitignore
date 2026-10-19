@@ -8,3 +8,4 @@ data/canon.db
 **/SYSTEM.md
 .stfolder
 .stignore
+site/db/

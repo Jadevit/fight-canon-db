@@ -1,26 +1,23 @@
-// Canon DB browser: loads canon.db into the page with sql.js and renders a few views.
+// Canon DB browser: reads canon.db with sql.js-httpvfs, which fetches only the pages of the
+// database a query touches, one request at a time. The site's copy (scripts/site_db.py) is
+// laid out so each view reads a few contiguous ranges: site_fights holds each fight with its
+// event and both fighters, and the `site_` tables hold what the lists show.
 // Views are chosen by the URL hash: #/fighters, #/fighter/<id>, #/events, #/event/<id>,
 // #/fight/<id>, #/leaders, #/sql.
 
-const SQLJS = "https://cdn.jsdelivr.net/npm/sql.js@1.14.2/dist/";
-const DB_URLS = ["canon.db.gz", "../data/canon.db"];  // deployed site, then a local checkout
+const VFS = "vendor/sql.js-httpvfs/";
+const DB_DIR = "db/";
+const RELEASES = "https://github.com/jadevit/fight-canon-db/releases/latest";
 
 const app = document.getElementById("app");
-let db;
+let worker;
 
 // --- helpers -------------------------------------------------------------------------
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
-function q(sql, params = []) {
-  const st = db.prepare(sql);
-  st.bind(params);
-  const rows = [];
-  while (st.step()) rows.push(st.getAsObject());
-  st.free();
-  return rows;
-}
+const q = (sql, params = []) => worker.db.query(sql, params);
 
 const dash = (v) => (v == null ? "—" : v);
 const of = (l, a) => (l == null ? (a == null ? "—" : `${a} thrown`) : a == null ? `${l}` : `${l} of ${a}`);
@@ -28,6 +25,7 @@ const pct = (l, a) => (l == null || !a ? "—" : Math.round((100 * l) / a) + "%"
 const mmss = (s) => (s == null ? "—" : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`);
 const hmm = (s) => (s == null ? "—" : `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`);
 const num = (n) => (n == null ? "—" : Number(n).toLocaleString());
+const mb = (bytes) => `${(bytes / 1e6).toFixed(bytes < 1e7 ? 1 : 0)} MB`;
 const badge = (r) => (r ? `<span class="res res-${esc(r)}">${esc(r)}</span>` : "");
 const fighterLink = (id, name) => `<a href="#/fighter/${esc(id)}">${esc(name)}</a>`;
 const eventLink = (id, name) => `<a href="#/event/${esc(id)}">${esc(name)}</a>`;
@@ -53,12 +51,13 @@ const STATS_NOTES = {
   oktagon: "Only what landed is counted: no attempts, knockdowns or control time.",
   sofascore: "A third party's count, not the promotion's. Total strikes are only counted thrown, not landed.",
 };
-function eventSources(id) {
+async function eventSources(id) {
   const links = isUfcStats(id) ? [ext(`http://ufcstats.com/event-details/${id}`, "UFC Stats")] : [];
+  const aliases = await q("SELECT source, source_id FROM event_aliases WHERE event_id = ? AND source IN ('sherdog', 'pfl')", [id]);
   const sherdog = id.startsWith("sherdog:") ? [id.slice(8)]
-    : q("SELECT source_id FROM event_aliases WHERE event_id = ? AND source = 'sherdog'", [id]).map((r) => r.source_id);
+    : aliases.filter((r) => r.source === "sherdog").map((r) => r.source_id);
   sherdog.forEach((s) => links.push(ext(`https://www.sherdog.com/events/x-${s}`, "Sherdog")));
-  q("SELECT source_id FROM event_aliases WHERE event_id = ? AND source = 'pfl'", [id])
+  aliases.filter((r) => r.source === "pfl")
     .forEach((r) => links.push(ext(`https://pflmma.com/event/${r.source_id}`, "PFL")));
   return links;
 }
@@ -66,6 +65,16 @@ function eventSources(id) {
 function debounce(fn, ms = 150) {
   let t;
   return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+}
+
+// Only the latest call's result is used: queries are async, and an older one can finish last.
+function latest(fn) {
+  let n = 0;
+  return async (...a) => {
+    const mine = ++n;
+    const out = await fn(...a);
+    return mine === n ? out : undefined;
+  };
 }
 
 // Query-string state inside the hash (#/leaders?stat=kd), so filters survive back/refresh.
@@ -76,11 +85,11 @@ function setParams(p) {
 }
 
 // Promotions with enough events to list (there are thousands of one-off shows).
-const promotions = () => q("SELECT promotion FROM events GROUP BY promotion HAVING COUNT(*) >= 25 ORDER BY COUNT(*) DESC")
-  .map((r) => r.promotion);
+const promotions = () => q("SELECT code, promotion FROM site_promotions WHERE listed ORDER BY events DESC");
 
 // Weight classes are stored as the bout title ("UFC Lightweight Title Bout");
 // division() reduces them to the division name. Sherdog doesn't say which bouts are women's.
+// Keep in step with scripts/site_db.py.
 const DIVISIONS = ["Women's Strawweight", "Women's Flyweight", "Women's Bantamweight",
   "Women's Featherweight", "Atomweight", "Strawweight", "Flyweight", "Bantamweight", "Featherweight",
   "Lightweight", "Welterweight", "Middleweight", "Light Heavyweight", "Super Heavyweight", "Heavyweight",
@@ -91,6 +100,16 @@ function division(wc) {
   return DIVISIONS.find((d) => s.includes(d)) || "Other";
 }
 const norm = (s) => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+// The words of a search term, normalized like the search columns, longest first (fighter
+// search looks it up as a prefix of a word of the name); null if none has two letters.
+function searchWords(term) {
+  const words = (norm(term).match(/[\p{L}\p{N}_]+/gu) || []).sort((a, b) => b.length - a.length);
+  if (!words.length || words[0].length < 2) return null;
+  const first = words[0];
+  const next = first.slice(0, -1) + String.fromCodePoint(first.codePointAt(first.length - 1) + 1);
+  return { words, first, next, rest: words.slice(1) };
+}
 
 // Seconds actually fought, from "3 Rnd (5-5-5)" + end round + end time.
 function fightSeconds(timeFormat, endRound, endTime) {
@@ -107,57 +126,22 @@ function fightSeconds(timeFormat, endRound, endTime) {
 
 // --- loading -------------------------------------------------------------------------
 
-async function fetchBytes(url, onProgress) {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
-  const total = Number(r.headers.get("content-length")) || 0;
-  const reader = r.body.getReader();
-  const chunks = [];
-  let loaded = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    loaded += value.length;
-    onProgress(loaded, total);
-  }
-  let bytes = new Uint8Array(loaded);
-  let off = 0;
-  for (const c of chunks) { bytes.set(c, off); off += c.length; }
-  if (bytes[0] === 0x1f && bytes[1] === 0x8b) {  // gzip: unpack in the browser
-    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
-    bytes = new Uint8Array(await new Response(stream).arrayBuffer());
-  }
-  return bytes;
-}
-
-async function loadDb() {
-  const bar = document.getElementById("progress");
-  const onProgress = (loaded, total) => { if (total) { bar.max = total; bar.value = loaded; } };
-  let lastErr;
-  for (const url of DB_URLS) {
-    try { return await fetchBytes(url, onProgress); } catch (e) { lastErr = e; }
-  }
-  throw lastErr;
-}
-
 (async function start() {
   try {
-    const [SQL, bytes] = await Promise.all([
-      initSqlJs({ locateFile: (f) => SQLJS + f }),
-      loadDb(),
-    ]);
-    db = new SQL.Database(bytes);
-    db.create_function("division", division);
-    db.create_function("norm", norm);
-    const last = q("SELECT name, date FROM events ORDER BY date DESC LIMIT 1")[0];
+    const r = await fetch(DB_DIR + "config.json", { cache: "no-cache" });
+    if (!r.ok) throw new Error(`${DB_DIR}config.json: HTTP ${r.status}`);
+    const config = await r.json();
+    config.urlPrefix = new URL(DB_DIR + config.urlPrefix, location.href).href;
+    const abs = (f) => new URL(VFS + f, location.href).href;
+    worker = await createDbWorker([{ from: "inline", config }], abs("sqlite.worker.js"), abs("sql-wasm.wasm"));
+    const [last] = await q("SELECT name, date FROM site_events LIMIT 1");
     document.getElementById("footer").innerHTML =
       `Data from <a href="http://ufcstats.com">UFC Stats</a>, <a href="https://www.sherdog.com">Sherdog</a>, ` +
       `<a href="https://pflmma.com">PFL</a>, <a href="https://oktagonmma.com">Oktagon</a>, ` +
       `<a href="https://www.sofascore.com">Sofascore</a> and ` +
       `<a href="https://www.bestfightodds.com">BestFightOdds</a>, updated daily. ` +
       `Latest event: ${esc(last.name)} (${esc(last.date)}). ` +
-      `<a href="https://github.com/jadevit/fight-canon-db">About and download</a>.`;
+      `<a href="https://github.com/jadevit/fight-canon-db">About</a> · <a href="${RELEASES}">Download</a>.`;
     window.addEventListener("hashchange", route);
     route();
   } catch (e) {
@@ -167,83 +151,106 @@ async function loadDb() {
 
 // --- routing -------------------------------------------------------------------------
 
-function route() {
+let page = 0;  // the page being shown; a view drops its result if another page was opened since
+
+async function route() {
   const path = (location.hash.slice(1) || "/").split("?")[0];
-  const [page = "", id = ""] = path.split("/").filter(Boolean);
+  const [name = "", id = ""] = path.split("/").filter(Boolean);
   const views = { "": home, fighters, fighter, events, event, fight, leaders, sql };
-  (views[page] || home)(id);
+  const mine = ++page;
+  const show = (html) => { if (mine !== page) return false; app.innerHTML = html; return true; };
+  try {
+    await (views[name] || home)(decodeURIComponent(id), show);
+  } catch (e) {
+    show(`<p class="error">${esc(e.message)}</p>`);
+  }
   window.scrollTo(0, 0);
 }
 
 // --- views ---------------------------------------------------------------------------
+// Each view gets the id from the URL and show(html), which draws the page unless another one
+// was opened meanwhile (it returns false then, and the view stops).
 
-function home() {
-  const c = q(`SELECT (SELECT COUNT(*) FROM events) ev, (SELECT COUNT(*) FROM fights) fi,
-               (SELECT COUNT(*) FROM fighters) fr, (SELECT MIN(date) FROM events) first`)[0];
-  const recent = q("SELECT event_id, name, date, location FROM events ORDER BY date DESC LIMIT 10");
-  app.innerHTML = `
+async function home(_, show) {
+  const [[c], recent] = await Promise.all([
+    q("SELECT * FROM site_stats"),
+    q("SELECT event_id, name, date, location FROM site_events LIMIT 10"),
+  ]);
+  if (!show(`
     <h1>MMA fights, round by round</h1>
-    <p>${num(c.ev)} events, ${num(c.fi)} fights and ${num(c.fr)} fighters since ${esc(c.first)}: the UFC and PRIDE
+    <p>${num(c.events)} events, ${num(c.fights)} fights and ${num(c.fighters)} fighters since ${esc(c.first_date)}: the UFC and PRIDE
        round by round, and results from thousands of other promotions.
        Search a fighter, open any card, or rank fighters by their stats.</p>
     <form id="s"><input type="search" name="q" placeholder="Search fighters…" autofocus></form>
     <h2>Latest events</h2>
     ${table(["Date", "Event", "Location"], recent.map((e) =>
       `<tr><td>${esc(e.date)}</td><td>${eventLink(e.event_id, e.name)}</td><td>${esc(e.location)}</td></tr>`))}
-    <p><a href="#/events">All events →</a></p>`;
+    <p><a href="#/events">All events →</a></p>`)) return;
   document.getElementById("s").onsubmit = (ev) => {
     ev.preventDefault();
     location.hash = `#/fighters?q=${encodeURIComponent(ev.target.q.value)}`;
   };
 }
 
-function fighters() {
+const CARD_COLS = "fighter_id, name, nickname, wins, losses, draws, no_contests, n, w, l, d, nc";
+
+async function fighters(_, show) {
   const p = params();
-  app.innerHTML = `
+  if (!show(`
     <h1>Fighters</h1>
     <input type="search" id="q" placeholder="Search by name…" value="${esc(p.get("q") || "")}" autofocus>
-    <div id="results"></div>`;
+    <div id="results"></div>`)) return;
   const input = document.getElementById("q");
-  const render = () => {
-    const term = norm(input.value.trim());
-    setParams(new URLSearchParams(term ? { q: input.value.trim() } : {}));
-    const rows = q(`
-      SELECT f.fighter_id, f.name, f.nickname, f.wins, f.losses, f.draws, f.no_contests, COUNT(p.fight_id) n,
-             SUM(p.result = 'W') w, SUM(p.result = 'L') l, SUM(p.result = 'D') d, SUM(p.result = 'NC') nc
-      FROM fighters f LEFT JOIN fight_participants p USING (fighter_id)
-      WHERE ?1 = '' OR norm(f.name) LIKE ?2
-         OR f.fighter_id IN (SELECT fighter_id FROM fighter_aliases WHERE norm(name) LIKE ?2)
-      GROUP BY f.fighter_id ORDER BY n DESC, f.name LIMIT 50`, [term, `%${term}%`]);
-    document.getElementById("results").innerHTML =
-      (term ? "" : `<p class="muted">Most fights in the database:</p>`) +
-      table(["Fighter", "Record", "Fights here"], rows.map((r) =>
-        `<tr><td>${fighterLink(r.fighter_id, r.name)}${r.nickname ? ` <span class="muted">“${esc(r.nickname)}”</span>` : ""}</td>
-             <td>${proRecord(r, r)}</td><td class="num">${r.n}</td></tr>`));
+  // site_names has a row per word of each name, with what the list shows.
+  const find = latest(async (term) => {
+    if (!term) return q(`SELECT ${CARD_COLS} FROM site_top_fighters ORDER BY n DESC, name`);
+    const s = searchWords(term);
+    if (!s) return null;
+    return q(`SELECT ${CARD_COLS} FROM site_names
+              WHERE token >= ? AND token < ? ${s.rest.map(() => "AND instr(search, ?) > 0").join(" ")}
+              GROUP BY fighter_id ORDER BY n DESC, name LIMIT 50`, [s.first, s.next, ...s.rest]);
+  });
+  const render = async () => {
+    const term = input.value.trim();
+    setParams(new URLSearchParams(term ? { q: term } : {}));
+    const rows = await find(term);
+    if (rows === undefined) return;  // a newer search is on its way
+    document.getElementById("results").innerHTML = rows === null
+      ? `<p class="muted">Type at least two letters of a name.</p>`
+      : (term ? "" : `<p class="muted">Most fights in the database:</p>`) +
+        table(["Fighter", "Record", "Fights here"], rows.map((r) =>
+          `<tr><td>${fighterLink(r.fighter_id, r.name)}${r.nickname ? ` <span class="muted">“${esc(r.nickname)}”</span>` : ""}</td>
+               <td>${proRecord(r, r)}</td><td class="num">${r.n}</td></tr>`));
   };
-  input.oninput = debounce(render);
-  render();
+  input.oninput = debounce(render, 250);
+  await render();
 }
 
-function fighter(id) {
-  const f = q("SELECT * FROM fighters WHERE fighter_id = ?", [id])[0];
-  if (!f) { app.innerHTML = "<p>Fighter not found.</p>"; return; }
-  const fights = q(`
-    SELECT e.date, e.event_id, e.name AS event, e.promotion, x.fight_id, x.weight_class, x.method, x.end_round,
-           x.end_time, x.time_format, x.title_fight, me.result, o.fighter_id AS opp_id, of.name AS opp
-    FROM fight_participants me
-    JOIN fights x USING (fight_id) JOIN events e USING (event_id)
-    JOIN fight_participants o ON o.fight_id = me.fight_id AND o.corner <> me.corner
-    JOIN fighters of ON of.fighter_id = o.fighter_id
-    WHERE me.fighter_id = ? ORDER BY e.date DESC`, [id]);
-  // Some sources count only what landed, so accuracy uses the rounds that have attempts.
-  const own = q(`SELECT fight_id, SUM(knockdowns) kd, SUM(sig_str_land) sl, SUM(sig_str_att) sa,
-                        SUM(CASE WHEN sig_str_att IS NOT NULL THEN sig_str_land END) sla,
-                        SUM(td_land) tl, SUM(td_att) ta, SUM(CASE WHEN td_att IS NOT NULL THEN td_land END) tla,
-                        SUM(sub_att) sub, SUM(ctrl_sec) ctrl
-                 FROM round_stats WHERE fighter_id = ? GROUP BY fight_id`, [id]);
-  const opp = q(`SELECT SUM(r.sig_str_land) sl, SUM(r.sig_str_att) sa FROM round_stats r
-                 JOIN fight_participants p ON p.fight_id = r.fight_id AND p.fighter_id = ?
-                 WHERE r.fighter_id <> ? AND r.sig_str_att IS NOT NULL`, [id, id])[0];
+// A fighter's fights, from their side of site_fights.
+const MY_FIGHTS = `SELECT date, event_id, event, promotion, fight_id, weight_class, method, end_round, end_time,
+  time_format, title_fight, %me_res AS result, %opp_id AS opp_id, %opp_name AS opp FROM site_fights WHERE %me_id = ?1`;
+const side = (me, opp) => MY_FIGHTS.replace("%me_res", `${me}_res`).replace("%me_id", `${me}_id`)
+  .replace("%opp_id", `${opp}_id`).replace("%opp_name", `${opp}_name`);
+
+async function fighter(id, show) {
+  const [[f], fights, own, sherdog] = await Promise.all([
+    q("SELECT * FROM fighters WHERE fighter_id = ?", [id]),
+    q(`${side("a", "b")} UNION ALL ${side("b", "a")} ORDER BY date DESC`, [id]),
+    // Some sources count only what landed, so accuracy uses the rounds that have attempts.
+    q(`SELECT fight_id, SUM(knockdowns) kd, SUM(sig_str_land) sl, SUM(sig_str_att) sa,
+              SUM(CASE WHEN sig_str_att IS NOT NULL THEN sig_str_land END) sla,
+              SUM(td_land) tl, SUM(td_att) ta, SUM(CASE WHEN td_att IS NOT NULL THEN td_land END) tla,
+              SUM(sub_att) sub, SUM(ctrl_sec) ctrl
+       FROM round_stats WHERE fighter_id = ? GROUP BY fight_id`, [id]),
+    q("SELECT DISTINCT source_id FROM fighter_aliases WHERE fighter_id = ? AND source = 'sherdog'", [id]),
+  ]);
+  if (!f) { show("<p>Fighter not found.</p>"); return; }
+  // Their opponents' strikes in the same fights, for strike defense.
+  const [opp] = own.length
+    ? await q(`SELECT SUM(sig_str_land) sl, SUM(sig_str_att) sa FROM round_stats
+               WHERE fight_id IN (${own.map(() => "?").join(",")}) AND fighter_id <> ? AND sig_str_att IS NOT NULL`,
+              [...own.map((r) => r.fight_id), id])
+    : [{}];
 
   const rec = { w: 0, l: 0, d: 0, nc: 0 };
   fights.forEach((x) => { if (x.result) rec[x.result.toLowerCase()]++; });
@@ -268,12 +275,11 @@ function fighter(id) {
     f.stance && esc(f.stance),
     f.nationality && esc(f.nationality),
   ].filter(Boolean).join(" · ");
-  const sherdog = q("SELECT DISTINCT source_id FROM fighter_aliases WHERE fighter_id = ? AND source = 'sherdog'", [id]);
   const links = (isUfcStats(id) ? [ext(`http://ufcstats.com/fighter-details/${id}`, "UFC Stats")] : [])
     .concat(sherdog.map((r) => ext(`https://www.sherdog.com/fighter/x-${r.source_id}`, "Sherdog")));
   const stat = (label, value) => `<div class="stat"><small class="muted">${label}</small><b>${value}</b></div>`;
 
-  app.innerHTML = `
+  show(`
     <h1>${esc(f.name)}</h1>
     <p>${bio}</p>
     <div class="grid2">
@@ -294,74 +300,103 @@ function fighter(id) {
           <td>${fightLink(x.fight_id, x.method || "—")}</td><td>${dash(x.end_round)}</td>
           <td>${dash(x.end_time)}</td><td>${eventLink(x.event_id, x.event)}</td>
           <td>${esc(x.promotion)}</td><td>${esc(x.date)}</td></tr>`))}
-    ${sourceLine(links)}`;
+    ${sourceLine(links)}`);
 }
 
-function events() {
-  const all = q(`SELECT e.event_id, e.name, e.date, e.location, e.promotion, COUNT(f.fight_id) n
-                 FROM events e LEFT JOIN fights f USING (event_id)
-                 GROUP BY e.event_id ORDER BY e.date DESC`);
-  const years = [...new Set(all.map((e) => e.date.slice(0, 4)))];
-  const promos = promotions();
+const EVENTS_SHOWN = 300;
+const SEARCH_SHOWN = 100;  // a search's matches are scattered over the years: fewer, so fewer lookups
+
+async function events(_, show) {
+  const [[c], promos] = await Promise.all([q("SELECT * FROM site_stats"), promotions()]);
+  const years = [];
+  for (let y = Number(c.last_date.slice(0, 4)); y >= Number(c.first_date.slice(0, 4)); y--) years.push(String(y));
   const p = params();
-  app.innerHTML = `
+  if (!show(`
     <h1>Events</h1>
     <div class="filters">
-      <input type="search" id="q" placeholder="Search events or places…" value="${esc(p.get("q") || "")}">
+      <input type="search" id="q" placeholder="Search events or places (whole words)…" value="${esc(p.get("q") || "")}">
       <select id="y"><option value="">All years</option>${years.map((y) =>
         `<option ${p.get("y") === y ? "selected" : ""}>${y}</option>`).join("")}</select>
       <select id="pr"><option value="">All promotions</option>${promos.map((x) =>
-        `<option ${p.get("pr") === x ? "selected" : ""}>${esc(x)}</option>`).join("")}</select>
+        `<option ${p.get("pr") === x.promotion ? "selected" : ""}>${esc(x.promotion)}</option>`).join("")}</select>
     </div>
-    <div id="results"></div>`;
+    <div id="results"></div>`)) return;
   const qi = document.getElementById("q"), yi = document.getElementById("y"), pi = document.getElementById("pr");
-  const render = () => {
-    const term = norm(qi.value.trim()), year = yi.value, promo = pi.value;
-    setParams(new URLSearchParams({ ...(qi.value.trim() && { q: qi.value.trim() }), ...(year && { y: year }),
-                                    ...(promo && { pr: promo }) }));
-    const rows = all.filter((e) => (!year || e.date.startsWith(year)) && (!promo || e.promotion === promo) &&
-      (!term || norm(e.name).includes(term) || norm(e.location).includes(term)));
+  // site_events is newest first: a year is a range of it, a promotion a range of its index.
+  // A search matches whole words: it walks the events of its rarest word, newest first, and
+  // keeps those that have the other words too.
+  const find = latest(async (term, year, promo) => {
+    const s = term ? searchWords(term) : null;
+    if (term && !s) return null;
+    const where = [], args = [];
+    const col = (c) => (s ? `w.${c}` : c);
+    if (year) { where.push(`${col("date")} >= ? AND ${col("date")} < ?`); args.push(year, String(Number(year) + 1)); }
+    if (promo) { where.push(`${s ? "e." : ""}promotion = ?`); args.push(promo); }
+    if (!s) {
+      const clause = where.length ? "WHERE " + where.join(" AND ") : "";
+      const rows = q(`SELECT event_id, name, date, location, promotion, n FROM site_events ${clause}
+                      ORDER BY date DESC LIMIT ${EVENTS_SHOWN + 1}`, args);
+      const count = where.length ? q(`SELECT COUNT(*) n FROM site_events ${clause}`, args).then((r) => r[0].n) : c.events;
+      return [await rows, await count, EVENTS_SHOWN];
+    }
+    const terms = [...new Set(s.words)];
+    const counts = Object.fromEntries((await q(
+      `SELECT token, COUNT(*) n FROM site_event_words WHERE token IN (${terms.map(() => "?").join(",")}) GROUP BY token`,
+      terms)).map((r) => [r.token, r.n]));
+    if (terms.some((t) => !counts[t])) return [[], 0, SEARCH_SHOWN];
+    const [rarest, ...others] = terms.sort((a, b) => counts[a] - counts[b]);
+    others.forEach((t) => {
+      where.push("EXISTS (SELECT 1 FROM site_event_words o WHERE o.token = ? AND o.date = w.date AND o.event_id = w.event_id)");
+      args.push(t);
+    });
+    const rows = await q(`
+      SELECT e.event_id, e.name, e.date, e.location, e.promotion, e.n
+      FROM site_event_words w JOIN site_events e ON e.date = w.date AND e.event_id = w.event_id
+      WHERE w.token = ? ${where.map((x) => `AND ${x}`).join(" ")}
+      ORDER BY w.date DESC LIMIT ${SEARCH_SHOWN + 1}`, [rarest, ...args]);
+    return [rows, null, SEARCH_SHOWN];
+  });
+  const render = async () => {
+    const term = qi.value.trim(), year = yi.value, promo = pi.value;
+    setParams(new URLSearchParams({ ...(term && { q: term }), ...(year && { y: year }), ...(promo && { pr: promo }) }));
+    const got = await find(term, year, promo);
+    if (got === undefined) return;
+    if (got === null) { document.getElementById("results").innerHTML = `<p class="muted">Type at least two letters.</p>`; return; }
+    const [rows, count, limit] = got;
+    const total = count ?? (rows.length > limit ? null : rows.length);
     document.getElementById("results").innerHTML =
-      `<p class="muted">${rows.length} events</p>` +
-      table(["Date", "Event", "Promotion", "Location", "Fights"], rows.slice(0, 300).map((e) =>
+      `<p class="muted">${total != null ? `${num(total)} events` : `More than ${limit} events`}${
+        rows.length > limit ? ` (showing the latest ${limit})` : ""}</p>` +
+      table(["Date", "Event", "Promotion", "Location", "Fights"], rows.slice(0, limit).map((e) =>
         `<tr><td>${esc(e.date)}</td><td>${eventLink(e.event_id, e.name)}</td><td>${esc(e.promotion)}</td>
              <td>${esc(e.location)}</td><td class="num">${e.n}</td></tr>`));
   };
-  qi.oninput = debounce(render);
+  qi.oninput = debounce(render, 250);
   yi.onchange = render;
   pi.onchange = render;
-  render();
+  await render();
 }
 
-function event(id) {
-  const e = q("SELECT * FROM events WHERE event_id = ?", [id])[0];
-  if (!e) { app.innerHTML = "<p>Event not found.</p>"; return; }
-  const fights = q(`
-    SELECT x.fight_id, x.weight_class, x.method, x.end_round, x.end_time, x.title_fight,
-           EXISTS (SELECT 1 FROM round_stats r WHERE r.fight_id = x.fight_id)
-             OR EXISTS (SELECT 1 FROM smartcage_round_stats r WHERE r.fight_id = x.fight_id) AS has_stats,
-           a.fighter_id a_id, fa.name a_name, a.result a_res,
-           b.fighter_id b_id, fb.name b_name, b.result b_res
-    FROM fights x
-    JOIN fight_participants a ON a.fight_id = x.fight_id AND a.corner = 0
-    JOIN fight_participants b ON b.fight_id = x.fight_id AND b.corner = 1
-    JOIN fighters fa ON fa.fighter_id = a.fighter_id
-    JOIN fighters fb ON fb.fighter_id = b.fighter_id
-    WHERE x.event_id = ? ORDER BY x.rowid`, [id]);
+async function event(id, show) {
+  const [[e], fights, [card], links] = await Promise.all([
+    q("SELECT e.*, p.coverage FROM events e LEFT JOIN promotions p USING (promotion) WHERE event_id = ?", [id]),
+    q("SELECT * FROM site_fights WHERE event_id = ? ORDER BY card", [id]),
+    q("SELECT complete FROM event_cards WHERE event_id = ?", [id]),
+    eventSources(id),
+  ]);
+  if (!e) { show("<p>Event not found.</p>"); return; }
   // The whole card is here if UFC Stats covers the promotion's cards or the card was read whole.
-  const whole = q(`SELECT ((SELECT coverage = 'full' FROM promotions WHERE promotion = ?1) AND ?2 = 'ufcstats')
-                     OR EXISTS (SELECT 1 FROM event_cards WHERE event_id = ?3 AND complete = 1) AS yes`,
-                  [e.promotion, e.source, id])[0].yes;
-  app.innerHTML = `
+  const whole = (e.coverage === "full" && e.source === "ufcstats") || card?.complete === 1;
+  show(`
     <h1>${esc(e.name)}</h1>
     <p>${[e.promotion, e.date, e.location].filter(Boolean).map(esc).join(" · ")}</p>
     ${whole ? "" : `<p class="muted"><small>Partial card: only the bouts of fighters this database follows.</small></p>`}
     ${table(["Fighters", "Weight class", "Method", "Rd", "Time", ""], fights.map((x) => `
       <tr><td>${badge(x.a_res)} ${fighterLink(x.a_id, x.a_name)}<br>${badge(x.b_res)} ${fighterLink(x.b_id, x.b_name)}</td>
-          <td>${x.weight_class ? esc(division(x.weight_class)) : "—"} ${boutTags(x)}</td><td>${esc(x.method || "—")}</td>
+          <td>${x.weight_class ? esc(x.division) : "—"} ${boutTags(x)}</td><td>${esc(x.method || "—")}</td>
           <td>${dash(x.end_round)}</td><td>${dash(x.end_time)}</td>
           <td>${fightLink(x.fight_id, x.has_stats ? "Stats →" : "Details →")}</td></tr>`))}
-    ${sourceLine(eventSources(id))}`;
+    ${sourceLine(links)}`);
 }
 
 const ROUND_ROWS = [
@@ -397,20 +432,22 @@ const SMARTCAGE_ROWS = [
   ["Time standing", (r) => mmss(r.standing_sec)],
 ];
 
-function fight(id) {
-  const x = q(`SELECT x.*, e.name event, e.date FROM fights x JOIN events e USING (event_id)
-               WHERE fight_id = ?`, [id])[0];
-  if (!x) { app.innerHTML = "<p>Fight not found.</p>"; return; }
-  const ps = q(`SELECT p.corner, p.result, p.fighter_id, f.name FROM fight_participants p
-                JOIN fighters f USING (fighter_id) WHERE fight_id = ? ORDER BY corner`, [id]);
+async function fight(id, show) {
   // Round stats in UFC Stats' columns, or PFL's older SmartCage set (its own columns).
-  let rounds = q("SELECT * FROM round_stats WHERE fight_id = ? ORDER BY round", [id]);
-  const smartcage = !rounds.length;
-  if (smartcage) rounds = q("SELECT * FROM smartcage_round_stats WHERE fight_id = ? ORDER BY round", [id]);
+  const [[x], ufc, cage] = await Promise.all([
+    q("SELECT * FROM site_fights WHERE fight_id = ?", [id]),
+    q("SELECT * FROM round_stats WHERE fight_id = ? ORDER BY round", [id]),
+    q("SELECT * FROM smartcage_round_stats WHERE fight_id = ? ORDER BY round", [id]),
+  ]);
+  if (!x) { show("<p>Fight not found.</p>"); return; }
+  const ps = [{ fighter_id: x.a_id, name: x.a_name, result: x.a_res }, { fighter_id: x.b_id, name: x.b_name, result: x.b_res }]
+    .filter((p) => p.fighter_id);
+  const smartcage = !ufc.length;
+  const rounds = smartcage ? cage : ufc;
   const nums = [...new Set(rounds.map((r) => r.round))];
   const statsFrom = rounds.length ? (smartcage ? "PFL (SmartCage)" : SOURCE_NAMES[rounds[0].source] || rounds[0].source) : "";
   const links = isUfcStats(id) ? [ext(`http://ufcstats.com/fight-details/${id}`, "UFC Stats")] : [];
-  eventSources(x.event_id).filter((l) => !l.includes("ufcstats.com")).forEach((l) => links.push(l));
+  (await eventSources(x.event_id)).filter((l) => !l.includes("ufcstats.com")).forEach((l) => links.push(l));
 
   // Totals: sum each column over rounds; stays NULL if every round is NULL.
   const total = (fid) => {
@@ -427,7 +464,7 @@ function fight(id) {
     ? total(p.fighter_id)
     : rounds.find((r) => r.round === Number(sel) && r.fighter_id === p.fighter_id) || {});
 
-  app.innerHTML = `
+  if (!show(`
     <p>${eventLink(x.event_id, x.event)} · ${esc(x.date)}</p>
     <h1>${ps.map((p) => `${fighterLink(p.fighter_id, p.name)} ${badge(p.result)}`).join(" vs ")}</h1>
     <p>${esc(x.weight_class || "")} ${boutTags(x)}<br>
@@ -441,8 +478,7 @@ function fight(id) {
         ? " This older PFL system counts all strikes by arm, leg and ground, not significant strikes."
         : STATS_NOTES[rounds[0].source] ? ` ${STATS_NOTES[rounds[0].source]}` : ""}</small></p>`
       : `<p class="muted">No round-by-round stats recorded for this fight.</p>`}
-    ${sourceLine(links)}`;
-  if (!rounds.length) return;
+    ${sourceLine(links)}`) || !rounds.length) return;
   const sel = document.getElementById("rsel");
   const render = () => {
     const [a, b] = pick(sel.value);
@@ -457,126 +493,89 @@ function fight(id) {
 
 // Leaderboards, one board per source of numbers: results come from every fight, and each
 // stats source (they count differently) ranks only its own fights, with the stats it has.
-// Each stat is a fixed SQL expression over the per-fighter aggregates `per` and `rs`.
-const RESULT_STATS = {
-  wins:   { label: "Wins", expr: "per.w" },
-  fin:    { label: "Finishes (KO/TKO + submission wins)", expr: "per.fin" },
-  ko:     { label: "KO/TKO wins", expr: "per.ko" },
-  subw:   { label: "Submission wins", expr: "per.subw" },
-  fights: { label: "Fights", expr: "per.n" },
-};
-const LANDED_STATS = {
-  sig:    { label: "Sig. strikes landed", expr: "rs.sl" },
-  total:  { label: "Total strikes landed", expr: "rs.tsl" },
-  td:     { label: "Takedowns landed", expr: "rs.tl" },
-  subatt: { label: "Submission attempts", expr: "rs.suba" },
-};
-const FULL_STATS = {
-  kd:     { label: "Knockdowns", expr: "rs.kd" },
-  sig:    LANDED_STATS.sig,
-  sigacc: { label: "Sig. strike accuracy (min. 100 attempted)", expr: "1.0 * rs.sl / rs.sa", where: "rs.sa >= 100", fmt: "pct" },
-  total:  LANDED_STATS.total,
-  td:     LANDED_STATS.td,
-  tdacc:  { label: "Takedown accuracy (min. 10 attempted)", expr: "1.0 * rs.tl / rs.ta", where: "rs.ta >= 10", fmt: "pct" },
-  subatt: LANDED_STATS.subatt,
-  ctrl:   { label: "Control time", expr: "rs.ctrl", fmt: "time" },
-};
-const ROUND_SUMS = `SUM(knockdowns) kd, SUM(sig_str_land) sl, SUM(sig_str_att) sa, SUM(total_str_land) tsl,
-  SUM(td_land) tl, SUM(td_att) ta, SUM(sub_att) suba, SUM(ctrl_sec) ctrl`;
-const BOARDS = {
-  results:   { label: "Results (all fights)", stats: RESULT_STATS,
-               note: "Counts pro fights in this database, which doesn't have every fighter's whole career." },
-  ufcstats:  { label: "UFC Stats", stats: FULL_STATS, table: "round_stats", source: "ufcstats", sums: ROUND_SUMS,
-               note: "Fights counted by UFC Stats: the UFC, and the other promotions it covers." },
-  pfl:       { label: "PFL (from Dec 2025)", stats: FULL_STATS, table: "round_stats", source: "pfl", sums: ROUND_SUMS,
-               note: "PFL's own stats, from December 2025 on." },
-  smartcage: { label: "PFL SmartCage (2018–2025)", table: "smartcage_round_stats", source: "pfl",
-               sums: `SUM(knockdowns) kd, SUM(total_str_land) tsl, SUM(total_str_att) tsa, SUM(arm_land) arm,
-                      SUM(leg_land) leg, SUM(ground_land) grd, SUM(td_land) tl, SUM(td_att) ta, SUM(sub_att) suba`,
-               stats: {
-                 kd:     { label: "Knockdowns", expr: "rs.kd" },
-                 total:  LANDED_STATS.total,
-                 totacc: { label: "Strike accuracy (min. 100 thrown)", expr: "1.0 * rs.tsl / rs.tsa", where: "rs.tsa >= 100", fmt: "pct" },
-                 arm:    { label: "Arm strikes landed", expr: "rs.arm" },
-                 leg:    { label: "Leg strikes landed", expr: "rs.leg" },
-                 ground: { label: "Ground strikes landed", expr: "rs.grd" },
-                 td:     LANDED_STATS.td,
-                 tdacc:  FULL_STATS.tdacc,
-                 subatt: LANDED_STATS.subatt,
-               },
-               note: "PFL's older system, 2018 to November 2025. It counts all strikes, not significant ones." },
-  oktagon:   { label: "Oktagon", stats: LANDED_STATS, table: "round_stats", source: "oktagon", sums: ROUND_SUMS,
-               note: "Oktagon's own stats, on the Oktagon fights Sofascore doesn't have. Only what landed is counted, so there are no accuracy, knockdown or control boards." },
-  sofascore: { label: "Sofascore", table: "round_stats", source: "sofascore",
-               sums: `${ROUND_SUMS}, SUM(total_str_att) tsa`,
-               stats: {
-                 kd:     FULL_STATS.kd,
-                 sig:    LANDED_STATS.sig,
-                 thrown: { label: "Total strikes thrown", expr: "rs.tsa" },
-                 td:     LANDED_STATS.td,
-                 tdacc:  FULL_STATS.tdacc,
-                 subatt: LANDED_STATS.subatt,
-                 ctrl:   FULL_STATS.ctrl,
-               },
-               note: "Sofascore's count for promotions with no official stats (ONE, RIZIN, KSW, ACA, BRAVE, Cage Warriors and others), and for Oktagon. Not comparable with the other boards." },
-};
+// The boards and their stats (SQL over pre-computed per-fighter totals) are defined in
+// scripts/site_db.py and read from site_boards.
+const LEADER_SUMS = "SUM(n) n, " + ["kd", "sl", "sa", "tsl", "tsa", "tl", "ta", "suba", "ctrl", "arm", "leg", "grd"]
+  .map((c) => `SUM(${c}) ${c}`).join(", ");
 
-function leaders() {
+// The top 50 for a board, stat and filters. The page's opening view (all promotions and
+// years, min. 1 fight) is pre-computed in site_top. Otherwise the results board, which has
+// all years only, ranks across all promotions through an index per stat or reads one
+// promotion's slice; a stats board sums its fighters' years in range.
+function leaderQuery(board, stat, s, f, allYears) {
+  const keep = `n >= ? AND ${s.expr} IS NOT NULL ${s.where ? `AND ${s.where}` : ""}`;
+  const top = `ORDER BY ${s.expr} DESC, n LIMIT 50`;
+  const named = (sql) => `SELECT t.fighter_id, f.name, t.n, t.val FROM (${sql}) t
+                          JOIN fighters f USING (fighter_id) ORDER BY t.val DESC, t.n`;
+  if (f.promo === "0" && (allYears || board === "results") && f.min === "1") {
+    return ["SELECT fighter_id, name, n, val FROM site_top WHERE board = ? AND stat = ? AND division = ? ORDER BY rank",
+            [board, stat, Number(f.div)]];
+  }
+  if (board === "results") {
+    // Spelled out so SQLite picks the partial indexes.
+    const promo = f.promo === "0" ? "promotion = 0" : "promotion = ? AND promotion <> 0";
+    return [named(`SELECT fighter_id, n, ${s.expr} val FROM site_results
+                   WHERE ${promo} AND division = ? AND ${keep} ${top}`),
+            [...(f.promo === "0" ? [] : [Number(f.promo)]), Number(f.div), Number(f.min)]];
+  }
+  if (allYears) {
+    return [named(`SELECT fighter_id, n, ${s.expr} val FROM site_leaders
+                   WHERE board = ? AND promotion = ? AND division = ? AND year = 0 AND ${keep} ${top}`),
+            [board, Number(f.promo), Number(f.div), Number(f.min)]];
+  }
+  return [named(`SELECT fighter_id, n, ${s.expr} val FROM (
+                   SELECT fighter_id, ${LEADER_SUMS} FROM site_leaders
+                   WHERE board = ? AND promotion = ? AND division = ? AND year BETWEEN ? AND ?
+                   GROUP BY fighter_id)
+                 WHERE ${keep} ${top}`),
+          [board, Number(f.promo), Number(f.div), Number(f.from), Number(f.to), Number(f.min)]];
+}
+
+async function leaders(_, show) {
   const p = params();
-  const [minY, maxY] = Object.values(q("SELECT MIN(substr(date,1,4)) a, MAX(substr(date,1,4)) b FROM events")[0]);
+  const [[c], promos, divisions, [boards]] = await Promise.all([
+    q("SELECT * FROM site_stats"), promotions(), q("SELECT code, division FROM site_divisions ORDER BY code"),
+    q("SELECT json FROM site_boards"),
+  ]);
+  const BOARDS = JSON.parse(boards.json);
+  const [minY, maxY] = [c.first_date.slice(0, 4), c.last_date.slice(0, 4)];
   const years = [];
   for (let y = Number(maxY); y >= Number(minY); y--) years.push(String(y));
-  const opt = (v, label, cur) => `<option value="${esc(v)}" ${cur === v ? "selected" : ""}>${esc(label)}</option>`;
+  const opt = (v, label, cur) => `<option value="${esc(v)}" ${cur === String(v) ? "selected" : ""}>${esc(label)}</option>`;
   const board0 = BOARDS[p.get("board")] ? p.get("board") : "results";
-  const cur = { board: board0, stat: p.get("stat") || "", promo: p.get("promo") || "", div: p.get("div") || "",
+  const code = (k) => (/^\d+$/.test(p.get(k) || "") ? p.get(k) : "0");  // older links named the promotion
+  const cur = { board: board0, stat: p.get("stat") || "", promo: code("promo"), div: code("div"),
                 from: p.get("from") || minY, to: p.get("to") || maxY, min: p.get("min") || "1" };
   const statOptions = (board, stat) => Object.entries(BOARDS[board].stats).map(([k, s]) => opt(k, s.label, stat)).join("");
-  app.innerHTML = `
+  if (!show(`
     <h1>Leaders</h1>
     <div class="filters">
       <label>Board<select id="board">${Object.entries(BOARDS).map(([k, b]) => opt(k, b.label, cur.board)).join("")}</select></label>
       <label>Stat<select id="stat">${statOptions(cur.board, cur.stat)}</select></label>
-      <label>Promotion<select id="promo">${opt("", "All promotions", cur.promo)}${promotions().map((x) => opt(x, x, cur.promo)).join("")}</select></label>
-      <label>Division<select id="div">${opt("", "All divisions", cur.div)}${DIVISIONS.map((d) => opt(d, d, cur.div)).join("")}</select></label>
+      <label>Promotion<select id="promo">${opt(0, "All promotions", cur.promo)}${promos.map((x) => opt(x.code, x.promotion, cur.promo)).join("")}</select></label>
+      <label>Division<select id="div">${opt(0, "All divisions", cur.div)}${divisions.map((d) => opt(d.code, d.division, cur.div)).join("")}</select></label>
       <label>From<select id="from">${years.map((y) => opt(y, y, cur.from)).join("")}</select></label>
       <label>To<select id="to">${years.map((y) => opt(y, y, cur.to)).join("")}</select></label>
       <label>Min. fights<input type="number" id="min" min="1" value="${esc(cur.min)}"></label>
     </div>
-    <div id="results"></div>`;
+    <div id="results"></div>`)) return;
   const val = (k) => document.getElementById(k).value;
-  const render = () => {
+  const find = latest((sql, args) => q(sql, args));
+  const render = async () => {
     const f = { board: val("board"), stat: val("stat"), promo: val("promo"), div: val("div"), from: val("from"),
-                to: val("to"), min: val("min") || "1" };
+                to: val("to"), min: String(Math.max(1, Number(val("min")) || 1)) };
+    const results = f.board === "results";
+    document.getElementById("from").disabled = document.getElementById("to").disabled = results;
     setParams(new URLSearchParams(f));
     const b = BOARDS[f.board];
-    const s = b.stats[f.stat] || Object.values(b.stats)[0];
-    // A stats board only looks at the fights that source counted.
-    const counted = b.table
-      ? `AND EXISTS (SELECT 1 FROM ${b.table} r WHERE r.fight_id = x.fight_id AND r.source = '${b.source}')` : "";
-    const rs = b.table
-      ? `SELECT r.fighter_id, ${b.sums} FROM ${b.table} r JOIN ff USING (fight_id)
-         WHERE r.source = '${b.source}' GROUP BY r.fighter_id`
-      : "SELECT NULL fighter_id WHERE 0";
-    const rows = q(`
-      WITH ff AS (
-        SELECT x.fight_id, x.method FROM fights x JOIN events e USING (event_id)
-        WHERE (?1 = '' OR division(x.weight_class) = ?1) AND substr(e.date, 1, 4) BETWEEN ?2 AND ?3
-          AND (?5 = '' OR e.promotion = ?5) ${counted}),
-      per AS (
-        SELECT p.fighter_id, COUNT(*) n, SUM(p.result = 'W') w,
-               SUM(p.result = 'W' AND (ff.method LIKE '%KO%' OR ff.method LIKE '%Submission%')) fin,
-               SUM(p.result = 'W' AND ff.method LIKE '%KO%') ko,
-               SUM(p.result = 'W' AND ff.method LIKE '%Submission%') subw
-        FROM fight_participants p JOIN ff USING (fight_id) GROUP BY p.fighter_id),
-      rs AS (${rs})
-      SELECT f.fighter_id, f.name, per.n, ${s.expr} AS val
-      FROM per JOIN fighters f USING (fighter_id) LEFT JOIN rs USING (fighter_id)
-      WHERE per.n >= ?4 AND ${s.expr} IS NOT NULL ${s.where ? `AND ${s.where}` : ""}
-      ORDER BY val DESC, per.n ASC LIMIT 50`, [f.div, f.from, f.to, Number(f.min), f.promo]);
-    const show = (v) => s.fmt === "pct" ? Math.round(v * 1000) / 10 + "%" : s.fmt === "time" ? hmm(v) : num(v);
-    document.getElementById("results").innerHTML = table(["#", "Fighter", b.table ? "Fights counted" : "Fights", esc(s.label)],
+    const stat = b.stats[f.stat] ? f.stat : Object.keys(b.stats)[0];
+    const s = b.stats[stat];
+    const rows = await find(...leaderQuery(f.board, stat, s, f, f.from === minY && f.to === maxY));
+    if (rows === undefined) return;
+    const shown = (v) => s.fmt === "pct" ? Math.round(v * 1000) / 10 + "%" : s.fmt === "time" ? hmm(v) : num(v);
+    document.getElementById("results").innerHTML = table(["#", "Fighter", results ? "Fights" : "Fights counted", esc(s.label)],
       rows.map((r, i) => `<tr><td class="num">${i + 1}</td><td>${fighterLink(r.fighter_id, r.name)}</td>
-                          <td class="num">${r.n}</td><td class="num">${show(r.val)}</td></tr>`)) +
+                          <td class="num">${r.n}</td><td class="num">${shown(r.val)}</td></tr>`)) +
       `<p class="muted"><small>${esc(b.note)}</small></p>`;
   };
   app.querySelectorAll("select, input").forEach((el) => (el.onchange = render));
@@ -586,53 +585,60 @@ function leaders() {
     stat.innerHTML = statOptions(val("board"), stat.value);
     render();
   };
-  render();
+  await render();
 }
 
 const EXAMPLES = {
   "Latest events": "SELECT date, name, location FROM events ORDER BY date DESC LIMIT 20;",
-  "How fights end": "SELECT method, COUNT(*) AS fights FROM fights GROUP BY method ORDER BY fights DESC;",
-  "Most knockdowns in one fight": `SELECT f.name, e.name AS event, e.date, SUM(r.knockdowns) AS kd, r.fight_id
+  "A fighter's fights": `SELECT date, event, method, a_name, a_res, b_name, b_res, fight_id
+FROM site_fights
+WHERE (SELECT fighter_id FROM site_top_fighters LIMIT 1) IN (a_id, b_id)
+ORDER BY date;`,
+  "Most knockdowns in one fight": `SELECT f.name, x.event, x.date, SUM(r.knockdowns) AS kd, r.fight_id
 FROM round_stats r
 JOIN fighters f USING (fighter_id)
-JOIN fights x USING (fight_id)
-JOIN events e USING (event_id)
+JOIN site_fights x USING (fight_id)
 GROUP BY r.fight_id, r.fighter_id
 ORDER BY kd DESC LIMIT 20;`,
-  "Title fights per year": `SELECT substr(e.date, 1, 4) AS year, COUNT(*) AS title_fights
-FROM fights x JOIN events e USING (event_id)
-WHERE x.title_fight = 1 GROUP BY year ORDER BY year;`,
-  "Fights per division": "SELECT division(weight_class) AS division, COUNT(*) AS fights FROM fights GROUP BY division ORDER BY fights DESC;",
-  "Promotions with whole cards": `SELECT e.promotion, COUNT(*) AS events, MIN(e.date) AS first, MAX(e.date) AS last
-FROM event_cards c JOIN events e USING (event_id)
-WHERE c.complete = 1 GROUP BY e.promotion ORDER BY events DESC;`,
   "Where round stats come from": "SELECT source, COUNT(DISTINCT fight_id) AS fights, COUNT(*) AS fighter_rounds FROM round_stats GROUP BY source;",
-  "All tables and columns": "SELECT name, sql FROM sqlite_master WHERE type = 'table';",
+  "Promotions with the most events": "SELECT promotion, events FROM site_promotions ORDER BY events DESC LIMIT 30;",
+  "How fights end (reads every fight)": "SELECT method, COUNT(*) AS fights FROM fights GROUP BY method ORDER BY fights DESC;",
+  "Fights per division (reads every fight)": "SELECT division, COUNT(*) AS fights FROM site_fights GROUP BY division ORDER BY fights DESC;",
+  "All tables and columns": "SELECT type, name, sql FROM sqlite_master WHERE type IN ('table', 'view');",
 };
 
-function sql() {
+async function sql(_, show) {
   const first = Object.values(EXAMPLES)[0];
-  app.innerHTML = `
+  if (!show(`
     <h1>SQL</h1>
-    <p>Query the whole database directly. It runs in your browser, so you can't break anything:
-       reloading the page resets it. Columns named <code>fighter_id</code>, <code>event_id</code>
-       or <code>fight_id</code> become links. <code>division(weight_class)</code> gives a fight's division.</p>
+    <p>Query the whole database directly. It runs in your browser, so you can't break anything.
+       Only the parts of the database a query reads are downloaded: lookups by id are quick,
+       but a query that reads a whole table downloads that table, which can be tens of MB.
+       For heavy work, <a href="${RELEASES}">download the database</a>.</p>
+    <p>This copy is arranged for the site: <code>fights</code> and <code>fight_participants</code>
+       are views over <code>site_fights</code>, which has each fight with its event, both fighters
+       and its <code>division</code>. Columns named <code>fighter_id</code>, <code>event_id</code>
+       or <code>fight_id</code> become links.</p>
     <select id="ex"><option value="">Examples…</option>${Object.keys(EXAMPLES).map((k) => `<option>${esc(k)}</option>`).join("")}</select>
     <textarea id="sqltext" class="sql" spellcheck="false">${esc(params().get("q") || first)}</textarea>
     <button id="run">Run (Ctrl+Enter)</button>
-    <div id="out"></div>`;
+    <div id="out"></div>`)) return;
   const ta = document.getElementById("sqltext");
-  const run = () => {
+  const run = async () => {
     const out = document.getElementById("out");
     setParams(new URLSearchParams({ q: ta.value }));
+    out.innerHTML = `<p class="muted">Running…</p>`;
+    const before = (await worker.worker.getStats()).totalFetchedBytes;
     try {
-      const res = db.exec(ta.value);
-      if (!res.length) { out.innerHTML = `<p class="muted">Done. No rows returned.</p>`; return; }
+      const res = await worker.db.exec(ta.value);
+      const read = (await worker.worker.getStats()).totalFetchedBytes - before;
+      const fetched = read ? ` · ${mb(read)} downloaded` : "";
+      if (!res.length) { out.innerHTML = `<p class="muted">Done. No rows returned${fetched}.</p>`; return; }
       const { columns, values } = res[res.length - 1];
       const cell = (c, v) => v == null ? "—"
         : c === "fighter_id" ? fighterLink(v, v) : c === "event_id" ? eventLink(v, v)
         : c === "fight_id" ? fightLink(v, v) : esc(v);
-      out.innerHTML = `<p class="muted">${values.length} rows${values.length > 1000 ? " (showing 1,000)" : ""}</p>` +
+      out.innerHTML = `<p class="muted">${values.length} rows${values.length > 1000 ? " (showing 1,000)" : ""}${fetched}</p>` +
         table(columns.map(esc), values.slice(0, 1000).map((row) =>
           `<tr>${row.map((v, i) => `<td class="wrap">${cell(columns[i], v)}</td>`).join("")}</tr>`));
     } catch (e) {
@@ -644,5 +650,5 @@ function sql() {
   document.getElementById("ex").onchange = (e) => {
     if (EXAMPLES[e.target.value]) { ta.value = EXAMPLES[e.target.value]; run(); }
   };
-  run();
+  await run();
 }

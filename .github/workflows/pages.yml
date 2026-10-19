@@ -1,11 +1,12 @@
-# Publishes site/ plus a gzipped copy of the latest released database to GitHub Pages.
+# Publishes site/ plus the site's copy of the latest released database (scripts/site_db.py:
+# laid out for the site and split into chunks it reads in pieces) to GitHub Pages.
 # Runs when the site changes, after each database update, or by hand.
 name: Deploy site
 
 on:
   push:
     branches: [main]
-    paths: ["site/**", ".github/workflows/pages.yml"]
+    paths: ["site/**", "scripts/site_db.py", ".github/workflows/pages.yml"]
   workflow_run:
     workflows: ["Update database", "Discover events"]
     types: [completed]
@@ -38,8 +39,8 @@ jobs:
         run: |
           gh release download --pattern canon.db --dir data
           mkdir _site
-          cp site/* _site/
-          gzip -9 -c data/canon.db > _site/canon.db.gz
+          cp -r site/* _site/
+          python3 scripts/site_db.py data/canon.db _site/db
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

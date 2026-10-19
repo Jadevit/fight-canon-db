@@ -101,10 +101,13 @@ new and recent cards of the promotions above, with PFL's, Oktagon's and Sofascor
 
 ## The website
 
-`site/` is a static page that loads the whole database into the browser with
-[sql.js](https://sql.js.org): fighter search, events, round-by-round fight stats,
-leaderboards and a SQL box. `.github/workflows/pages.yml` publishes it to GitHub
-Pages (with a gzipped copy of the DB) after every database update.
+`site/` is a static page that queries the database in the browser with
+[sql.js-httpvfs](https://github.com/phiresky/sql.js-httpvfs), which downloads only the parts
+of the file a query reads: fighter search, events, round-by-round fight stats, leaderboards
+and a SQL box. `.github/workflows/pages.yml` publishes it to GitHub Pages after every
+database update, with a copy of the database arranged for the site by `scripts/site_db.py`.
+To look at it locally: `python scripts/site_db.py`, then `python scripts/serve.py` and open
+http://localhost:8000/site/.
 
 ## Run locally
 

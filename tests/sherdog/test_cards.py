@@ -130,6 +130,14 @@ def test_bout_types():
         "sherdog:901:100-300": "pro", "sherdog:902:300-400": "exhibition"}
 
 
+def test_bout_against_oneself_is_skipped():
+    conn = _db()
+    counts = write(conn, [_row(901, "2019-05-05", ("Carl Cole", "300"), ("Carl Cole", "300")),
+                          _row(901, "2019-05-05", ("Dan Dent", "400"), ("Eve East", "500"))])
+    assert counts["bouts not written"] == 1 and counts["new fights"] == 1
+    assert conn.execute("SELECT complete FROM event_cards").fetchone() == (0,)
+
+
 def test_non_pro_fights_are_dropped():
     from canon_db.sources.sherdog.load import drop_non_pro, mark_bout_types
     conn = _db()

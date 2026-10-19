@@ -82,7 +82,8 @@ def write(conn: sqlite3.Connection, st: State, bouts: list[dict], fresh: bool) -
     per_card = Counter((b["event"], s["sid"]) for b in bouts for s in b["sides"])
     for b in bouts:
         b["crowded"] = any(per_card[(b["event"], s["sid"])] > 1 for s in b["sides"])
-    ok = [b for b in bouts if b.get("placed", True) and b["event"] and all(s["sid"] for s in b["sides"])]
+    ok = [b for b in bouts if b.get("placed", True) and b["event"] and all(s["sid"] for s in b["sides"])
+          and b["sides"][0]["sid"] != b["sides"][1]["sid"]]  # a few cards list one fighter on both sides
     written = {id(b) for b in ok}
     while True:  # a new link can make another bout matchable
         before = len(st.new_links)
