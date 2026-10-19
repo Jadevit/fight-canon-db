@@ -7,6 +7,8 @@ site's pages: each one should read a few contiguous ranges, not hundreds of scat
   named fights and fight_participants give the original columns back for the SQL page.
 - `site_` tables hold the rest of what the pages show (search, lists, leaderboards), with
   what each row displays in the row itself.
+- The round stats tables are stored in fight order, so a fight's rounds are together and a
+  query that reads them all by fight reads the table straight through.
 - Pages are 4 KB and the file is split into 10 MB chunks.
 
     python scripts/site_db.py [canon.db] [out dir]     # defaults: data/canon.db site/db
@@ -258,6 +260,20 @@ def leaders(conn: sqlite3.Connection) -> None:
         conn.execute(f"CREATE INDEX site_results_{c} ON site_results(division, {c} DESC, n) WHERE promotion = 0")
 
 
+def cluster(conn: sqlite3.Connection, table: str, order: str) -> None:
+    """Rewrite a table with its rows stored in `order`, so reading it in that order (through
+    its primary key, say) is one long range instead of a request per row."""
+    sql = conn.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)).fetchone()[0]
+    indexes = [r[0] for r in conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = ? AND sql IS NOT NULL", (table,))]
+    conn.execute(f"ALTER TABLE {table} RENAME TO {table}_unsorted")
+    conn.execute(sql)
+    conn.execute(f"INSERT INTO {table} SELECT * FROM {table}_unsorted ORDER BY {order}")
+    conn.execute(f"DROP TABLE {table}_unsorted")
+    for s in indexes:
+        conn.execute(s)
+
+
 def fill(conn: sqlite3.Connection) -> None:
     """Add the site's tables, swap fights and fight_participants for views, then rewrite the
     file in the site's page size."""
@@ -281,6 +297,8 @@ def fill(conn: sqlite3.Connection) -> None:
                       for t in words(f"{name} {loc or ''}")])
     leaders(conn)
     conn.executescript(VIEWS_SQL)
+    for table in ("round_stats", "smartcage_round_stats", "sofascore_round_stats"):
+        cluster(conn, table, "fight_id, fighter_id, round")
     conn.commit()
     conn.execute("PRAGMA journal_mode = DELETE")
     conn.execute(f"PRAGMA page_size = {PAGE}")
