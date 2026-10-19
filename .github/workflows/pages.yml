@@ -42,6 +42,14 @@ jobs:
           cp -r site/* _site/
           python3 scripts/site_db.py data/canon.db _site/db
 
+      # The same site on Cloudflare Pages (project fightcanon, at fightcanon.com): no 1 GB cap.
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy _site --project-name=fightcanon --branch=main --commit-dirty=true
+
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
