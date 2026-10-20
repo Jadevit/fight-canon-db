@@ -1,10 +1,11 @@
 // The website on Cloudflare Workers (static assets only, no script): fightcanon.com.
-// pages.yml builds _site/ (site/ plus the site's database) and runs `wrangler deploy`.
+// pages.yml builds _cf/ (site/ plus a config.json pointing at the database in R2, at
+// db.fightcanon.com: Workers' static assets don't answer range requests) and runs `wrangler deploy`.
 {
   "name": "fightcanon",
   "compatibility_date": "2026-10-19",
   "assets": {
-    "directory": "./_site",
+    "directory": "./_cf",
     "not_found_handling": "404-page"
   }
 }

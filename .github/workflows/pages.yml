@@ -12,6 +12,10 @@ on:
     types: [completed]
   workflow_dispatch:
 
+env:
+  R2_BUCKET: fightcanon-db
+  R2_URL: https://db.fightcanon.com
+
 permissions:
   contents: read
   pages: write
@@ -33,18 +37,45 @@ jobs:
         with:
           ref: main
 
+      # _site/: GitHub Pages, the database next to the page. _cf/: the fightcanon Worker
+      # (wrangler.jsonc), the page only; its config.json points at the database in R2.
       - name: Build site
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release download --pattern canon.db --dir data
-          mkdir _site
+          python3 scripts/site_db.py data/canon.db _db
+          mkdir _site _cf
           cp -r site/* _site/
-          python3 scripts/site_db.py data/canon.db _site/db
+          cp -r _db _site/db
+          cp -r site/* _cf/
+          mkdir _cf/db
+          build=$(jq -r .cacheBust _db/config.json)
+          jq --arg p "$R2_URL/$build/canon.db." '.urlPrefix = $p' _db/config.json > _cf/db/config.json
+          live=$(curl -sf https://fightcanon.com/db/config.json | jq -r .urlPrefix | sed -nE 's#.*/([^/]+)/canon\.db\.$#\1#p' || true)
+          echo "BUILD=$build" >> "$GITHUB_ENV"
+          echo "LIVE=$live" >> "$GITHUB_ENV"
 
-      # The same site on Cloudflare (the fightcanon Worker, at fightcanon.com; wrangler.jsonc):
-      # no 1 GB cap. It can't hold up the GitHub Pages deploy while it's new.
+      # Cloudflare can't hold up the GitHub Pages deploy while it's new. Each build goes in its
+      # own folder of the bucket, so a page open during a deploy keeps reading the files it
+      # started with; the folder before the live one is deleted afterwards.
+      - name: Upload the database to R2
+        id: r2
+        continue-on-error: true
+        env: &r2
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_URL: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          AWS_DEFAULT_REGION: auto
+          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+        run: |
+          aws s3 cp _db/ "s3://$R2_BUCKET/$BUILD/" --recursive --exclude config.json \
+            --content-type application/octet-stream --cache-control "public, max-age=31536000, immutable"
+
       - name: Deploy to Cloudflare
+        id: worker
+        if: steps.r2.outcome == 'success'
         continue-on-error: true
         uses: cloudflare/wrangler-action@v3
         with:
@@ -52,6 +83,17 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: "4.151.2"
           command: deploy
+
+      - name: Remove old builds from R2
+        if: steps.worker.outcome == 'success'
+        continue-on-error: true
+        env: *r2
+        run: |
+          aws s3 ls "s3://$R2_BUCKET/" | sed -nE 's#^ *PRE (.*)/$#\1#p' | while read -r old; do
+            if [ "$old" != "$BUILD" ] && [ "$old" != "$LIVE" ]; then
+              aws s3 rm "s3://$R2_BUCKET/$old/" --recursive --quiet
+            fi
+          done
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
