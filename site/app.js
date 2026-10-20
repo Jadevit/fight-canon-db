@@ -131,7 +131,7 @@ function fightSeconds(timeFormat, endRound, endTime) {
     const r = await fetch(DB_DIR + "config.json", { cache: "no-cache" });
     if (!r.ok) throw new Error(`${DB_DIR}config.json: HTTP ${r.status}`);
     const config = await r.json();
-    config.urlPrefix = new URL(DB_DIR + config.urlPrefix, location.href).href;
+    config.urlPrefix = new URL(config.urlPrefix, new URL(DB_DIR, location.href)).href;
     const abs = (f) => new URL(VFS + f, location.href).href;
     worker = await createDbWorker([{ from: "inline", config }], abs("sqlite.worker.js"), abs("sql-wasm.wasm"));
     const [last] = await q("SELECT name, date FROM site_events LIMIT 1");
