@@ -144,8 +144,8 @@ CREATE INDEX site_event_aliases_event ON event_aliases(event_id);
 -- Counts for the home page.
 CREATE TABLE site_stats AS SELECT
     (SELECT COUNT(*) FROM events) events, (SELECT COUNT(*) FROM fights) fights,
-    (SELECT COUNT(*) FROM fighters) fighters, (SELECT MIN(date) FROM events) first_date,
-    (SELECT MAX(date) FROM events) last_date;
+    (SELECT COUNT(*) FROM fighters) fighters, (SELECT COUNT(DISTINCT promotion) FROM events) promotions,
+    (SELECT MIN(date) FROM events) first_date, (SELECT MAX(date) FROM events) last_date;
 
 -- What a fighter row in a list shows: their record from UFC Stats and their fights here.
 CREATE TEMP TABLE cards AS

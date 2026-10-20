@@ -56,6 +56,8 @@ def test_site_db(tmp_path):
                         ).fetchall() == [("a" * 16, 2, 31)]
     assert site.execute("SELECT event_id FROM site_event_words WHERE token = 'london'").fetchall() == [("e1",)]
     assert site.execute("SELECT event_id FROM site_events LIMIT 1").fetchone() == ("e2",)  # newest first
+    assert site.execute("SELECT events, promotions FROM site_stats").fetchone() == (
+        canon.execute("SELECT COUNT(*), COUNT(DISTINCT promotion) FROM events").fetchone())
     # Leaderboards: totals and the pre-computed opening view.
     assert site.execute("SELECT n, w, ko, subw FROM site_results WHERE promotion = 0 AND division = 0 "
                         "AND fighter_id = ?", ("a" * 16,)).fetchone() == (2, 2, 1, 1)
