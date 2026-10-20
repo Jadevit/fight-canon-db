@@ -42,13 +42,15 @@ jobs:
           cp -r site/* _site/
           python3 scripts/site_db.py data/canon.db _site/db
 
-      # The same site on Cloudflare Pages (project fightcanon, at fightcanon.com): no 1 GB cap.
-      - name: Deploy to Cloudflare Pages
+      # The same site on Cloudflare (the fightcanon Worker, at fightcanon.com; wrangler.jsonc):
+      # no 1 GB cap. It can't hold up the GitHub Pages deploy while it's new.
+      - name: Deploy to Cloudflare
+        continue-on-error: true
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy _site --project-name=fightcanon --branch=main --commit-dirty=true
+          command: deploy
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
