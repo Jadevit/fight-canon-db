@@ -1,4 +1,4 @@
-"""Load whole Sherdog cards from Kaggle datasets (one per organization in cards.ORGS, scraped
+"""Load whole Sherdog cards from Kaggle datasets (one per organization, scraped
 from Sherdog's event pages, CC0): a one-off base for those organizations' cards, so the
 event-page crawl (cards.py) only has to keep them current. Not part of the daily update.
 

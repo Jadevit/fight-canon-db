@@ -7,7 +7,8 @@ scraped from [UFC Stats](http://ufcstats.com), with fighters' full pro records f
 that publish none, and betting lines from [BestFightOdds](https://www.bestfightodds.com),
 updated automatically.
 
-- Browse it: **https://jadevit.github.io/fight-canon-db/**
+- Browse it: **https://fightcanon.com**
+- JSON (a file per fighter and event, rebuilt daily): `https://db.fightcanon.com/v1/`
 - Database: [latest release](https://github.com/jadevit/fight-canon-db/releases/latest) (`canon.db`)
 - Coverage and row counts: [`data/summary.json`](data/summary.json)
 - Schema: [`canon_db/schema.sql`](canon_db/schema.sql)
@@ -19,7 +20,9 @@ curl -L -o canon.db https://github.com/jadevit/fight-canon-db/releases/latest/do
 ```
 
 Every update is its own release (`db-YYYY-MM-DD-HHMM`), so you can pin a version:
-`.../releases/download/<tag>/canon.db`. To work on this repo, put the latest one at
+`.../releases/download/<tag>/canon.db`. Releases are pruned to the newest 30 plus the first of
+each month; to keep another one for good, add its tag to
+[`data/keep-releases.txt`](data/keep-releases.txt). To work on this repo, put the latest one at
 `data/canon.db` first: `gh release download --pattern canon.db --dir data`.
 
 ## Tables
@@ -71,10 +74,10 @@ UFC Stats usually lists the winner first, so don't use corner as a feature for o
 In Sherdog fights corner means nothing. Sherdog events are labelled by their Sherdog
 organization: the label we already use if its events overlap ours, else its full name.
 
-Sherdog fights get in two ways. For some promotions (ACA, Bellator, BRAVE, Cage Warriors,
-Fight Nation, Jungle Fight, KSW, LFA, Oktagon, ONE, PFL, RIZIN) every card is read whole, and those events are in `event_cards`.
-Other Sherdog fights come from the pages of fighters linked to UFC Stats, so they are there
-because of who fought in them: filter on `event_cards` when that matters. Only pro MMA fights
+Sherdog fights get in two ways. Every event in Sherdog's event sitemaps has its card read
+whole, and those events are in `event_cards` (nearly all of them). Other Sherdog fights come
+from the pages of fighters linked to UFC Stats, so they are there because of who fought in
+them: filter on `event_cards` when that matters. Only pro MMA fights
 are kept. Event pages don't say whether a bout was pro, so card fights are checked on the
 fighters' Sherdog pages and amateur and exhibition bouts are removed; `fights.bout_type` is
 `pro` once checked, and NULL for UFC Stats fights and for card fights not yet checked.
@@ -96,17 +99,19 @@ A GitHub Action runs daily. It fetches any new events from UFC Stats, reloads th
 last 21 days (UFC Stats often posts stats and corrections late), and if something
 changed publishes the database as a new release and commits `data/summary.json`. A second, weekly Action picks up events UFC Stats
 leaves off its events list (Dana White's Contender Series, PRIDE and other promotions).
-Sherdog pages of fighters from the last 21 days' cards are read each day too, and so are the
-new and recent cards of the promotions above, with PFL's, Oktagon's and Sofascore's stats.
+Sherdog pages of fighters from the last 21 days' cards are read each day too, and so are
+Sherdog's new and recent event cards, with PFL's, Oktagon's and Sofascore's stats.
 
 ## The website
 
-`site/` is a static page that queries the database in the browser with
+`site/` is a static page (fightcanon.com): fighters, events, round-by-round fight stats,
+leaderboards and a SQL box. Its pages read JSON files written by `scripts/site_json.py`; the
+SQL box and filtered leaderboards query a copy of the database in the browser with
 [sql.js-httpvfs](https://github.com/phiresky/sql.js-httpvfs), which downloads only the parts
-of the file a query reads: fighter search, events, round-by-round fight stats, leaderboards
-and a SQL box. `.github/workflows/pages.yml` publishes it to GitHub Pages after every
-database update, with a copy of the database arranged for the site by `scripts/site_db.py`.
-To look at it locally: `python scripts/site_db.py`, then `python scripts/serve.py` and open
+of the file a query reads (the copy is arranged for the site by `scripts/site_db.py`).
+`.github/workflows/pages.yml` publishes it after every database update. To look at it
+locally: `python scripts/site_db.py data/canon.db site/db site/db/site.db`, then
+`python scripts/site_json.py build site/db/site.db site/db` and `python scripts/serve.py`, and open
 http://localhost:8000/site/.
 
 ## Run locally

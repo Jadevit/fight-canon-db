@@ -1,8 +1,8 @@
 """Whole Sherdog cards: every bout of an event, whoever fought in it.
 
 Fighter pages (load.py) only reach fighters linked to UFC Stats and their opponents, so which
-regional fights the database has would depend on careers. Cards don't: for the organizations
-in ORGS every event is read, and each one read is recorded in event_cards.
+regional fights the database has would depend on careers. Cards don't: every event in
+Sherdog's event sitemaps is read, and each one read is recorded in event_cards.
 
 A card's bouts are written like the fighter-page loader writes fights (same ids, same
 linking):
@@ -31,25 +31,9 @@ from datetime import date, timedelta
 from canon_db.sources.sherdog.load import (BASE, NAME, PREFIX, Labels, Pages, State, drop_duplicates,
                                            drop_empty_events, drop_non_pro, fight_id, mark_bout_types, merge,
                                            minted, move_event, name_ok, sherdog_promotion)
-from canon_db.sources.sherdog.pages import (bio, parse_card, parse_event, parse_event_sitemap,
-                                            parse_org_events)
+from canon_db.sources.sherdog.pages import bio, parse_card, parse_event, parse_event_sitemap
 from canon_db.sources.ufcstats.client import save
 
-# Sherdog organizations whose every event is read (id: name on Sherdog).
-ORGS = {
-    "8185": "Absolute Championship Akhmat",
-    "1960": "Bellator MMA",
-    "11227": "Brave Combat Federation",
-    "186": "Cage Warriors",
-    "15829": "Fight Nation Championship",
-    "351": "Jungle Fight",
-    "668": "Konfrontacja Sztuk Walki",
-    "11339": "Legacy Fighting Alliance (LFA)",
-    "5383": "Oktagon MMA",
-    "3877": "One Championship",
-    "12241": "Professional Fighters League",
-    "10333": "Rizin Fighting Federation",
-}
 BIO = ("nickname", "dob", "height_in", "weight_lbs", "nationality")
 
 log = logging.getLogger(NAME)
@@ -181,23 +165,6 @@ def write(conn: sqlite3.Connection, st: State, bouts: list[dict], fresh: bool) -
 
 # --- reading event pages ------------------------------------------------------------------
 
-def org_events(pages: Pages, org: str, every_page: bool) -> list[tuple[str, str]]:
-    """[(event id, date)] listed on an organization's page; with `every_page`, its older
-    pages too (100 events each)."""
-    out, n = [], 1
-    while True:
-        url = f"{BASE}/organizations/x-{org}" + (f"/recent-events/{n}" if n > 1 else "")
-        page = pages.fetcher.get(url)
-        if page is None:
-            log.warning("Couldn't read %s; its events are skipped this run.", url)
-            return out
-        events, older = parse_org_events(page)
-        out += events
-        if not (every_page and older):
-            return out
-        n += 1
-
-
 @contextmanager
 def threads(workers: int) -> Iterator[ThreadPoolExecutor]:
     """A thread pool that drops its queued work if the caller fails (a plain `with` would
@@ -209,10 +176,11 @@ def threads(workers: int) -> Iterator[ThreadPoolExecutor]:
         pool.shutdown(cancel_futures=True)
 
 
-def sitemap_events(pages: Pages, tries: int = 8, wait: float = 30) -> list[str]:
-    """Every event id in Sherdog's event sitemaps (those its sitemap index lists). Sherdog
-    sometimes answers with an empty one, so each is retried, and the last good copy on disk
-    is used if it never comes."""
+def sitemap_events(pages: Pages, tries: int = 6, wait: float = 10) -> list[str]:
+    """Every event id in Sherdog's event sitemaps (those its sitemap index lists). Sherdog's
+    cache sometimes holds an empty copy of one, so each request asks with a query string of
+    its own (which gets past it), each sitemap is retried, and the last good copy on disk is
+    used if it never comes."""
     index = pages.fetcher.get(f"{BASE}/sitemap.xml") or ""
     out = set()
     saved = pages.events.parent / "sitemaps"
@@ -220,7 +188,7 @@ def sitemap_events(pages: Pages, tries: int = 8, wait: float = 30) -> list[str]:
     for url in re.findall(r"<loc>([^<]*/sitemap-events\d*\.xml)</loc>", index):
         path = saved / url.rsplit("/", 1)[1]
         for n in range(tries):
-            xml = pages.fetcher.get(url) or ""
+            xml = pages.fetcher.get(f"{url}?r={time.time_ns()}") or ""
             ids = parse_event_sitemap(xml)
             if ids:
                 save(path, xml)
@@ -293,24 +261,17 @@ def due(seen: dict, sid: str, day: str | None, today: str, settle: int) -> bool:
     return day <= today and seen[sid][1] <= (date.fromisoformat(day) + timedelta(days=settle)).isoformat()
 
 
-def crawl(conn: sqlite3.Connection, pages: Pages, recent_days: int, every_page: bool,
-          every_event: bool = False, workers: int = 1, chunk: int = 1000) -> Counter:
-    """Read cards: of every event in Sherdog's sitemaps with `every_event`, else of ORGS'
-    events. An event is read if due(); pages are fetched `workers` at a time and written
-    `chunk` events at a time."""
+def crawl(conn: sqlite3.Connection, pages: Pages, recent_days: int, workers: int = 1,
+          chunk: int = 1000) -> Counter:
+    """Read the cards of the events in Sherdog's sitemaps that are due(): new ones and recent
+    ones (all ~78k the first time, which takes days; a daily run reads a few hundred). Pages
+    are fetched `workers` at a time and written `chunk` events at a time."""
     today = date.today().isoformat()
     seen = pages_read(conn)
-    if every_event:
-        listed = sitemap_events(pages)
-        todo = {e: None for e in listed if due(seen, e, None, today, recent_days)}
-        log.info("Sherdog cards: %d events in the sitemaps, %d to read.", len(listed), len(todo))
-    else:
-        todo = {}
-        for org, org_name in ORGS.items():
-            listed = [(e, d) for e, d in org_events(pages, org, every_page) if d <= today]
-            mine = [e for e, d in listed if due(seen, e, d, today, recent_days)]
-            log.info("Sherdog cards: %s: %d events listed, %d to read.", org_name, len(listed), len(mine))
-            todo.update({e: org for e in mine if e not in todo})
+    listed = sitemap_events(pages)
+    # Events read before stay due without a sitemap (one that didn't come leaves only new ones).
+    todo = [e for e in sorted(set(listed) | seen.keys(), key=int) if due(seen, e, None, today, recent_days)]
+    log.info("Sherdog cards: %d events in the sitemaps, %d to read.", len(listed), len(todo))
     st, labels, counts = State(conn), Labels(conn), Counter()
     ours = {p.casefold(): p for (p,) in conn.execute("SELECT promotion FROM promotions")}
     bouts, read = [], []
@@ -335,8 +296,6 @@ def crawl(conn: sqlite3.Connection, pages: Pages, recent_days: int, every_page: 
                 info, card, fetched = page
                 if info["org_id"]:
                     label = labels.label(info["org_id"], info["org"])
-                elif todo[e]:
-                    label = labels.label(todo[e], ORGS[todo[e]])
                 else:
                     label = sherdog_promotion(info["name"], ours)
                 bouts += card_bouts(info, card, e, label, fetched)

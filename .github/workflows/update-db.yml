@@ -72,3 +72,11 @@ jobs:
           git add data/summary.json
           git commit -m "data: update through ${last}"
           git push
+
+      # Old releases: the newest 30, the first of each month and data/keep-releases.txt stay.
+      - name: Prune old releases
+        if: steps.update.outputs.changed == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/prune-releases.sh

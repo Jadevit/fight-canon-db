@@ -522,14 +522,9 @@ def add_arguments(p: argparse.ArgumentParser) -> None:
     p.add_argument("--cached", action="store_true",
                    help="reuse fighter pages already on disk; fetch only missing ones")
     p.add_argument("--no-cards", action="store_true",
-                   help="skip reading whole cards of the organizations in cards.ORGS")
-    p.add_argument("--all-cards", action="store_true",
-                   help="list every event of those organizations, not just their latest 100")
+                   help="skip reading whole cards (the events in Sherdog's sitemaps that are due)")
     p.add_argument("--classify-all", action="store_true",
-                   help="check every card fight's bout type on fighter pages, not just recent cards")
-    p.add_argument("--every-event", action="store_true",
-                   help="read the card of every event in Sherdog's sitemaps (~78k pages, days), then "
-                        "check every card fight's bout type; rerun to resume (pages stay on disk)")
+                   help="check the bout type of every card fight not checked yet, not just recent cards")
     p.add_argument("--workers", type=int, default=4,
                    help="pages fetched at once for cards and bout types (the delay still holds)")
     p.add_argument("--relabel", action="store_true",
@@ -563,10 +558,9 @@ def update(conn: sqlite3.Connection, args: argparse.Namespace, raw: Path) -> Non
     counts = write(conn, st, read, pages, args.relabel)
     if not (args.offline or args.relabel or args.no_cards):
         from canon_db.sources.sherdog import cards  # it builds on this module
-        c = cards.crawl(conn, pages, args.recent_days, args.all_cards, args.every_event, args.workers)
+        c = cards.crawl(conn, pages, args.recent_days, args.workers)
         log.info("Sherdog cards: %s.", ", ".join(f"{k} {v}" for k, v in c.items()))
-        since = (None if args.classify_all or args.every_event
-                 else (date.today() - timedelta(days=args.recent_days)).isoformat())
+        since = None if args.classify_all else (date.today() - timedelta(days=args.recent_days)).isoformat()
         c = cards.classify(conn, pages, since, args.workers)
         log.info("Sherdog bout types: %s.", ", ".join(f"{k} {v}" for k, v in c.items()))
     (raw / "conflicts.tsv").unlink(missing_ok=True)
