@@ -112,7 +112,7 @@ of the file a query reads (the copy is arranged for the site by `scripts/site_db
 `.github/workflows/deploy.yml` publishes it after every database update. To look at it
 locally: `python scripts/site_db.py data/canon.db site/db site/db/site.db`, then
 `python scripts/site_json.py build site/db/site.db site/db` and `python scripts/serve.py`, and open
-http://localhost:8000/site/.
+http://localhost:8000/.
 
 ## Run locally
 

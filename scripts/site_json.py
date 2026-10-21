@@ -9,7 +9,8 @@ site's public API too, under /v1/.
 
 Search: names (fighters) and words (events) are split into files by prefix. A prefix with
 more than SEARCH_CAP matches gets a file of its top SEARCH_TOP (most fights; newest events)
-and those whose word is the prefix itself, and a file for each prefix a letter longer.
+and the top SEARCH_EXACT of those whose word is the prefix itself (a common word, such as a
+country, would otherwise bring tens of thousands), and a file for each prefix a letter longer.
 Upload compares each file's hash with the manifest of the last upload (v1-manifest.json in
 the bucket) and sends only the changed ones.
 """
@@ -32,7 +33,7 @@ from site_db import words  # noqa: E402
 VERSION = "v1"
 SEARCH_CAP = 800
 SEARCH_TOP = 100
-EVENTS_LATEST = 300
+SEARCH_EXACT = 300
 CACHE = "public, max-age=300"  # files keep their names, so a daily update shows up within minutes
 
 
@@ -180,10 +181,8 @@ def events(conn: sqlite3.Connection, w: Writer) -> None:
 
 
 def event_lists(conn: sqlite3.Connection, w: Writer) -> None:
-    """events/latest.json, events/y/<year>.json, events/p/<promotion code>.json (listed ones)."""
+    """events/y/<year>.json, events/p/<promotion code>.json (listed ones)."""
     cols = "event_id, name, date, location, promotion, n"
-    w("events/latest.json", table(conn.execute(
-        f"SELECT {cols} FROM site_events ORDER BY date DESC, event_id LIMIT {EVENTS_LATEST}")))
     years = [y for (y,) in conn.execute("SELECT DISTINCT substr(date, 1, 4) FROM site_events ORDER BY 1")]
     for y in years:
         w(f"events/y/{y}.json", table(conn.execute(
@@ -201,7 +200,8 @@ def trie(w: Writer, folder: str, cols: list[str], entries: list[tuple[set[str], 
         if len(items) <= SEARCH_CAP or len(prefix) >= 16:
             w(f"{folder}/{hexname(prefix)}.json", {"split": False, "cols": cols, "rows": [entries[i][1] for i in items]})
             return
-        keep = sorted(set(items[:SEARCH_TOP]) | {i for i in items if prefix in entries[i][0]})
+        exact = [i for i in items if prefix in entries[i][0]][:SEARCH_EXACT]
+        keep = sorted(set(items[:SEARCH_TOP]) | set(exact))
         w(f"{folder}/{hexname(prefix)}.json", {"split": True, "cols": cols, "rows": [entries[i][1] for i in keep]})
         children = defaultdict(list)
         for i in items:

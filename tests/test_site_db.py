@@ -78,6 +78,7 @@ def test_site_json(tmp_path, monkeypatch):
     site_db.build(tmp_path / "canon.db", tmp_path / "out", tmp_path / "site.db")
     monkeypatch.setattr(site_json, "SEARCH_CAP", 1)  # split every prefix with two matches
     monkeypatch.setattr(site_json, "SEARCH_TOP", 1)
+    monkeypatch.setattr(site_json, "SEARCH_EXACT", 1)
     site_json.build(tmp_path / "site.db", tmp_path / "json")
     root = tmp_path / "json" / "v1"
     read = lambda p: json.loads((root / p).read_text(encoding="utf-8"))  # noqa: E731
@@ -94,7 +95,6 @@ def test_site_json(tmp_path, monkeypatch):
     assert [f["fight_id"] for f in rows(e1["fights"])] == ["f2", "f1"]  # card order
     assert e1["stats"]["f1"]["source"] == "ufcstats" and "f2" not in e1["stats"]
     assert read(f"fx/{site_json.shard('f1')}.json")["f1"] == "e1"
-    assert [e["event_id"] for e in rows(read("events/latest.json"))] == ["e2", "e1"]
     assert [e["event_id"] for e in rows(read("events/y/2020.json"))] == ["e1"]
 
     # Search: "jo" matches José (and Junior, his alias) only, so it isn't split; Carl Cole and
@@ -107,7 +107,9 @@ def test_site_json(tmp_path, monkeypatch):
     # itself (none), and "ufc" is a file of its own.
     uf = read(f"se/{site_json.hexname('uf')}.json")
     assert uf["split"] and [r["event_id"] for r in rows(uf)] == ["e2"]
-    assert (root / "se" / f"{site_json.hexname('ufc')}.json").exists()
+    # "ufc" is both events' word itself: split again, it keeps only the newest (SEARCH_EXACT).
+    ufc = read(f"se/{site_json.hexname('ufc')}.json")
+    assert ufc["split"] and [r["event_id"] for r in rows(ufc)] == ["e2"]
 
     assert read("l/results/wins.json")["0"][0][:3] == ["a" * 16, "José Aldo", 2]
     m = read("meta.json")

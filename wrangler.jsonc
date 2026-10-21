@@ -1,4 +1,5 @@
-// The website on Cloudflare Workers (static assets only, no script): fightcanon.com.
+// The website on Cloudflare Workers (static assets only, no script): fightcanon.com. Any path
+// that isn't a file gets index.html, which routes on the path (/fighter/<id>).
 // deploy.yml builds _cf/ (site/ plus a config.json pointing at the data in R2, at
 // db.fightcanon.com: Workers' static assets don't answer range requests) and runs `wrangler deploy`.
 {
@@ -6,6 +7,6 @@
   "compatibility_date": "2026-10-19",
   "assets": {
     "directory": "./_cf",
-    "not_found_handling": "404-page"
+    "not_found_handling": "single-page-application"
   }
 }

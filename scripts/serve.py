@@ -1,8 +1,10 @@
-"""Serve the repo for a local look at the site, with HTTP range requests (the site reads its
-database in pieces; python -m http.server always sends whole files).
+"""Serve site/ for a local look at the site, like fightcanon.com does: HTTP range requests (the
+SQL page reads the database in pieces; python -m http.server always sends whole files), and
+index.html for any path that isn't a file (the page routes on the path).
 
-    python scripts/site_db.py        # build site/db/ from data/canon.db first
-    python scripts/serve.py [port]   # then open http://localhost:8000/site/
+    python scripts/site_db.py data/canon.db site/db site/db/site.db    # build site/db/ first
+    python scripts/site_json.py build site/db/site.db site/db
+    python scripts/serve.py [port]                                     # then open http://localhost:8000/
 """
 
 from __future__ import annotations
@@ -17,6 +19,8 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 class RangeHandler(SimpleHTTPRequestHandler):
     def send_head(self):
         self.remaining = None  # one handler serves every request on a kept-alive connection
+        if not os.path.exists(self.translate_path(self.path)):
+            self.path = "/index.html"  # a page of the site, not a file
         m = re.fullmatch(r"bytes=(\d+)-(\d*)", self.headers.get("Range", ""))
         path = self.translate_path(self.path)
         if not m or not os.path.isfile(path):
@@ -51,6 +55,6 @@ class RangeHandler(SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    print(f"http://localhost:{port}/site/")
+    root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "site")
+    print(f"http://localhost:{port}/")
     ThreadingHTTPServer(("", port), partial(RangeHandler, directory=root)).serve_forever()

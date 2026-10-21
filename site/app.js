@@ -3,11 +3,12 @@
 // leaderboards' opening views. Only the SQL page and filtered leaderboards query the
 // database, with sql.js-httpvfs, which fetches the 4 KB pages of the site's copy
 // (scripts/site_db.py) that a query touches; it loads the first time it's needed.
-// Views are chosen by the URL hash: #/ (landing), #/fighters, #/fighter/<id>, #/events,
-// #/event/<id>, #/fight/<id>, #/leaders, #/sql. How it looks is in DESIGN.md.
+// Views are chosen by the path: / (landing), /fighters, /fighter/<id>, /events, /event/<id>,
+// /fight/<id>, /leaders, /sql (the server answers every path with this page). How it looks is
+// in DESIGN.md.
 
-const VFS = "vendor/sql.js-httpvfs/";
-const DB_DIR = "db/";
+const VFS = "/vendor/sql.js-httpvfs/";
+const DB_DIR = "/db/";
 const REPO = "https://github.com/jadevit/fight-canon-db";
 const RELEASES = `${REPO}/releases/latest`;
 
@@ -72,8 +73,8 @@ const plural = (n, one, many = one + "s") => `${num(n)} ${n === 1 ? one : many}`
 const american = (v) => (v == null ? null : v > 0 ? `+${v}` : String(v));
 const dot = (...parts) => parts.filter(Boolean).join(" · ");
 
-const fighterLink = (id, name, cls = "") => `<a href="#/fighter/${esc(id)}"${cls ? ` class="${cls}"` : ""}>${esc(name)}</a>`;
-const eventLink = (id, name) => `<a href="#/event/${esc(id)}">${esc(name)}</a>`;
+const fighterLink = (id, name, cls = "") => `<a href="/fighter/${esc(id)}"${cls ? ` class="${cls}"` : ""}>${esc(name)}</a>`;
+const eventLink = (id, name) => `<a href="/event/${esc(id)}">${esc(name)}</a>`;
 const ext = (url, label) => `<a href="${esc(url)}" target="_blank" rel="noopener">${label}</a>`;
 const badge = (text) => `<span class="badge">${esc(text)}</span>`;
 const res = (r) => r ? `<span class="res res-${esc(r)}" title="${{ W: "Win", L: "Loss", D: "Draw", NC: "No contest" }[r] || ""}">${esc(r)}</span>`
@@ -140,12 +141,17 @@ function latest(fn) {
   };
 }
 
-// Query-string state inside the hash (#/leaders?stat=kd), so filters survive back/refresh.
-function params() { return new URLSearchParams(location.hash.split("?")[1] || ""); }
+// Filters live in the query string (/leaders?stat=kd), so they survive back and refresh.
+function params() { return new URLSearchParams(location.search); }
 function setParams(p) {
-  const base = location.hash.split("?")[0] || "#/";
   const s = p.toString();
-  history.replaceState(null, "", s ? `${base}?${s}` : base);
+  history.replaceState(null, "", s ? `${location.pathname}?${s}` : location.pathname);
+}
+
+// Open a page of the site without reloading it.
+function go(href) {
+  history.pushState(null, "", href);
+  route();
 }
 
 // Promotions with enough events to list (there are thousands of one-off shows).
@@ -191,33 +197,45 @@ function fightSeconds(timeFormat, endRound, endTime) {
 
 const searchFighters = async (s, limit) => (await searchIndex("sf", s)).slice(0, limit);
 
-// Events, newest first: the latest ones, a year's, a promotion's (listed ones), or a search's,
-// narrowed by year and promotion. Returns [rows (up to limit + 1), total or null if unknown].
-async function searchEvents(s, year, promo, limit) {
+// Events, newest first: a search's, a promotion's (listed ones) or a year's, narrowed by year
+// and promotion; with none of those, a year's file at a time from the newest. Returns
+// {rows, total (null if unknown), more()}: more() adds the next year's events to rows, and
+// returns false when there are none left to add.
+async function eventList(s, year, promo) {
   const inYear = (e) => !year || e.date.startsWith(year);
   const ofPromo = (e) => !promo || e.promotion === promo;
-  let rows;
-  if (s) rows = await searchIndex("se", s);
-  else if (promo) {
-    const code = (await promotions()).find((x) => x.promotion === promo)?.code;
-    rows = code == null ? [] : objs(await api(`events/p/${code}.json`));
-  } else if (year) rows = objs(await api(`events/y/${year}.json`));
-  else {
-    const m = await meta();
-    return [objs(await api("events/latest.json")).slice(0, limit + 1), m.stats.events];
+  const done = async () => false;
+  if (s || promo || year) {
+    let rows;
+    if (s) rows = await searchIndex("se", s);
+    else if (promo) {
+      const code = (await promotions()).find((x) => x.promotion === promo)?.code;
+      rows = code == null ? [] : objs(await api(`events/p/${code}.json`));
+    } else rows = objs(await api(`events/y/${year}.json`));
+    rows = rows.filter((e) => inYear(e) && ofPromo(e));
+    return { rows, total: rows.length, more: done };
   }
-  rows = rows.filter((e) => inYear(e) && ofPromo(e));
-  return [rows.slice(0, limit + 1), s && rows.length > limit ? null : rows.length];
+  const m = await meta();
+  let y = Number(m.stats.last_date.slice(0, 4));
+  const first = Number(m.stats.first_date.slice(0, 4));
+  const list = { rows: [], total: m.stats.events };
+  list.more = async () => {
+    if (y < first) return false;
+    list.rows.push(...objs(await api(`events/y/${y--}.json`)));
+    return true;
+  };
+  await list.more();
+  return list;
 }
 
 const fighterRow = (r) => `
-  <a class="row" href="#/fighter/${esc(r.fighter_id)}">
+  <a class="row" href="/fighter/${esc(r.fighter_id)}">
     <div class="main"><div class="title">${esc(r.name)}</div>
       ${r.nickname ? `<div class="sub">“${esc(r.nickname)}”</div>` : ""}</div>
     <div class="end"><b class="num">${proRecord(r, r)}</b>${plural(r.n, "fight")} here</div>
   </a>`;
 const eventRow = (e) => `
-  <a class="row" href="#/event/${esc(e.event_id)}">
+  <a class="row" href="/event/${esc(e.event_id)}">
     <div class="main"><div class="title">${esc(e.name)}</div>
       <div class="sub">${esc(dot(longDate(e.date), e.promotion, e.location))}</div></div>
     <div class="end">${plural(e.n, "fight")}</div>
@@ -241,7 +259,7 @@ function mirrorRow(label, a, b, max, fmt = num, text = null) {
 const landed = (l, a) => (l == null ? (a == null ? "—" : `${a} thr.`) : `${l}${a != null ? ` <small>/${a}</small>` : ""}`);
 
 const eventFile = (eid) => api(`e/${fileKey(eid)}.json`);
-const fightLink = (fid, eid) => `#/fight/${esc(fid)}?e=${encodeURIComponent(eid)}`;
+const fightLink = (fid, eid) => `/fight/${esc(fid)}?e=${encodeURIComponent(eid)}`;
 
 // A fight's round stats from its event's file: round_stats' columns, or PFL's older SmartCage
 // set (its own columns).
@@ -316,8 +334,8 @@ menuBtn.onclick = () => {
   const find = latest(async (term) => {
     const s = searchWords(term);
     if (!s) return null;
-    const [people, [events]] = await Promise.all([searchFighters(s, 6), searchEvents(s, "", "", 5)]);
-    return [people, events.slice(0, 5)];
+    const [people, events] = await Promise.all([searchFighters(s, 6), eventList(s, "", "")]);
+    return [people, events.rows.slice(0, 5)];
   });
   const render = async () => {
     const term = input.value.trim();
@@ -327,9 +345,9 @@ menuBtn.onclick = () => {
     if (got === null) { box.innerHTML = `<p>Type at least two letters.</p>`; box.hidden = false; return; }
     const [people, events] = got;
     box.innerHTML = (people.length ? `<span class="label">Fighters</span>` + people.map((r) =>
-        `<a href="#/fighter/${esc(r.fighter_id)}">${esc(r.name)}<small>${proRecord(r, r)}</small></a>`).join("") : "") +
+        `<a href="/fighter/${esc(r.fighter_id)}">${esc(r.name)}<small>${proRecord(r, r)}</small></a>`).join("") : "") +
       (events.length ? `<span class="label">Events</span>` + events.map((e) =>
-        `<a href="#/event/${esc(e.event_id)}">${esc(e.name)}<small>${esc(e.date)}</small></a>`).join("") : "") +
+        `<a href="/event/${esc(e.event_id)}">${esc(e.name)}<small>${esc(e.date)}</small></a>`).join("") : "") +
       (people.length || events.length ? "" : `<p>Nothing found.</p>`);
     links = [...box.querySelectorAll("a")];
     active = -1;
@@ -348,12 +366,13 @@ menuBtn.onclick = () => {
   form.onsubmit = (e) => {
     e.preventDefault();
     const pick = links[active] || links[0];
-    location.hash = pick && !box.hidden ? pick.getAttribute("href") : `#/fighters?q=${encodeURIComponent(input.value.trim())}`;
+    close();
+    go(pick && !box.hidden ? pick.getAttribute("href") : `/fighters?q=${encodeURIComponent(input.value.trim())}`);
   };
   box.addEventListener("mousedown", (e) => e.preventDefault());  // keep focus while clicking a result
   box.addEventListener("click", (e) => { if (e.target.closest("a")) { close(); input.value = ""; input.blur(); } });
   input.addEventListener("blur", close);
-  window.addEventListener("hashchange", close);
+  window.addEventListener("route", close);
 })();
 
 meta().then((m) => {
@@ -366,7 +385,8 @@ meta().then((m) => {
 let page = 0;  // the page being shown; a view drops its result if another page was opened since
 
 async function route() {
-  const path = (location.hash.slice(1) || "/").split("?")[0];
+  const path = location.pathname;
+  window.dispatchEvent(new Event("route"));
   const [name = "", id = ""] = path.split("/").filter(Boolean);
   const views = { "": landing, fighters, fighter, events, event, fight, leaders, sql };
   const view = views[name] || landing;
@@ -377,7 +397,7 @@ async function route() {
   menuBtn.setAttribute("aria-expanded", "false");
   const section = { fighter: "fighters", event: "events", fight: "events" }[name] || name;
   nav.querySelectorAll("a").forEach((a) =>
-    a.toggleAttribute("aria-current", a.getAttribute("href") === `#/${section}`));
+    a.toggleAttribute("aria-current", a.getAttribute("href") === `/${section}`));
   if (view !== landing) app.innerHTML = loading();
   window.scrollTo(0, 0);
   try {
@@ -405,17 +425,17 @@ async function landing(_, show) {
           .map(([k, label], i) => `<div class="tile"><b class="${i ? "" : "gold"}" data-k="${k}"><span class="skel">—</span></b><span>${label}</span></div>`).join("")}
       </section>
       <section class="ctas">
-        <a class="btn primary" href="#/fighters">Browse the database</a>
-        <a class="btn" href="#/sql">${ICON.terminal}Query it with SQL</a>
+        <a class="btn primary" href="/fighters">Browse the database</a>
+        <a class="btn" href="/sql">${ICON.terminal}Query it with SQL</a>
       </section>
       <section class="section">
         <span class="label">What's inside</span>
         <div class="cards">
-          <a class="card" href="#/fighters">${ICON.fighters}<h3>Fighters</h3>
+          <a class="card" href="/fighters">${ICON.fighters}<h3>Fighters</h3>
             <p>Careers across every promotion, linked through the fights they share.</p></a>
-          <a class="card" href="#/events">${ICON.events}<h3>Events</h3>
+          <a class="card" href="/events">${ICON.events}<h3>Events</h3>
             <p>Whole cards, newest first, from the UFC to regional shows.</p></a>
-          <a class="card" href="#/leaders">${ICON.rounds}<h3>Round by round</h3>
+          <a class="card" href="/leaders">${ICON.rounds}<h3>Round by round</h3>
             <p>Strikes, takedowns and control for every round that was counted, with who counted it.</p></a>
           <a class="card" href="${RELEASES}">${ICON.open}<h3>Open data</h3>
             <p>The whole database is one free SQLite file, rebuilt daily.</p></a>
@@ -444,7 +464,7 @@ async function landing(_, show) {
   const vals = { fights: num(c.fights), fighters: num(c.fighters), promotions: num(c.promotions), first: c.first_date.slice(0, 4) };
   document.querySelectorAll("#tiles b[data-k]").forEach((b) => (b.textContent = vals[b.dataset.k]));
   const slot = document.getElementById("latest-event");
-  if (slot) slot.innerHTML = e ? `<a class="card" href="#/event/${esc(e.event_id)}">
+  if (slot) slot.innerHTML = e ? `<a class="card" href="/event/${esc(e.event_id)}">
       <span class="badge">${esc(e.promotion)}</span><h3>${esc(e.name)}</h3>
       <p>${esc(dot(longDate(e.date), e.location, plural(e.n, "fight")))}</p></a>` : "";
 }
@@ -601,8 +621,7 @@ async function fighter(id, show) {
   }));
 }
 
-const EVENTS_SHOWN = 300;
-const SEARCH_SHOWN = 100;  // a search's matches are scattered over the years: fewer, so fewer lookups
+const EVENTS_SHOWN = 300;  // a page of the list; "Show more" adds the next
 
 // A chip around a native select: the label, then the chosen option's text.
 const chip = (id, label, options, cur) => {
@@ -635,21 +654,34 @@ async function events(_, show) {
   const find = latest(async (term, year, promo) => {
     const s = term ? searchWords(term) : null;
     if (term && !s) return null;
-    const limit = s ? SEARCH_SHOWN : EVENTS_SHOWN;
-    return [...(await searchEvents(s, year, promo, limit)), limit];
+    return eventList(s, year, promo);
   });
+  let list, shown;
+  const draw = () => {
+    const out = document.getElementById("results");
+    out.innerHTML = `<p class="note" style="margin:0 0 10px">${plural(list.total, "event")}</p>` +
+      (list.rows.length ? `<div class="list">${list.rows.slice(0, shown).map(eventRow).join("")}</div>` : nothing()) +
+      (list.rows.length > shown || list.canMore ? `<button class="btn more" id="more">Show more</button>` : "");
+    const btn = document.getElementById("more");
+    if (btn) btn.onclick = async () => {
+      btn.disabled = true;
+      shown += EVENTS_SHOWN;
+      while (list.rows.length < shown && (list.canMore = await list.more()));
+      draw();
+    };
+  };
   const render = async () => {
     const term = qi.value.trim(), year = yi.value, promo = pi.value;
     [yi, pi].forEach(syncChip);
     setParams(new URLSearchParams({ ...(term && { q: term }), ...(year && { y: year }), ...(promo && { pr: promo }) }));
     const got = await find(term, year, promo);
     if (got === undefined) return;
-    const out = document.getElementById("results");
-    if (got === null) { out.innerHTML = nothing("Type at least two letters."); return; }
-    const [rows, total, limit] = got;
-    out.innerHTML = `<p class="note" style="margin:0 0 10px">${total != null ? plural(total, "event") : `More than ${limit} events`}${
-        rows.length > limit ? `, showing the latest ${limit}` : ""}</p>` +
-      (rows.length ? `<div class="list">${rows.slice(0, limit).map(eventRow).join("")}</div>` : nothing());
+    if (got === null) { document.getElementById("results").innerHTML = nothing("Type at least two letters."); return; }
+    list = got;
+    shown = EVENTS_SHOWN;
+    list.canMore = !(term || year || promo);  // only the whole list reads on, a year at a time
+    while (list.rows.length < shown && (list.canMore = await list.more()));
+    draw();
   };
   qi.oninput = debounce(render, 250);
   yi.onchange = pi.onchange = render;
@@ -759,9 +791,9 @@ async function fight(id, show) {
       <section>
         <p class="muted">${eventLink(x.event_id, x.event)} · ${esc(longDate(x.date))}</p>
         <div class="versus" style="margin-top:16px">
-          <div class="side">${L.id ? `<a class="name ${nameCls(L)}" href="#/fighter/${esc(L.id)}">${esc(L.name)}</a>` : ""}</div>
+          <div class="side">${L.id ? `<a class="name ${nameCls(L)}" href="/fighter/${esc(L.id)}">${esc(L.name)}</a>` : ""}</div>
           <div class="vs">VS</div>
-          <div class="side">${R.id ? `<a class="name ${nameCls(R)}" href="#/fighter/${esc(R.id)}">${esc(R.name)}</a>` : ""}</div>
+          <div class="side">${R.id ? `<a class="name ${nameCls(R)}" href="/fighter/${esc(R.id)}">${esc(R.name)}</a>` : ""}</div>
         </div>
         <div class="outcome">
           ${outcome ? `<b>${outcome}</b><br>` : ""}
@@ -910,7 +942,7 @@ async function leaders(_, show) {
     if (rows === undefined) return;
     const shown = (v) => s.fmt === "pct" ? Math.round(v * 1000) / 10 + "%" : s.fmt === "time" ? hmm(v) : num(v);
     document.getElementById("results").innerHTML = (rows.length ? `<div class="list">${rows.map((r, i) => `
-        <a class="row${i ? "" : " first"}" href="#/fighter/${esc(r.fighter_id)}">
+        <a class="row${i ? "" : " first"}" href="/fighter/${esc(r.fighter_id)}">
           <span class="rank">${i + 1}</span>
           <div class="main"><div class="title">${esc(r.name)}</div>
             <div class="sub">${plural(r.n, "fight")}${results ? "" : " counted"}</div></div>
@@ -983,7 +1015,7 @@ async function sql(_, show) {
       const { columns, values } = resl[resl.length - 1];
       const cell = (c, v) => v == null ? `<td class="null">NULL</td>`
         : `<td>${c === "fighter_id" ? fighterLink(v, v) : c === "event_id" ? eventLink(v, v)
-          : c === "fight_id" ? `<a href="#/fight/${esc(v)}">${esc(v)}</a>` : esc(v)}</td>`;
+          : c === "fight_id" ? `<a href="/fight/${esc(v)}">${esc(v)}</a>` : esc(v)}</td>`;
       status.textContent = `${plural(values.length, "row")}${values.length > 1000 ? " (showing 1,000)" : ""}${fetched}`;
       out.innerHTML = `<div class="grid-out"><table><thead><tr>${columns.map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead>
         <tbody>${values.slice(0, 1000).map((row) => `<tr>${row.map((v, i) => cell(columns[i], v)).join("")}</tr>`).join("")}</tbody></table></div>`;
@@ -999,5 +1031,16 @@ async function sql(_, show) {
 }
 
 // Last, so every view and constant above is defined.
-window.addEventListener("hashchange", route);
+// Links within the site open without reloading the page (unless opened in a new tab).
+document.addEventListener("click", (e) => {
+  const a = e.target.closest("a[href]");
+  if (!a || a.target || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const url = new URL(a.href);
+  if (url.origin !== location.origin || /\.[a-z0-9]+$/i.test(url.pathname)) return;  // a file, not a page
+  e.preventDefault();
+  go(url.pathname + url.search);
+});
+window.addEventListener("popstate", route);
+// Links from before the site had paths (#/fighter/<id>) still work.
+if (location.hash.startsWith("#/")) history.replaceState(null, "", location.hash.slice(1));
 route();
