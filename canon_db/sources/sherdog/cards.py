@@ -9,8 +9,7 @@ linking):
   - a bout the database has as a UFC Stats fight (same date, a fighter already linked; names
     decide on a crowded card) isn't added; it links the other fighter if the names agree, and
     the event becomes an event_aliases row;
-  - a bout the database has as a Sherdog fight is updated from a fresh event page, or only
-    has its empty columns filled from an older copy (the Kaggle datasets);
+  - a bout the database has as a Sherdog fight is replaced by the event page's;
   - any other bout becomes a `source = 'sherdog'` fight.
 Bios (when the card has them) fill empty columns of `sherdog:` fighters; of other fighters
 only `dob`.
@@ -56,11 +55,11 @@ def match_ufcstats(st: State, b: dict) -> tuple | None:
     return None
 
 
-def write(conn: sqlite3.Connection, st: State, bouts: list[dict], fresh: bool) -> Counter:
+def write(conn: sqlite3.Connection, st: State, bouts: list[dict]) -> Counter:
     """Write cards. Each bout: {event, event_name, date, location, label, via, fetched_at,
     weight_class, method, referee, round, time, title (None: unknown), placed (False: the card
-    lists it but it can't be written), sides: [{sid, name, result, *BIO}] x2}. `fresh`: the
-    cards are newer than the database's own Sherdog fights, so they replace them."""
+    lists it but it can't be written), sides: [{sid, name, result, *BIO}] x2}. A bout the
+    database has as a Sherdog fight replaces it (event pages are read after its results settle)."""
     counts = Counter(bouts=len(bouts))
     redirects = dict(conn.execute("SELECT old_id, new_id FROM fighter_redirects"))
     per_card = Counter((b["event"], s["sid"]) for b in bouts for s in b["sides"])
@@ -109,9 +108,7 @@ def write(conn: sqlite3.Connection, st: State, bouts: list[dict], fresh: bool) -
         ranked = sorted(zip(ids, (s["result"] for s in b["sides"])))  # corner means nothing
         parts += [(fight_id, fid, corner, r) for corner, (fid, r) in enumerate(ranked)]
 
-    keep = "excluded.{0}" if fresh else "coalesce({0}, excluded.{0})"
-    cols = ["weight_class", "method", "end_round", "end_time", "referee"] + (
-        ["title_fight", "no_contest"] if fresh else [])
+    cols = ["weight_class", "method", "end_round", "end_time", "referee", "title_fight", "no_contest"]
     with conn:
         for fid, s in st.new_links:  # a `sherdog:` fighter found on UFC Stats
             if conn.execute("SELECT 1 FROM fighters WHERE fighter_id = ?", (minted(s),)).fetchone():
@@ -145,9 +142,8 @@ def write(conn: sqlite3.Connection, st: State, bouts: list[dict], fresh: bool) -
         conn.executemany(
             "INSERT INTO fights (fight_id, event_id, weight_class, title_fight, method, end_round, end_time, "
             "referee, no_contest, source) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT (fight_id) DO UPDATE SET "
-            + ", ".join(f"{c} = {keep.format(c)}" for c in cols), fights.values())
-        if fresh:
-            conn.executemany("DELETE FROM fight_participants WHERE fight_id = ?", [(f,) for f in fights])
+            + ", ".join(f"{c} = excluded.{c}" for c in cols), fights.values())
+        conn.executemany("DELETE FROM fight_participants WHERE fight_id = ?", [(f,) for f in fights])
         conn.executemany("INSERT OR IGNORE INTO fight_participants (fight_id, fighter_id, corner, result) "
                          "VALUES (?,?,?,?)", parts)
         counts["duplicates dropped"] = drop_duplicates(conn)
@@ -284,7 +280,7 @@ def crawl(conn: sqlite3.Connection, pages: Pages, recent_days: int, workers: int
                              "VALUES (?,?,?,?)", [(label, NAME, o, n) for o, (label, n) in labels.new.items()])
             conn.executemany("INSERT OR REPLACE INTO event_pages (source, source_id, date, fetched_at) "
                              "VALUES (?,?,?,?)", read)
-        counts.update(write(conn, st, bouts, fresh=True))
+        counts.update(write(conn, st, bouts))
         bouts.clear()
         read.clear()
 

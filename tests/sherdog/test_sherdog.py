@@ -136,7 +136,7 @@ def test_merge_keeps_one_row_per_fight():
 
 
 def test_parse_card():
-    from canon_db.sources.sherdog.pages import parse_card, parse_org_events
+    from canon_db.sources.sherdog.pages import parse_card
     page = (FIXTURES / "event_card.html").read_text(encoding="utf-8")
     assert parse_event(page)["date"] == "2018-12-08"
     card = parse_card(page)
@@ -147,8 +147,6 @@ def test_parse_card():
     assert (main["weight_class"], main["title"], main["method"], main["referee"], main["round"], main["time"]) == (
         "Bantamweight", True, "TKO (Punches)", "Marc Goddard", "3", "4:07")
     assert sum(b["title"] for b in card) == 2
-    events, older = parse_org_events((FIXTURES / "organization.html").read_text(encoding="utf-8"))
-    assert events[0] == ("114289", "2026-10-30") and len(events) == 102 and older
 
 
 def test_parse_fighter_sections_and_bio():

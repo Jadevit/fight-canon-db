@@ -1,4 +1,4 @@
-# canon-db
+# fight-canon-db
 
 A SQLite database of MMA events, fights and round-by-round stats (UFC, PRIDE and more),
 scraped from [UFC Stats](http://ufcstats.com), with fighters' full pro records from

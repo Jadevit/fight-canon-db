@@ -54,7 +54,6 @@ def test_site_db(tmp_path):
     # Search by any word of any name, accents dropped.
     assert site.execute("SELECT DISTINCT fighter_id, n, wins FROM site_names WHERE token IN ('jose', 'junior')"
                         ).fetchall() == [("a" * 16, 2, 31)]
-    assert site.execute("SELECT event_id FROM site_event_words WHERE token = 'london'").fetchall() == [("e1",)]
     assert site.execute("SELECT event_id FROM site_events LIMIT 1").fetchone() == ("e2",)  # newest first
     assert site.execute("SELECT events, promotions FROM site_stats").fetchone() == (
         canon.execute("SELECT COUNT(*), COUNT(DISTINCT promotion) FROM events").fetchone())

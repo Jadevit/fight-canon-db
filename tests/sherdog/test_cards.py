@@ -2,11 +2,7 @@ import sqlite3
 
 from canon_db import db
 from canon_db.sources.sherdog import cards
-from canon_db.sources.sherdog.kaggle import bouts
 from canon_db.sources.sherdog.load import State
-
-CW = "cage-warriors-mma-dataset"
-
 
 def _db():
     conn = sqlite3.connect(":memory:")
@@ -22,31 +18,26 @@ def _db():
     return conn
 
 
-def _row(event, day, f1, f2, status="REALIZADO", **kw):
+def _bout(event, day, f1, f2, **kw):
+    """A bout as card_bouts() makes it from an event page."""
     (n1, s1), (n2, s2) = f1, f2
-    r = dict(event_name=f"CW {event} - X", event_date=f"{day} 00:00:00+00:00", event_location="Leeds",
-             event_status=status, weight_class="Lightweight", method="TKO (Punches)", referee="Ref",
-             round_num="2", time="03:10", fighter_1=n1, fighter_1_result="win", fighter_2=n2,
-             fighter_2_result="loss", event_url=f"https://www.sherdog.com/events/CW-{event}-{event}",
-             fighter_1_url=f"https://www.sherdog.com/fighter/x-{s1}",
-             fighter_2_url=f"https://www.sherdog.com/fighter/x-{s2}", referee_url="")
-    for i in "12":
-        r.update({f"f{i}_nickname": "", f"f{i}_nationality": "England", f"f{i}_birthplace": "",
-                  f"f{i}_birthDate": "1990-01-01", f"f{i}_height_cm": "182.88", f"f{i}_weight_kg": "70.31",
-                  f"f{i}_gym": ""})
-    r.update(kw)
-    return r
+    b = dict(event=str(event), event_name=f"CW {event} - X", date=day, location="Leeds", label="CWFC",
+             via="event_page", fetched_at="2026-01-01", weight_class="Lightweight", method="TKO (Punches)",
+             referee="Ref", round=2, time="3:10", title=False, placed=True,
+             sides=[dict(sid=sid, name=name, result=res, nickname=None, nationality="England", dob="1990-01-01",
+                         height_in=72, weight_lbs=155) for name, sid, res in ((n1, s1, "W"), (n2, s2, "L"))])
+    b.update(kw)
+    return b
 
 
-def write(conn, rows, fresh=False):
-    return cards.write(conn, State(conn), bouts(CW, rows), fresh)
+def write(conn, bouts):
+    return cards.write(conn, State(conn), bouts)
 
 
 def test_load_cards():
     conn = _db()
-    rows = [_row(900, "2020-01-01", ("Alan Able", "100"), ("Ben Baker", "200")),   # UFC Stats has it
-            _row(901, "2019-05-05", ("Carl Cole", "300"), ("Alan Able", "100")),   # regional
-            _row(902, "2030-01-01", ("Carl Cole", "300"), ("Dan Dent", "400"), status="CANCELADO")]
+    rows = [_bout(900, "2020-01-01", ("Alan Able", "100"), ("Ben Baker", "200")),   # UFC Stats has it
+            _bout(901, "2019-05-05", ("Carl Cole", "300"), ("Alan Able", "100"))]   # regional
     counts = write(conn, rows)
     assert counts["bouts UFC Stats has"] == 1 and counts["new fights"] == 1
     # The shared fight links Ben Baker and makes the Sherdog event ours.
@@ -66,10 +57,10 @@ def test_load_cards():
                         ("a" * 16,)).fetchone() == ("1990-01-01", 70, None)
     assert conn.execute("SELECT 1 FROM fighters WHERE fighter_id = 'sherdog:400'").fetchone() is None
     assert sorted(conn.execute("SELECT event_id, via, complete FROM event_cards")) == [
-        ("e1", f"kaggle:leandroiber/{CW} v8", 1), ("sherdog:901", f"kaggle:leandroiber/{CW} v8", 1)]
+        ("e1", "event_page", 1), ("sherdog:901", "event_page", 1)]
 
 
-def test_existing_sherdog_fight_only_filled_in():
+def test_event_page_replaces_sherdog_fight():
     conn = _db()
     conn.execute("INSERT INTO events (event_id, name, date, source) VALUES ('sherdog:901', 'CW 901', "
                  "'2019-05-05', 'sherdog')")
@@ -78,24 +69,17 @@ def test_existing_sherdog_fight_only_filled_in():
                  "('sherdog:901:100-300', 'sherdog:901', 'No Contest (Overturned)', 'sherdog')")
     conn.executemany("INSERT INTO fight_participants VALUES ('sherdog:901:100-300', ?, ?, 'NC')",
                      [("a" * 16, 0), ("sherdog:300", 1)])
-    rows = [_row(901, "2019-05-05", ("Carl Cole", "300"), ("Alan Able", "100"))]
-    write(conn, rows)
+    write(conn, [_bout(901, "2019-05-05", ("Carl Cole", "300"), ("Alan Able", "100"))])
     assert conn.execute("SELECT method, weight_class FROM fights WHERE fight_id = 'sherdog:901:100-300'"
-                        ).fetchone() == ("No Contest (Overturned)", "Lightweight")
-    assert {r[0] for r in conn.execute("SELECT result FROM fight_participants "
-                                       "WHERE fight_id = 'sherdog:901:100-300'")} == {"NC"}
-    # A fresh event page replaces it.
-    write(conn, rows, fresh=True)
-    assert conn.execute("SELECT method FROM fights WHERE fight_id = 'sherdog:901:100-300'").fetchone() == (
-        "TKO (Punches)",)
+                        ).fetchone() == ("TKO (Punches)", "Lightweight")
     assert sorted(conn.execute("SELECT fighter_id, result FROM fight_participants "
                                "WHERE fight_id = 'sherdog:901:100-300'")) == [("a" * 16, "L"), ("sherdog:300", "W")]
 
 
 def test_crowded_card_needs_names():
     conn = _db()
-    rows = [_row(900, "2020-01-02", ("Alan Able", "100"), ("Ben Baker", "200")),
-            _row(900, "2020-01-02", ("Alan Able", "100"), ("Zed Zane", "500"))]  # a tournament night
+    rows = [_bout(900, "2020-01-02", ("Alan Able", "100"), ("Ben Baker", "200")),
+            _bout(900, "2020-01-02", ("Alan Able", "100"), ("Zed Zane", "500"))]  # a tournament night
     counts = write(conn, rows)
     assert counts["bouts UFC Stats has"] == 1 and counts["new fights"] == 1
     assert conn.execute("SELECT fighter_id FROM fighter_aliases WHERE source_id = '500'").fetchone() == (
@@ -105,10 +89,10 @@ def test_crowded_card_needs_names():
 def test_card_follows_its_event():
     from canon_db.sources.sherdog.load import drop_empty_events, move_event
     conn = _db()
-    write(conn, [_row(901, "2019-05-05", ("Carl Cole", "300"), ("Alan Able", "100"))])
+    write(conn, [_bout(901, "2019-05-05", ("Carl Cole", "300"), ("Alan Able", "100"))])
     move_event(conn, "sherdog:901", "e1")
     assert conn.execute("SELECT event_id FROM event_cards").fetchall() == [("e1",)]
-    write(conn, [_row(905, "2019-06-06", ("Carl Cole", "300"), ("Dan Dent", "400"))])
+    write(conn, [_bout(905, "2019-06-06", ("Carl Cole", "300"), ("Dan Dent", "400"))])
     conn.execute("DELETE FROM fight_participants WHERE fight_id LIKE 'sherdog:905:%'")
     conn.execute("DELETE FROM fights WHERE event_id = 'sherdog:905'")
     drop_empty_events(conn)
@@ -119,8 +103,8 @@ def test_card_follows_its_event():
 def test_bout_types():
     from canon_db.sources.sherdog.load import default_pro, mark_bout_types
     conn = _db()
-    write(conn, [_row(901, "2019-05-05", ("Carl Cole", "300"), ("Alan Able", "100")),
-                 _row(902, "2019-06-06", ("Carl Cole", "300"), ("Dan Dent", "400"))])
+    write(conn, [_bout(901, "2019-05-05", ("Carl Cole", "300"), ("Alan Able", "100")),
+                 _bout(902, "2019-06-06", ("Carl Cole", "300"), ("Dan Dent", "400"))])
     default_pro(conn)  # card fights stay unchecked
     assert conn.execute("SELECT count(*) FROM fights WHERE bout_type IS NULL").fetchone() == (1 + 2,)  # f1 too
     page = dict(fights=[dict(event_id="901", opponent_id="100")],
@@ -132,8 +116,8 @@ def test_bout_types():
 
 def test_bout_against_oneself_is_skipped():
     conn = _db()
-    counts = write(conn, [_row(901, "2019-05-05", ("Carl Cole", "300"), ("Carl Cole", "300")),
-                          _row(901, "2019-05-05", ("Dan Dent", "400"), ("Eve East", "500"))])
+    counts = write(conn, [_bout(901, "2019-05-05", ("Carl Cole", "300"), ("Carl Cole", "300")),
+                          _bout(901, "2019-05-05", ("Dan Dent", "400"), ("Eve East", "500"))])
     assert counts["bouts not written"] == 1 and counts["new fights"] == 1
     assert conn.execute("SELECT complete FROM event_cards").fetchone() == (0,)
 
@@ -141,9 +125,9 @@ def test_bout_against_oneself_is_skipped():
 def test_non_pro_fights_are_dropped():
     from canon_db.sources.sherdog.load import drop_non_pro, mark_bout_types
     conn = _db()
-    write(conn, [_row(901, "2019-05-05", ("Carl Cole", "300"), ("Alan Able", "100")),
-                 _row(902, "2019-06-06", ("Carl Cole", "300"), ("Dan Dent", "400")),
-                 _row(903, "2019-07-07", ("Carl Cole", "300"), ("Eve East", "500"))])
+    write(conn, [_bout(901, "2019-05-05", ("Carl Cole", "300"), ("Alan Able", "100")),
+                 _bout(902, "2019-06-06", ("Carl Cole", "300"), ("Dan Dent", "400")),
+                 _bout(903, "2019-07-07", ("Carl Cole", "300"), ("Eve East", "500"))])
     conn.execute("INSERT INTO event_aliases VALUES ('sherdog:902', 'sofascore', '77')")
     conn.execute("INSERT INTO round_stats (fight_id, fighter_id, round, source) "
                  "VALUES ('sherdog:902:300-400', 'sherdog:400', 1, 'sofascore')")
@@ -171,5 +155,5 @@ def test_event_pages_due():
     assert due == ["2", "4"]
     assert cards.due(seen, "3", None, "2026-12-02", 21)
     conn = _db()
-    write(conn, [_row(901, "2019-05-05", ("Carl Cole", "300"), ("Alan Able", "100"))])
+    write(conn, [_bout(901, "2019-05-05", ("Carl Cole", "300"), ("Alan Able", "100"))])
     assert "901" in cards.pages_read(conn)  # cards read before event_pages count as read

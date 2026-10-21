@@ -1,12 +1,13 @@
-"""Build the website's copy of canon.db. The site reads it with sql.js-httpvfs, which fetches
-only the pages a query touches, one request at a time, so the copy is laid out for the
-site's pages: each one should read a few contiguous ranges, not hundreds of scattered rows.
+"""Build the website's copy of canon.db. It's what scripts/site_json.py writes the browsing
+pages from, and what the SQL page and filtered leaderboards query in the browser with
+sql.js-httpvfs, which fetches only the pages a query touches, one request at a time; so
+each such query should read a few contiguous ranges, not hundreds of scattered rows.
 
 - fights and fight_participants become one table, site_fights: each fight with its event's
   date and name and both fighters, in card order (an event's fights are contiguous). Views
   named fights and fight_participants give the original columns back for the SQL page.
-- `site_` tables hold the rest of what the pages show (search, lists, leaderboards), with
-  what each row displays in the row itself.
+- `site_` tables hold the lists the pages show (search names, events, leaderboard totals and
+  their opening views), with what each row displays in the row itself.
 - The round stats tables are stored in fight order, so a fight's rounds are together and a
   query that reads them all by fight reads the table straight through.
 - Pages are 4 KB and the file is split into 10 MB chunks.
@@ -162,16 +163,12 @@ CREATE TABLE site_names (token TEXT, fighter_id TEXT, search TEXT, n INTEGER, na
     PRIMARY KEY (token, fighter_id, search)) WITHOUT ROWID;
 CREATE TABLE site_top_fighters AS SELECT * FROM temp.cards ORDER BY n DESC, name LIMIT 50;
 
--- Events, newest first, with their fight counts; event search: every word of the name and
--- place, newest first under each word.
+-- Events, newest first, with their fight counts.
 CREATE INDEX site_events_date ON events(date);
 CREATE TABLE site_events (date TEXT, event_id TEXT, name TEXT, location TEXT, promotion TEXT, n INTEGER,
     PRIMARY KEY (date DESC, event_id)) WITHOUT ROWID;
 INSERT INTO site_events SELECT e.date, e.event_id, e.name, e.location, e.promotion, COUNT(f.fight_id)
     FROM events e LEFT JOIN fights f USING (event_id) WHERE e.date IS NOT NULL GROUP BY e.event_id;
-CREATE INDEX site_events_promotion ON site_events(promotion, date DESC, name, location, n);
-CREATE TABLE site_event_words (token TEXT, date TEXT, event_id TEXT,
-    PRIMARY KEY (token, date DESC, event_id)) WITHOUT ROWID;
 
 -- Promotions and divisions by number, for the leaderboard tables (0 means all). The site
 -- lists the promotions with 25 or more events (there are thousands of one-off shows).
@@ -293,10 +290,6 @@ def fill(conn: sqlite3.Connection) -> None:
             seen.add((fid, search))
             out += [(t, fid, search, r[7], *r[1:7], *r[8:12]) for t in words(search)]
     conn.executemany("INSERT OR IGNORE INTO site_names VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", out)
-    conn.executemany("INSERT OR IGNORE INTO site_event_words VALUES (?,?,?)",
-                     [(t, d, e) for d, e, name, loc in conn.execute(
-                         "SELECT date, event_id, name, location FROM site_events").fetchall()
-                      for t in words(f"{name} {loc or ''}")])
     leaders(conn)
     conn.executescript(VIEWS_SQL)
     for table in ("round_stats", "smartcage_round_stats", "sofascore_round_stats"):
