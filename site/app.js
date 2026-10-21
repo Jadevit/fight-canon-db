@@ -1,7 +1,8 @@
-// Fight Canon: reads the site's copy of canon.db with sql.js-httpvfs, which fetches only the
-// pages of the database a query touches, one request at a time. The copy (scripts/site_db.py)
-// is laid out so each view reads a few contiguous ranges: site_fights holds each fight with
-// its event and both fighters, and the `site_` tables hold what the lists show.
+// Fight Canon. Browsing pages read JSON files written daily by scripts/site_json.py: one per
+// fighter and per event, the event lists, a search index split by prefix, and the
+// leaderboards' opening views. Only the SQL page and filtered leaderboards query the
+// database, with sql.js-httpvfs, which fetches the 4 KB pages of the site's copy
+// (scripts/site_db.py) that a query touches; it loads the first time it's needed.
 // Views are chosen by the URL hash: #/ (landing), #/fighters, #/fighter/<id>, #/events,
 // #/event/<id>, #/fight/<id>, #/leaders, #/sql. How it looks is in DESIGN.md.
 
@@ -12,18 +13,48 @@ const RELEASES = `${REPO}/releases/latest`;
 
 const app = document.getElementById("app");
 
-// The database loads in the background; views draw what they can and await it for the rest.
-const ready = (async () => {
-  const r = await fetch(DB_DIR + "config.json", { cache: "no-cache" });
+const CONFIG = fetch(DB_DIR + "config.json", { cache: "no-cache" }).then((r) => {
   if (!r.ok) throw new Error(`${DB_DIR}config.json: HTTP ${r.status}`);
-  const config = await r.json();
-  config.urlPrefix = new URL(config.urlPrefix, new URL(DB_DIR, location.href)).href;
-  const abs = (f) => new URL(VFS + f, location.href).href;
-  return createDbWorker([{ from: "inline", config }], abs("sqlite.worker.js"), abs("sql-wasm.wasm"));
-})();
-ready.catch(() => {});  // each view reports it
+  return r.json();
+});
+const base = new URL(DB_DIR, location.href);
+const API = CONFIG.then((c) => new URL(c.api || "v1/", base).href);
 
-const q = async (sql, params = []) => (await ready).db.query(sql, params);
+// A JSON file of the API, fetched once per page load; null if there's no such file.
+const files = new Map();
+function api(path) {
+  if (!files.has(path)) {
+    files.set(path, (async () => {
+      const r = await fetch((await API) + path);
+      if (r.status === 404 || r.status === 403) return null;
+      if (!r.ok) throw new Error(`${path}: HTTP ${r.status}`);
+      return r.json();
+    })().catch((e) => { files.delete(path); throw e; }));
+  }
+  return files.get(path);
+}
+const meta = () => api("meta.json");
+// {cols, rows} to objects.
+const objs = (t) => (t ? t.rows.map((r) => Object.fromEntries(t.cols.map((c, i) => [c, r[i]]))) : []);
+const fileKey = (id) => id.replaceAll(":", "~");
+const hex = (s) => [...new TextEncoder().encode(s)].map((b) => b.toString(16).padStart(2, "0")).join("");
+// Which fx/ file a fight is in: the low byte of its FNV-1a hash (site_json.py does the same).
+function shard(id) {
+  let h = 0x811c9dc5;
+  for (const b of new TextEncoder().encode(id)) h = Math.imul(h ^ b, 0x01000193) >>> 0;
+  return (h & 0xff).toString(16).padStart(2, "0");
+}
+
+// The database, started the first time something queries it.
+let worker;
+function db() {
+  return (worker ||= CONFIG.then((config) => {
+    config.urlPrefix = new URL(config.urlPrefix, base).href;
+    const abs = (f) => new URL(VFS + f, location.href).href;
+    return createDbWorker([{ from: "inline", config }], abs("sqlite.worker.js"), abs("sql-wasm.wasm"));
+  }));
+}
+const q = async (sql, params = []) => (await db()).db.query(sql, params);
 
 // --- helpers -------------------------------------------------------------------------
 
@@ -84,14 +115,12 @@ const STATS_NOTES = {
   sofascore: "A third party's count, not the promotion's. Total strikes are counted thrown, not landed.",
   smartcage: "PFL's older system counts all strikes by arm, leg and ground, not significant strikes.",
 };
-async function eventSources(id) {
+// `aliases`: the event file's {sherdog: [ids], pfl: [ids]}.
+function eventSources(id, aliases) {
   const links = isUfcStats(id) ? [ext(`http://ufcstats.com/event-details/${id}`, "UFC Stats")] : [];
-  const aliases = await q("SELECT source, source_id FROM event_aliases WHERE event_id = ? AND source IN ('sherdog', 'pfl')", [id]);
-  const sherdog = id.startsWith("sherdog:") ? [id.slice(8)]
-    : aliases.filter((r) => r.source === "sherdog").map((r) => r.source_id);
+  const sherdog = id.startsWith("sherdog:") ? [id.slice(8)] : aliases.sherdog || [];
   sherdog.forEach((s) => links.push(ext(`https://www.sherdog.com/events/x-${s}`, "Sherdog")));
-  aliases.filter((r) => r.source === "pfl")
-    .forEach((r) => links.push(ext(`https://pflmma.com/event/${r.source_id}`, "PFL")));
+  (aliases.pfl || []).forEach((s) => links.push(ext(`https://pflmma.com/event/${s}`, "PFL")));
   return links;
 }
 const sourceLine = (links) => links.length ? `<p class="note">Source: ${links.join(" · ")}</p>` : "";
@@ -120,18 +149,31 @@ function setParams(p) {
 }
 
 // Promotions with enough events to list (there are thousands of one-off shows).
-const promotions = () => q("SELECT code, promotion FROM site_promotions WHERE listed ORDER BY events DESC");
+const promotions = async () => objs((await meta()).promotions);
 
 const norm = (s) => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
-// The words of a search term, normalized like the search columns, longest first (fighter
-// search looks it up as a prefix of a word of the name); null if none has two letters.
+// The words of a search term, normalized like the search index, longest first; null if none
+// has two letters.
 function searchWords(term) {
   const words = (norm(term).match(/[\p{L}\p{N}_]+/gu) || []).sort((a, b) => b.length - a.length);
   if (!words.length || words[0].length < 2) return null;
-  const first = words[0];
-  const next = first.slice(0, -1) + String.fromCodePoint(first.codePointAt(first.length - 1) + 1);
-  return { words, first, next, rest: words.slice(1) };
+  return { words, first: words[0] };
+}
+
+// Search a split index (sf/ fighters, se/ events): read the file of the longest word's first
+// two letters, a letter deeper while that file is split, and keep the rows in which every
+// word of the term starts a word. Rows come in rank order (most fights; newest).
+async function searchIndex(folder, s) {
+  let p = s.first.slice(0, 2), file = await api(`${folder}/${hex(p)}.json`);
+  while (file?.split && p.length < s.first.length) {
+    p = s.first.slice(0, p.length + 1);
+    file = await api(`${folder}/${hex(p)}.json`);
+  }
+  return objs(file).filter((r) => {
+    const ws = r.words.split(" ");
+    return s.words.every((t) => ws.some((w) => w.startsWith(t)));
+  });
 }
 
 // Seconds actually fought, from "3 Rnd (5-5-5)" + end round + end time.
@@ -147,48 +189,25 @@ function fightSeconds(timeFormat, endRound, endTime) {
   return mins.slice(0, endRound - 1).reduce((a, b) => a + b, 0) * 60 + last;
 }
 
-const CARD_COLS = "fighter_id, name, nickname, wins, losses, draws, no_contests, n, w, l, d, nc";
+const searchFighters = async (s, limit) => (await searchIndex("sf", s)).slice(0, limit);
 
-// Fighters whose name has a word starting with the term's longest word (site_names has a row
-// per word of each name), and the term's other words anywhere in a name.
-function searchFighters(s, limit) {
-  return q(`SELECT ${CARD_COLS} FROM site_names
-            WHERE token >= ? AND token < ? ${s.rest.map(() => "AND instr(search, ?) > 0").join(" ")}
-            GROUP BY fighter_id ORDER BY n DESC, name LIMIT ${limit}`, [s.first, s.next, ...s.rest]);
-}
-
-// Events, newest first: site_events is in that order, so a year is a range of it and a
-// promotion a range of its index. A search matches whole words: it walks the events of its
-// rarest word, newest first, and keeps those that have the other words too. Returns
-// [rows (up to limit + 1), total or null if unknown].
-async function searchEvents(s, year, promo, limit, total) {
-  const where = [], args = [];
-  const col = (c) => (s ? `w.${c}` : c);
-  if (year) { where.push(`${col("date")} >= ? AND ${col("date")} < ?`); args.push(year, String(Number(year) + 1)); }
-  if (promo) { where.push(`${s ? "e." : ""}promotion = ?`); args.push(promo); }
-  if (!s) {
-    const clause = where.length ? "WHERE " + where.join(" AND ") : "";
-    const rows = q(`SELECT event_id, name, date, location, promotion, n FROM site_events ${clause}
-                    ORDER BY date DESC LIMIT ${limit + 1}`, args);
-    const count = where.length ? q(`SELECT COUNT(*) n FROM site_events ${clause}`, args).then((r) => r[0].n) : total;
-    return [await rows, await count];
+// Events, newest first: the latest ones, a year's, a promotion's (listed ones), or a search's,
+// narrowed by year and promotion. Returns [rows (up to limit + 1), total or null if unknown].
+async function searchEvents(s, year, promo, limit) {
+  const inYear = (e) => !year || e.date.startsWith(year);
+  const ofPromo = (e) => !promo || e.promotion === promo;
+  let rows;
+  if (s) rows = await searchIndex("se", s);
+  else if (promo) {
+    const code = (await promotions()).find((x) => x.promotion === promo)?.code;
+    rows = code == null ? [] : objs(await api(`events/p/${code}.json`));
+  } else if (year) rows = objs(await api(`events/y/${year}.json`));
+  else {
+    const m = await meta();
+    return [objs(await api("events/latest.json")).slice(0, limit + 1), m.stats.events];
   }
-  const terms = [...new Set(s.words)];
-  const counts = Object.fromEntries((await q(
-    `SELECT token, COUNT(*) n FROM site_event_words WHERE token IN (${terms.map(() => "?").join(",")}) GROUP BY token`,
-    terms)).map((r) => [r.token, r.n]));
-  if (terms.some((t) => !counts[t])) return [[], 0];
-  const [rarest, ...others] = terms.sort((a, b) => counts[a] - counts[b]);
-  others.forEach((t) => {
-    where.push("EXISTS (SELECT 1 FROM site_event_words o WHERE o.token = ? AND o.date = w.date AND o.event_id = w.event_id)");
-    args.push(t);
-  });
-  const rows = await q(`
-    SELECT e.event_id, e.name, e.date, e.location, e.promotion, e.n
-    FROM site_event_words w JOIN site_events e ON e.date = w.date AND e.event_id = w.event_id
-    WHERE w.token = ? ${where.map((x) => `AND ${x}`).join(" ")}
-    ORDER BY w.date DESC LIMIT ${limit + 1}`, [rarest, ...args]);
-  return [rows, rows.length > limit ? null : rows.length];
+  rows = rows.filter((e) => inYear(e) && ofPromo(e));
+  return [rows.slice(0, limit + 1), s && rows.length > limit ? null : rows.length];
 }
 
 const fighterRow = (r) => `
@@ -221,17 +240,19 @@ function mirrorRow(label, a, b, max, fmt = num, text = null) {
 }
 const landed = (l, a) => (l == null ? (a == null ? "—" : `${a} thr.`) : `${l}${a != null ? ` <small>/${a}</small>` : ""}`);
 
-// A fight's round stats: round_stats, or PFL's older SmartCage set (its own columns).
-async function roundStats(fid) {
-  const rows = await q("SELECT * FROM round_stats WHERE fight_id = ? ORDER BY round", [fid]);
-  if (rows.length) return { rows, source: rows[0].source, cage: false };
-  const cage = await q("SELECT * FROM smartcage_round_stats WHERE fight_id = ? ORDER BY round", [fid]);
-  return cage.length ? { rows: cage, source: "smartcage", cage: true } : null;
+const eventFile = (eid) => api(`e/${fileKey(eid)}.json`);
+const fightLink = (fid, eid) => `#/fight/${esc(fid)}?e=${encodeURIComponent(eid)}`;
+
+// A fight's round stats from its event's file: round_stats' columns, or PFL's older SmartCage
+// set (its own columns).
+function roundStats(ev, fid) {
+  const st = ev?.stats[fid];
+  return st ? { rows: objs(st), source: st.source, cage: st.cage } : null;
 }
 
 // "At a glance": strikes per round, control per round, then knockdowns and takedowns.
-async function glance(fid, left, names) {
-  const st = await roundStats(fid);
+async function glance(fid, eid, left, names) {
+  const st = roundStats(await eventFile(eid), fid);
   if (!st) return `<div class="glance"><p class="muted">No round stats for this fight.</p></div>`;
   const right = [...new Set(st.rows.map((r) => r.fighter_id))].find((i) => i !== left);
   const rounds = [...new Set(st.rows.map((r) => r.round))];
@@ -252,7 +273,7 @@ async function glance(fid, left, names) {
       ${mirrorRow("Knockdowns", kd[0], kd[1], Math.max(1, ...kd.filter((v) => v != null)))}
       ${mirrorRow("Takedowns", td[0], td[1], Math.max(1, ...td.filter((v) => v != null)))}
     </div>
-    <a class="go" href="#/fight/${esc(fid)}">Full fight page →</a>
+    <a class="go" href="${fightLink(fid, eid)}">Full fight page →</a>
   </div>`;
 }
 
@@ -265,7 +286,7 @@ function expandable(container, names) {
       const slot = d.querySelector(".slot");
       slot.innerHTML = loading();
       try {
-        slot.innerHTML = await glance(d.dataset.fight, d.dataset.left, names(d));
+        slot.innerHTML = await glance(d.dataset.fight, d.dataset.event, d.dataset.left, names(d));
       } catch (e) {
         slot.innerHTML = `<p class="error">${esc(e.message)}</p>`;
       }
@@ -309,7 +330,7 @@ menuBtn.onclick = () => {
         `<a href="#/fighter/${esc(r.fighter_id)}">${esc(r.name)}<small>${proRecord(r, r)}</small></a>`).join("") : "") +
       (events.length ? `<span class="label">Events</span>` + events.map((e) =>
         `<a href="#/event/${esc(e.event_id)}">${esc(e.name)}<small>${esc(e.date)}</small></a>`).join("") : "") +
-      (people.length || events.length ? "" : `<p>Nothing found. Events match whole words.</p>`);
+      (people.length || events.length ? "" : `<p>Nothing found.</p>`);
     links = [...box.querySelectorAll("a")];
     active = -1;
     box.hidden = false;
@@ -335,7 +356,8 @@ menuBtn.onclick = () => {
   window.addEventListener("hashchange", close);
 })();
 
-ready.then(() => q("SELECT name, event_id FROM site_events ORDER BY date DESC LIMIT 1")).then(([e]) => {
+meta().then((m) => {
+  const [e] = objs(m.latest);
   if (e) document.getElementById("latest").innerHTML = ` · Latest event: ${eventLink(e.event_id, e.name)}`;
 }).catch(() => {});
 
@@ -356,7 +378,7 @@ async function route() {
   const section = { fighter: "fighters", event: "events", fight: "events" }[name] || name;
   nav.querySelectorAll("a").forEach((a) =>
     a.toggleAttribute("aria-current", a.getAttribute("href") === `#/${section}`));
-  if (view !== landing) app.innerHTML = loading(document.querySelector("#app .loading") ? "Loading…" : "Loading the database…");
+  if (view !== landing) app.innerHTML = loading();
   window.scrollTo(0, 0);
   try {
     await view(decodeURIComponent(id), show);
@@ -414,13 +436,11 @@ async function landing(_, show) {
       </section>
       <section class="section">
         <span class="label">Latest event</span>
-        <div id="latest-event">${loading("Loading the database…")}</div>
+        <div id="latest-event">${loading()}</div>
       </section>
     </div>`)) return;
-  const [[c], [e]] = await Promise.all([
-    q("SELECT * FROM site_stats"),
-    q("SELECT event_id, name, date, location, promotion, n FROM site_events ORDER BY date DESC LIMIT 1"),
-  ]);
+  const m = await meta();
+  const c = m.stats, [e] = objs(m.latest);
   const vals = { fights: num(c.fights), fighters: num(c.fighters), promotions: num(c.promotions), first: c.first_date.slice(0, 4) };
   document.querySelectorAll("#tiles b[data-k]").forEach((b) => (b.textContent = vals[b.dataset.k]));
   const slot = document.getElementById("latest-event");
@@ -437,7 +457,7 @@ async function fighters(_, show) {
     <div id="results">${loading()}</div>`)) return;
   const input = document.getElementById("q");
   const find = latest(async (term) => {
-    if (!term) return q(`SELECT ${CARD_COLS} FROM site_top_fighters ORDER BY n DESC, name`);
+    if (!term) return objs((await meta()).top_fighters);
     const s = searchWords(term);
     return s ? searchFighters(s, 50) : null;
   });
@@ -454,32 +474,15 @@ async function fighters(_, show) {
   await render();
 }
 
-// A fighter's fights, from their side of site_fights.
-const MY_FIGHTS = `SELECT date, event_id, event, promotion, fight_id, division, has_stats, method, end_round, end_time,
-  time_format, title_fight, %me_res AS result, %opp_id AS opp_id, %opp_name AS opp FROM site_fights WHERE %me_id = ?1`;
-const side = (me, opp) => MY_FIGHTS.replace("%me_res", `${me}_res`).replace("%me_id", `${me}_id`)
-  .replace("%opp_id", `${opp}_id`).replace("%opp_name", `${opp}_name`);
 const TYPICAL = (d) => d && !["Other", "Catch Weight", "Open Weight"].includes(d);
 
 async function fighter(id, show) {
-  const [[f], fights, own, sherdog] = await Promise.all([
-    q("SELECT * FROM fighters WHERE fighter_id = ?", [id]),
-    q(`${side("a", "b")} UNION ALL ${side("b", "a")} ORDER BY date DESC`, [id]),
-    // Some sources count only what landed, so accuracy uses the rounds that have attempts.
-    q(`SELECT fight_id, source, SUM(knockdowns) kd, SUM(sig_str_land) sl, SUM(sig_str_att) sa,
-              SUM(CASE WHEN sig_str_att IS NOT NULL THEN sig_str_land END) sla,
-              SUM(td_land) tl, SUM(td_att) ta, SUM(CASE WHEN td_att IS NOT NULL THEN td_land END) tla,
-              SUM(sub_att) sub, SUM(ctrl_sec) ctrl
-       FROM round_stats WHERE fighter_id = ? GROUP BY fight_id`, [id]),
-    q("SELECT DISTINCT source_id FROM fighter_aliases WHERE fighter_id = ? AND source = 'sherdog'", [id]),
-  ]);
-  if (!f) { show(nothing("Fighter not found.")); return; }
-  // Their opponents' strikes in the same fights, for strike defense.
-  const opp = own.length
-    ? await q(`SELECT fight_id, SUM(sig_str_land) sl, SUM(sig_str_att) sa FROM round_stats
-               WHERE fight_id IN (${own.map(() => "?").join(",")}) AND fighter_id <> ? AND sig_str_att IS NOT NULL
-               GROUP BY fight_id`, [...own.map((r) => r.fight_id), id])
-    : [];
+  // Their file: the fighter, their fights newest first, and per fight their stat totals and
+  // their opponent's (strike defense). Some sources count only what landed, so accuracy uses
+  // the rounds that have attempts (sla, tla).
+  const d = await api(`f/${fileKey(id)}.json`);
+  if (!d) { show(nothing("Fighter not found.")); return; }
+  const f = d.fighter, fights = objs(d.fights), own = objs(d.stats);
 
   // Record: from their UFC Stats page if they have one, else the fights here.
   const here = { w: 0, l: 0, d: 0, nc: 0 };
@@ -498,7 +501,7 @@ async function fighter(id, show) {
     f.nationality && esc(f.nationality),
   ].filter(Boolean);
   const links = (isUfcStats(id) ? [ext(`http://ufcstats.com/fighter-details/${id}`, "UFC Stats")] : [])
-    .concat(sherdog.map((s) => ext(`https://www.sherdog.com/fighter/x-${s.source_id}`, "Sherdog")));
+    .concat(d.sherdog.map((s) => ext(`https://www.sherdog.com/fighter/x-${s}`, "Sherdog")));
 
   const total = r.w + r.l + r.d || 1;
   const recordBlock = `
@@ -529,7 +532,6 @@ async function fighter(id, show) {
   // Career stats per source (they count differently), the source with the most fights first.
   const bySource = {};
   const fightOf = Object.fromEntries(fights.map((x) => [x.fight_id, x]));
-  const oppOf = Object.fromEntries(opp.map((o) => [o.fight_id, o]));
   for (const row of own) (bySource[row.source] ||= []).push(row);
   const sources = Object.keys(bySource).sort((a, b) => bySource[b].length - bySource[a].length);
   const statsFor = (src) => {
@@ -543,8 +545,7 @@ async function fighter(id, show) {
       const x = fightOf[row.fight_id];
       const s = x && fightSeconds(x.time_format, x.end_round, x.end_time);
       if (s && row.sl != null) { secs += s; slTimed += row.sl; }
-      const o = oppOf[row.fight_id];
-      if (o && o.sa != null) { os += o.sl || 0; oa += o.sa; }
+      if (row.opp_sa != null) { os += row.opp_sl || 0; oa += row.opp_sa; }
     }
     const tiles = [
       secs && ["Sig. strikes / min", (slTimed / (secs / 60)).toFixed(2)],
@@ -569,7 +570,7 @@ async function fighter(id, show) {
     </section>` : "";
 
   const history = fights.map((x) => fightRow(
-    `data-fight="${esc(x.fight_id)}" data-left="${esc(id)}" data-opp="${esc(x.opp_id)}" data-opp-name="${esc(x.opp)}"`,
+    `data-fight="${esc(x.fight_id)}" data-event="${esc(x.event_id)}" data-left="${esc(id)}" data-opp="${esc(x.opp_id)}" data-opp-name="${esc(x.opp)}"`,
     `${res(x.result)}
      <div class="main">
        <div class="title">${x.opp_id ? fighterLink(x.opp_id, x.opp) : "Unknown"} ${x.title_fight ? badge("Title") : ""}</div>
@@ -617,13 +618,13 @@ const syncChip = (sel) => {
 };
 
 async function events(_, show) {
-  const [[c], promos] = await Promise.all([q("SELECT * FROM site_stats"), promotions()]);
+  const [c, promos] = await Promise.all([meta().then((m) => m.stats), promotions()]);
   const years = [];
   for (let y = Number(c.last_date.slice(0, 4)); y >= Number(c.first_date.slice(0, 4)); y--) years.push([String(y), String(y)]);
   const p = params();
   if (!show(`
     <div class="page-head"><h1>Events</h1>
-      <input type="search" id="q" placeholder="Search events or places (whole words)" value="${esc(p.get("q") || "")}">
+      <input type="search" id="q" placeholder="Search events or places" value="${esc(p.get("q") || "")}">
       <div class="chips">
         ${chip("y", "Year", [["", "All"], ...years], p.get("y") || "")}
         ${chip("pr", "Promotion", [["", "All"], ...promos.map((x) => [x.promotion, x.promotion])], p.get("pr") || "")}
@@ -635,7 +636,7 @@ async function events(_, show) {
     const s = term ? searchWords(term) : null;
     if (term && !s) return null;
     const limit = s ? SEARCH_SHOWN : EVENTS_SHOWN;
-    return [...(await searchEvents(s, year, promo, limit, c.events)), limit];
+    return [...(await searchEvents(s, year, promo, limit)), limit];
   });
   const render = async () => {
     const term = qi.value.trim(), year = yi.value, promo = pi.value;
@@ -656,15 +657,11 @@ async function events(_, show) {
 }
 
 async function event(id, show) {
-  const [[e], fights, [card], links] = await Promise.all([
-    q("SELECT e.*, p.coverage FROM events e LEFT JOIN promotions p USING (promotion) WHERE event_id = ?", [id]),
-    q("SELECT * FROM site_fights WHERE event_id = ? ORDER BY card", [id]),
-    q("SELECT complete FROM event_cards WHERE event_id = ?", [id]),
-    eventSources(id),
-  ]);
-  if (!e) { show(nothing("Event not found.")); return; }
+  const d = await eventFile(id);
+  if (!d) { show(nothing("Event not found.")); return; }
+  const e = d.event, fights = objs(d.fights), links = eventSources(id, d.aliases);
   // The whole card is here if UFC Stats covers the promotion's cards or the card was read whole.
-  const whole = (e.coverage === "full" && e.source === "ufcstats") || card?.complete === 1;
+  const whole = (e.coverage === "full" && e.source === "ufcstats") || e.card_complete === 1;
   // The winner's side goes left (gold); with no winner, the first fighter listed.
   const left = (x) => (x.b_res === "W" ? "b" : "a");
   const bouts = fights.map((x) => {
@@ -672,12 +669,12 @@ async function event(id, show) {
     const name = (s) => x[`${s}_id`]
       ? fighterLink(x[`${s}_id`], x[`${s}_name`], x[`${s}_res`] === "W" ? "won" : "") : "Unknown";
     return fightRow(
-      `data-fight="${esc(x.fight_id)}" data-left="${esc(x[`${l}_id`])}" data-names="${esc(JSON.stringify({ [x.a_id]: x.a_name, [x.b_id]: x.b_name }))}"`,
+      `data-fight="${esc(x.fight_id)}" data-event="${esc(id)}" data-left="${esc(x[`${l}_id`])}" data-names="${esc(JSON.stringify({ [x.a_id]: x.a_name, [x.b_id]: x.b_name }))}"`,
       `<div class="main">
          <div class="title">${name(l)} <span class="faint">vs</span> ${name(r)} ${x.title_fight ? badge("Title") : ""}</div>
          <div class="sub">${esc(dot(x.a_res === "D" ? "Draw" : x.a_res === "NC" ? "No contest" : "", x.method,
            x.end_round && `R${x.end_round} ${x.end_time || ""}`.trim(), x.weight_class && x.division !== "Other" ? x.division : x.weight_class))}
-           · <a href="#/fight/${esc(x.fight_id)}">Details</a></div>
+           · <a href="${fightLink(x.fight_id, id)}">Details</a></div>
        </div>`, x.has_stats);
   }).join("");
   if (!show(`
@@ -714,19 +711,21 @@ const SMARTCAGE_ROWS = [
 ];
 
 async function fight(id, show) {
-  const [[x], st, scores, odds] = await Promise.all([
-    q("SELECT * FROM site_fights WHERE fight_id = ?", [id]),
-    roundStats(id),
-    q("SELECT * FROM judge_scores WHERE fight_id = ? ORDER BY judge, round", [id]),
-    q("SELECT * FROM odds WHERE fight_id = ? AND book = 'all'", [id]),
-  ]);
+  // Everything is in its event's file; a link without the event (?e=) looks it up in fx/.
+  const eid = params().get("e") || (await api(`fx/${shard(id)}.json`))?.[id];
+  const d = eid && await eventFile(eid);
+  const x = d && objs(d.fights).find((f) => f.fight_id === id);
   if (!x) { show(nothing("Fight not found.")); return; }
+  Object.assign(x, { event_id: eid, event: d.event.name, date: d.event.date });
+  const st = roundStats(d, id);
+  const scores = objs({ cols: d.scores.cols, rows: d.scores.fights[id] || [] });
+  const odds = objs({ cols: d.odds.cols, rows: d.odds.fights[id] || [] });
   // The winner goes left, in gold; with no winner, the first fighter listed.
   const sides = [{ id: x.a_id, name: x.a_name, res: x.a_res }, { id: x.b_id, name: x.b_name, res: x.b_res }];
   if (x.b_res === "W") sides.reverse();
   const [L, R] = sides;
   const links = isUfcStats(id) ? [ext(`http://ufcstats.com/fight-details/${id}`, "UFC Stats")] : [];
-  (await eventSources(x.event_id)).filter((l) => !l.includes("ufcstats.com")).forEach((l) => links.push(l));
+  eventSources(eid, d.aliases).filter((l) => !l.includes("ufcstats.com")).forEach((l) => links.push(l));
   const outcome = L.res === "W" ? `${esc(L.name)} wins` : L.res === "D" ? "Draw" : L.res === "NC" ? "No contest" : "";
   const nameCls = (s) => (s.res === "W" ? "won" : "lost");
 
@@ -825,19 +824,14 @@ async function fight(id, show) {
 const LEADER_SUMS = "SUM(n) n, " + ["kd", "sl", "sa", "tsl", "tsa", "tl", "ta", "suba", "ctrl", "arm", "leg", "grd"]
   .map((c) => `SUM(${c}) ${c}`).join(", ");
 
-// The top 50 for a board, stat and filters. The page's opening view (all promotions and
-// years, min. 1 fight) is pre-computed in site_top. Otherwise the results board, which has
-// all years only, ranks across all promotions through an index per stat or reads one
-// promotion's slice; a stats board sums its fighters' years in range.
+// The top 50 for a board, stat and filters (the opening view is a file: l/<board>/<stat>.json).
+// The results board, which has all years only, ranks across all promotions through an index
+// per stat or reads one promotion's slice; a stats board sums its fighters' years in range.
 function leaderQuery(board, stat, s, f, allYears) {
   const keep = `n >= ? AND ${s.expr} IS NOT NULL ${s.where ? `AND ${s.where}` : ""}`;
   const top = `ORDER BY ${s.expr} DESC, n LIMIT 50`;
   const named = (sql) => `SELECT t.fighter_id, f.name, t.n, t.val FROM (${sql}) t
                           JOIN fighters f USING (fighter_id) ORDER BY t.val DESC, t.n`;
-  if (f.promo === "0" && (allYears || board === "results") && f.min === "1") {
-    return ["SELECT fighter_id, name, n, val FROM site_top WHERE board = ? AND stat = ? AND division = ? ORDER BY rank",
-            [board, stat, Number(f.div)]];
-  }
   if (board === "results") {
     // Spelled out so SQLite picks the partial indexes.
     const promo = f.promo === "0" ? "promotion = 0" : "promotion = ? AND promotion <> 0";
@@ -862,11 +856,8 @@ const MIN_FIGHTS = [1, 3, 5, 10, 15, 20, 30];
 
 async function leaders(_, show) {
   const p = params();
-  const [[c], promos, divisions, [boards]] = await Promise.all([
-    q("SELECT * FROM site_stats"), promotions(), q("SELECT code, division FROM site_divisions ORDER BY code"),
-    q("SELECT json FROM site_boards"),
-  ]);
-  const BOARDS = JSON.parse(boards.json);
+  const [m, promos] = await Promise.all([meta(), promotions()]);
+  const c = m.stats, divisions = objs(m.divisions), BOARDS = m.boards;
   const [minY, maxY] = [c.first_date.slice(0, 4), c.last_date.slice(0, 4)];
   const years = [];
   for (let y = Number(maxY); y >= Number(minY); y--) years.push([String(y), String(y)]);
@@ -889,7 +880,16 @@ async function leaders(_, show) {
     </div>
     <div id="results">${loading()}</div>`)) return;
   const val = (k) => document.getElementById(k).value;
-  const find = latest((sql, args) => q(sql, args));
+  // A board's opening view (all promotions and years, min. 1 fight) is a file; other filters
+  // query the database.
+  const find = latest(async (f, stat, s, allYears) => {
+    if (f.promo === "0" && allYears && f.min === "1") {
+      const top = await api(`l/${f.board}/${stat}.json`);
+      return (top?.[f.div] || []).map(([fighter_id, name, n, val]) => ({ fighter_id, name, n, val }));
+    }
+    document.getElementById("results").innerHTML = loading("Loading the database…");
+    return q(...leaderQuery(f.board, stat, s, f, allYears));
+  });
   const era = document.getElementById("era");
   const render = async () => {
     const f = { board: val("board"), stat: val("stat"), promo: val("promo"), div: val("div"), from: val("from"),
@@ -906,7 +906,7 @@ async function leaders(_, show) {
     const b = BOARDS[f.board];
     const stat = b.stats[f.stat] ? f.stat : Object.keys(b.stats)[0];
     const s = b.stats[stat];
-    const rows = await find(...leaderQuery(f.board, stat, s, f, results || (f.from === minY && f.to === maxY)));
+    const rows = await find(f, stat, s, results || (f.from === minY && f.to === maxY));
     if (rows === undefined) return;
     const shown = (v) => s.fmt === "pct" ? Math.round(v * 1000) / 10 + "%" : s.fmt === "time" ? hmm(v) : num(v);
     document.getElementById("results").innerHTML = (rows.length ? `<div class="list">${rows.map((r, i) => `
@@ -973,7 +973,7 @@ async function sql(_, show) {
     setParams(new URLSearchParams({ q: ta.value }));
     out.innerHTML = "";
     status.textContent = "Running…";
-    const w = await ready;
+    const w = await db();
     const before = (await w.worker.getStats()).totalFetchedBytes;
     try {
       const resl = await w.db.exec(ta.value);

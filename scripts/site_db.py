@@ -11,7 +11,9 @@ site's pages: each one should read a few contiguous ranges, not hundreds of scat
   query that reads them all by fight reads the table straight through.
 - Pages are 4 KB and the file is split into 10 MB chunks.
 
-    python scripts/site_db.py [canon.db] [out dir]     # defaults: data/canon.db site/db
+    python scripts/site_db.py [canon.db] [out dir] [keep]   # defaults: data/canon.db site/db
+
+`keep` also saves the whole file (for scripts/site_json.py).
 
 Writes <out>/canon.db.000, .001, ... and <out>/config.json.
 """
@@ -307,8 +309,9 @@ def fill(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
-def build(src: Path, out: Path) -> dict:
-    """Write the site's database to `out` in chunks, with its config.json; returns the config."""
+def build(src: Path, out: Path, keep: Path | None = None) -> dict:
+    """Write the site's database to `out` in chunks, with its config.json; returns the config.
+    `keep`: also save the whole file there (scripts/site_json.py reads it)."""
     out.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
         db = Path(tmp) / "site.db"
@@ -318,6 +321,8 @@ def build(src: Path, out: Path) -> dict:
             fill(conn)
         finally:
             conn.close()
+        if keep:
+            shutil.copyfile(db, keep)
         for old in out.glob("canon.db.*"):
             old.unlink()
         size, digest = db.stat().st_size, hashlib.sha256()
@@ -334,5 +339,6 @@ def build(src: Path, out: Path) -> dict:
 
 if __name__ == "__main__":
     args = sys.argv[1:]
-    c = build(Path(args[0] if args else "data/canon.db"), Path(args[1] if len(args) > 1 else "site/db"))
+    c = build(Path(args[0] if args else "data/canon.db"), Path(args[1] if len(args) > 1 else "site/db"),
+              Path(args[2]) if len(args) > 2 else None)
     print(f"{c['databaseLengthBytes'] / 1e6:.0f} MB in {-(-c['databaseLengthBytes'] // CHUNK)} chunks")
