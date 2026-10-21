@@ -11,14 +11,14 @@ import json
 import logging
 from pathlib import Path
 
-from canon_db.sources.pfl.fetch import Site
+from canon_db.http import Fetcher
 
 STATS = "https://oktagon.sh12w3.esports.cz/api/export"
 API = "https://api.oktagonmma.com/v1"
 log = logging.getLogger("oktagon")
 
 
-def get_json(site: Site, url: str):
+def get_json(site: Fetcher, url: str):
     r = site.request("GET", url)
     try:
         return r.json() if r is not None and r.status_code == 200 else None
@@ -31,7 +31,7 @@ def save(path: Path, data) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
 
 
-def tournaments(site: Site, years: list[int]) -> list[dict]:
+def tournaments(site: Fetcher, years: list[int]) -> list[dict]:
     """[{id, name, date}] of the stats host's events in these years."""
     out = {}
     for year in years:
@@ -40,7 +40,7 @@ def tournaments(site: Site, years: list[int]) -> list[dict]:
     return sorted(out.values(), key=lambda t: t["date"])
 
 
-def fetch_tournament(site: Site, raw: Path, tid: int, fresh: bool) -> None:
+def fetch_tournament(site: Fetcher, raw: Path, tid: int, fresh: bool) -> None:
     """Save a tournament and its matches (those not on disk yet, or all with `fresh`)."""
     path = raw / "tournaments" / f"{tid}.json"
     if fresh or not path.exists():
@@ -57,7 +57,7 @@ def fetch_tournament(site: Site, raw: Path, tid: int, fresh: bool) -> None:
                 save(mpath, data)
 
 
-def fetch_cards(site: Site, raw: Path, since: str, today: str, every: bool) -> None:
+def fetch_cards(site: Fetcher, raw: Path, since: str, today: str, every: bool) -> None:
     """Save the fight cards of past events: those from `since` on again, and with `every`
     all the ones not on disk."""
     events = get_json(site, f"{API}/events?limit=200")

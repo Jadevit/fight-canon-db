@@ -1,4 +1,4 @@
-"""Polite HTTP client for UFC Stats, including the proof-of-work wall solver.
+"""UFC Stats' HTTP client: the shared Fetcher (canon_db.http) plus its proof-of-work wall solver.
 
 UFC Stats gates every page behind a one-time hashcash "checking your browser"
 challenge: it embeds a nonce and a difficulty, and expects a proof of work (an n
@@ -13,16 +13,13 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
-import threading
-import time
-from pathlib import Path
 
 import requests
 
+from canon_db import http
+
 BASE = "http://ufcstats.com"
 EVENTS_LIST_URL = f"{BASE}/statistics/events/completed?page=all"
-
-HEADERS = {"User-Agent": "Mozilla/5.0 (canon-db research scraper; ~1 request/sec)"}
 
 CHALLENGE_MARKER = "Checking your browser"
 CHALLENGE_URL = f"{BASE}/__c"
@@ -32,29 +29,17 @@ DIFFICULTY_RE = re.compile(r"Array\((\d+)\+1\)")  # new Array(N+1).join('0') -> 
 log = logging.getLogger("fetcher")
 
 
-class Fetcher:
-    """Fixed delay between requests, retries with exponential backoff. Threads may share one:
-    the delay is between any two requests, whichever thread makes them."""
+class Fetcher(http.Fetcher):
+    """canon_db.http.Fetcher that clears UFC Stats' browser check whenever a page is one."""
 
     def __init__(self, delay: float = 1.0, retries: int = 4, timeout: float = 30):
-        self.session = requests.Session()
-        self.session.headers.update(HEADERS)
-        self.delay = delay
-        self.retries = retries
-        self.timeout = timeout
-        self.last_request = 0.0
-        self.lock = threading.Lock()
-        self.requests_made = 0
+        super().__init__(delay, retries, timeout)
         self.walls_solved = 0
-        self.failures: list[str] = []
 
-    def _throttle(self) -> None:
-        """Hold the fixed delay between requests, then mark this moment as the last one."""
-        with self.lock:
-            wait = self.delay - (time.monotonic() - self.last_request)
-            if wait > 0:
-                time.sleep(wait)
-            self.last_request = time.monotonic()
+    def wall(self, page: str) -> bool | None:
+        if CHALLENGE_MARKER not in page:
+            return None
+        return self._solve_wall(page)  # cookie missing or expired
 
     def _solve_wall(self, html: str) -> bool:
         """Clear the hashcash challenge for this session (a few hundred hashes)."""
@@ -69,8 +54,7 @@ class Fetcher:
         n = 0
         while not hashlib.sha256(f"{nonce}:{n}".encode()).hexdigest().startswith(target):
             n += 1
-        self._throttle()
-        self.requests_made += 1
+        self.throttle()
         try:
             r = self.session.post(CHALLENGE_URL, data={"nonce": nonce, "n": n},
                                   timeout=self.timeout)
@@ -83,33 +67,3 @@ class Fetcher:
         self.walls_solved += 1
         log.info("Cleared the browser check in %d hashes (solve #%d).", n, self.walls_solved)
         return True
-
-    def get(self, url: str) -> str | None:
-        for attempt in range(1, self.retries + 1):
-            self._throttle()
-            self.requests_made += 1
-            try:
-                r = self.session.get(url, timeout=self.timeout)
-                if r.status_code == 200:
-                    if CHALLENGE_MARKER not in r.text:
-                        return r.text
-                    # Cookie missing or expired: solve and retry without backoff.
-                    if self._solve_wall(r.text):
-                        continue
-                elif r.status_code == 404:  # no such page: asking again won't help
-                    log.warning("HTTP 404 on %s", url)
-                    break
-                else:
-                    log.warning("HTTP %s on %s (attempt %d)", r.status_code, url, attempt)
-            except requests.RequestException as e:
-                log.warning("%s on %s (attempt %d)", type(e).__name__, url, attempt)
-            time.sleep(self.delay * 2 ** attempt)  # back off: 2s, 4s, 8s, 16s
-        self.failures.append(url)
-        return None
-
-
-def save(path: Path, html: str) -> None:
-    """Write via a temp file so a crash mid-write never leaves a half page that looks finished."""
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(html, encoding="utf-8")
-    tmp.replace(path)

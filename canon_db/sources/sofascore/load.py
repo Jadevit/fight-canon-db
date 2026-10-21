@@ -37,9 +37,7 @@ from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
 
-from canon_db.sources.bestfightodds.match import Matcher
-from canon_db.sources.pfl.load import leftover
-from canon_db.sources.sherdog.load import name_ok
+from canon_db.matching import Matcher, leftover, name_ok
 from canon_db.sources.sofascore.pages import EXTRA_COLS, ROUND_COLS, bouts, rounds
 
 NAME = "sofascore"

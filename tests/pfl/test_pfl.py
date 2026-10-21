@@ -2,7 +2,8 @@ import json
 import sqlite3
 
 from canon_db import db
-from canon_db.sources.pfl.load import leftover, load
+from canon_db.matching import leftover
+from canon_db.sources.pfl.load import load
 from canon_db.sources.pfl.pages import parse_event, parse_stats
 
 PAGE = '<title>PFL 1 | Professional Fighters League</title> "startDate": "2020-01-02T00:00:00-04:00" var is_v2 = %s;'

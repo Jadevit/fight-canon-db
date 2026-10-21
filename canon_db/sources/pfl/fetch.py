@@ -18,7 +18,7 @@ from pathlib import Path
 
 import requests
 
-from canon_db.sources.ufcstats.client import HEADERS
+from canon_db import http
 
 BASE = "https://pflmma.com"
 EXPIRED = 419  # the session's token timed out
@@ -27,27 +27,16 @@ URL_RE = re.compile(r"var fight_url = '([^']+)'")
 log = logging.getLogger("pfl")
 
 
-class Site:
-    def __init__(self, delay: float):
-        self.delay, self.last, self.token = delay, 0.0, None
-        self.session = requests.Session()
-        self.session.headers.update(HEADERS)
+class Site(http.Fetcher):
+    """canon_db.http.Fetcher with PFL's session token: an expired token (HTTP 419) comes back as
+    a response, so post() can get a new one."""
 
-    def request(self, method: str, url: str, **kw) -> requests.Response | None:
-        for attempt in range(1, 5):
-            wait = self.delay - (time.monotonic() - self.last)
-            if wait > 0:
-                time.sleep(wait)
-            self.last = time.monotonic()
-            try:
-                r = self.session.request(method, url, timeout=30, **kw)
-                if r.status_code in (200, EXPIRED):
-                    return r
-                log.warning("HTTP %s on %s (attempt %d)", r.status_code, url, attempt)
-            except requests.RequestException as e:
-                log.warning("%s on %s (attempt %d)", type(e).__name__, url, attempt)
-            time.sleep(self.delay * 2 ** attempt)
-        return None
+    def __init__(self, delay: float):
+        super().__init__(delay)
+        self.token = None
+
+    def request(self, method: str, url: str, ok: tuple[int, ...] = (200, EXPIRED), **kw) -> requests.Response | None:
+        return super().request(method, url, ok, **kw)
 
     def post(self, url: str, page_tag: str, **kw) -> requests.Response | None:
         """POST with the session's token, getting a new one (from an event page) if it expired."""

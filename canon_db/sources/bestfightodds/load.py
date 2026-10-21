@@ -24,9 +24,9 @@ from collections import defaultdict
 from datetime import date, timedelta
 from pathlib import Path
 
-from canon_db.sources.bestfightodds.match import Matcher, norm
+from canon_db.http import Fetcher, save
+from canon_db.matching import Matcher, norm
 from canon_db.sources.bestfightodds.pages import parse_fighter_page
-from canon_db.sources.ufcstats.client import Fetcher, save
 
 NAME = "bestfightodds"
 BASE = "https://www.bestfightodds.com"

@@ -1,7 +1,10 @@
-"""Match BestFightOdds fights to canon.db fights.
+"""Match another source's bouts to canon.db fights, and tell whether two names are one person.
 
-Event first: only fights dated within a day of the BestFightOdds date are candidates (time
-zones shift dates), and the two fighter names only have to pick one bout among those.
+Matcher: event first: only fights dated within a day of the source's date are candidates
+(time zones shift dates), and the two fighter names only have to pick one bout among those.
+leftover() places a bout whose names didn't both match (ring names, married names) on the one
+unclaimed fight of its event that fits it best. Every source that attaches to our fights
+(PFL, Oktagon, Sofascore, BestFightOdds) and Sherdog's linking use these.
 """
 
 from __future__ import annotations
@@ -63,3 +66,25 @@ class Matcher:
         if len(scored) > 1 and scored[0][0] - scored[1][0] < margin:
             return None, "ambiguous"
         return scored[0][1], scored[0][2]
+
+
+def name_ok(name: str, names: list[str]) -> bool:
+    """Two spellings plausibly of one person: close overall, or sharing a surname-length word."""
+    words = {w for w in norm(name).split() if len(w) >= 3}
+    return any(sim(name, n) >= 0.6 or words & {w for w in norm(n).split() if len(w) >= 3}
+               for n in names)
+
+
+def leftover(who: list[dict], free: list[tuple]) -> tuple | None:
+    """(fight_id, {source's fighter id: fighter_id}) for a bout whose names didn't both match: the one
+    fight in `free` ([(fight_id, [(fighter_id, names)] x2)], the event's fights no bout took)
+    that has more of its fighters than any other."""
+    best = []
+    for fight_id, sides in free:
+        for (a, b) in (sides, sides[::-1]):
+            score = name_ok(who[0]["name"], a[1]) + name_ok(who[1]["name"], b[1])
+            if score:
+                best.append((score, fight_id, {who[0]["slug"]: a[0], who[1]["slug"]: b[0]}))
+    best.sort(key=lambda t: -t[0])
+    top = [t for t in best if t[0] == best[0][0]] if best else []
+    return (top[0][1], top[0][2]) if len({t[1] for t in top}) == 1 and len(top) == 1 else None

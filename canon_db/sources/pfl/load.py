@@ -27,31 +27,15 @@ from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
 
-from canon_db.sources.bestfightodds.match import Matcher
+from canon_db.matching import Matcher, leftover, name_ok
 from canon_db.sources.pfl.fetch import Site, fetch
 from canon_db.sources.pfl.pages import V1, V2, parse_event, parse_stats
-from canon_db.sources.sherdog.load import name_ok
 
 NAME = "pfl"
 ROUND_COLS = ["ctrl_sec", *V2]
 SMARTCAGE_COLS = list(V1)
 
 log = logging.getLogger(NAME)
-
-
-def leftover(who: list[dict], free: list[tuple]) -> tuple | None:
-    """(fight_id, {PFL id: fighter_id}) for a bout whose names didn't both match: the one
-    fight in `free` ([(fight_id, [(fighter_id, names)] x2)], the event's fights no bout took)
-    that has more of its fighters than any other."""
-    best = []
-    for fight_id, sides in free:
-        for (a, b) in (sides, sides[::-1]):
-            score = name_ok(who[0]["name"], a[1]) + name_ok(who[1]["name"], b[1])
-            if score:
-                best.append((score, fight_id, {who[0]["slug"]: a[0], who[1]["slug"]: b[0]}))
-    best.sort(key=lambda t: -t[0])
-    top = [t for t in best if t[0] == best[0][0]] if best else []
-    return (top[0][1], top[0][2]) if len({t[1] for t in top}) == 1 and len(top) == 1 else None
 
 
 def load(conn: sqlite3.Connection, raw: Path) -> Counter:

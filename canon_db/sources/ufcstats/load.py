@@ -25,7 +25,8 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from canon_db.sources.ufcstats import fields as F
-from canon_db.sources.ufcstats.client import BASE, EVENTS_LIST_URL, Fetcher, save
+from canon_db.http import save
+from canon_db.sources.ufcstats.client import BASE, EVENTS_LIST_URL, Fetcher
 from canon_db.sources.ufcstats.pages import (parse_event, parse_events_list, parse_fight,
                                              parse_fighter)
 

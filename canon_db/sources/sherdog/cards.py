@@ -27,11 +27,12 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import date, timedelta
 
+from canon_db.http import save
+from canon_db.matching import name_ok
 from canon_db.sources.sherdog.load import (BASE, NAME, PREFIX, Labels, Pages, State, drop_duplicates,
                                            drop_empty_events, drop_non_pro, fight_id, mark_bout_types, merge,
-                                           minted, move_event, name_ok, sherdog_promotion)
+                                           minted, move_event, sherdog_promotion)
 from canon_db.sources.sherdog.pages import bio, parse_card, parse_event, parse_event_sitemap
-from canon_db.sources.ufcstats.client import save
 
 BIO = ("nickname", "dob", "height_in", "weight_lbs", "nationality")
 

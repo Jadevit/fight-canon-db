@@ -31,11 +31,10 @@ from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
 
-from canon_db.sources.bestfightodds.match import Matcher
+from canon_db.http import Fetcher
+from canon_db.matching import Matcher, leftover
 from canon_db.sources.oktagon.fetch import fetch_cards, fetch_tournament, tournaments
 from canon_db.sources.oktagon.pages import COLS, card_fights, fighters, rounds
-from canon_db.sources.pfl.fetch import Site
-from canon_db.sources.pfl.load import leftover
 
 NAME = "oktagon"
 FIRST_YEAR = 2005
@@ -166,7 +165,7 @@ def add_arguments(p: argparse.ArgumentParser) -> None:
 
 def update(conn: sqlite3.Connection, args: argparse.Namespace, raw: Path) -> None:
     if not args.offline:
-        site = Site(args.delay)
+        site = Fetcher(args.delay)
         today = date.today()
         since = (today - timedelta(days=args.recent_days)).isoformat()
         years = list(range(FIRST_YEAR, today.year + 1)) if args.all else sorted({int(since[:4]), today.year})

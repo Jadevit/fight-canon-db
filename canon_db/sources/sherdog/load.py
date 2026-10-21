@@ -38,9 +38,9 @@ from collections import defaultdict
 from datetime import date, timedelta
 from pathlib import Path
 
-from canon_db.sources.bestfightodds.match import norm, sim
+from canon_db.http import Fetcher, save
+from canon_db.matching import name_ok, norm, sim
 from canon_db.sources.sherdog.pages import parse_event, parse_fighter, parse_sitemap
-from canon_db.sources.ufcstats.client import Fetcher, save
 from canon_db.sources.ufcstats.load import promotion
 
 NAME = "sherdog"
@@ -62,13 +62,6 @@ log = logging.getLogger(NAME)
 
 def minted(sherdog_id: str) -> str:
     return PREFIX + sherdog_id
-
-
-def name_ok(name: str, names: list[str]) -> bool:
-    """Two spellings plausibly of one person: close overall, or sharing a surname-length word."""
-    words = {w for w in norm(name).split() if len(w) >= 3}
-    return any(sim(name, n) >= 0.6 or words & {w for w in norm(n).split() if len(w) >= 3}
-               for n in names)
 
 
 def days_apart(a: str, b: str) -> int:
