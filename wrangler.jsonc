@@ -1,5 +1,5 @@
 // The website on Cloudflare Workers (static assets only, no script): fightcanon.com.
-// pages.yml builds _cf/ (site/ plus a config.json pointing at the database in R2, at
+// deploy.yml builds _cf/ (site/ plus a config.json pointing at the data in R2, at
 // db.fightcanon.com: Workers' static assets don't answer range requests) and runs `wrangler deploy`.
 {
   "name": "fightcanon",

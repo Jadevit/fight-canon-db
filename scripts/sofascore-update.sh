@@ -48,7 +48,7 @@ for try in 1 2 3; do
   gh release create "$tag" "$WORK/canon.db" "$WORK/summary.json" --title "Data through $last" \
     --notes "Sofascore update, run outside GitHub (Sofascore refuses its runners)."
   echo "$(date '+%F %T') published $tag"
-  gh workflow run pages.yml  # the site redeploys by itself only after the CI workflows
+  gh workflow run deploy.yml  # the site redeploys by itself only after the CI workflows
   exit 0
 done
 echo "$(date '+%F %T') gave up: releases kept changing" >&2

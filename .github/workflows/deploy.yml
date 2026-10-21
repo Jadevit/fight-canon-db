@@ -1,12 +1,15 @@
-# Publishes site/ plus the site's copy of the latest released database (scripts/site_db.py:
-# laid out for the site and split into chunks it reads in pieces) to GitHub Pages.
-# Runs when the site changes, after each database update, or by hand.
+# Deploys the website to fightcanon.com: the page (site/) as the fightcanon Worker's static
+# assets (wrangler.jsonc), and the latest release's data in R2 (bucket fightcanon-db, served
+# at db.fightcanon.com): the pages as JSON (scripts/site_json.py, under v1/) and the site's
+# copy of the database (scripts/site_db.py, in chunks, for the SQL page and filtered
+# leaderboards). Runs when the site changes, after each database update, or by hand.
 name: Deploy site
 
 on:
   push:
     branches: [main]
-    paths: ["site/**", "scripts/site_db.py", "scripts/site_json.py", ".github/workflows/pages.yml"]
+    paths: ["site/**", "scripts/site_db.py", "scripts/site_json.py", "wrangler.jsonc",
+            ".github/workflows/deploy.yml"]
   workflow_run:
     workflows: ["Update database", "Discover events"]
     types: [completed]
@@ -18,20 +21,22 @@ env:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
+  group: deploy
   cancel-in-progress: true
 
 jobs:
   deploy:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_ENDPOINT_URL: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+      AWS_DEFAULT_REGION: auto
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
     steps:
       - uses: actions/checkout@v4
         with:
@@ -41,9 +46,8 @@ jobs:
         with:
           python-version: "3.14"
 
-      # _db/: the site's database in chunks; _json/v1/: the pages as JSON (site_json.py), always
-      # read from R2. _site/: GitHub Pages, the database next to the page. _cf/: the fightcanon
-      # Worker (wrangler.jsonc), the page only; its config.json points at the database in R2.
+      # _db/: the database in chunks; _json/v1/: the pages as JSON; _cf/: the Worker's assets,
+      # whose config.json points at both in R2.
       - name: Build site
         env:
           GH_TOKEN: ${{ github.token }}
@@ -51,10 +55,7 @@ jobs:
           gh release download --pattern canon.db --dir data
           python scripts/site_db.py data/canon.db _db _site.db
           python scripts/site_json.py build _site.db _json
-          mkdir _site _cf
-          cp -r site/* _site/
-          cp -r _db _site/db
-          jq --arg a "$R2_URL/v1/" '.api = $a' _db/config.json > _site/db/config.json
+          mkdir _cf
           cp -r site/* _cf/
           mkdir _cf/db
           build=$(jq -r .cacheBust _db/config.json)
@@ -64,37 +65,20 @@ jobs:
           echo "BUILD=$build" >> "$GITHUB_ENV"
           echo "LIVE=$live" >> "$GITHUB_ENV"
 
-      # Cloudflare can't hold up the GitHub Pages deploy while it's new. Each build goes in its
-      # own folder of the bucket, so a page open during a deploy keeps reading the files it
-      # started with; afterwards, build folders other than the live one and the one before it
-      # are deleted (v1/, the JSON, stays).
+      # Each build of the database goes in its own folder, so a page open during a deploy keeps
+      # reading the files it started with.
       - name: Upload the database to R2
-        id: r2
-        continue-on-error: true
-        env: &r2
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          AWS_ENDPOINT_URL: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
-          AWS_DEFAULT_REGION: auto
-          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
-          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
         run: |
           aws s3 cp _db/ "s3://$R2_BUCKET/$BUILD/" --recursive --exclude config.json \
             --content-type application/octet-stream --cache-control "public, max-age=31536000, immutable"
 
       # Only the files that changed since the last upload (v1-manifest.json in the bucket).
       - name: Upload the JSON to R2
-        if: steps.r2.outcome == 'success'
-        continue-on-error: true
-        env: *r2
         run: |
           pip install boto3
           python scripts/site_json.py upload _json
 
-      - name: Deploy to Cloudflare
-        id: worker
-        if: steps.r2.outcome == 'success'
-        continue-on-error: true
+      - name: Deploy the Worker
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -102,20 +86,12 @@ jobs:
           wranglerVersion: "4.151.2"
           command: deploy
 
+      # Database builds other than the live one and the one before it (v1/ stays).
       - name: Remove old builds from R2
-        if: steps.worker.outcome == 'success'
         continue-on-error: true
-        env: *r2
         run: |
           aws s3 ls "s3://$R2_BUCKET/" | sed -nE 's#^ *PRE ([0-9a-f]{12})/$#\1#p' | while read -r old; do
             if [ "$old" != "$BUILD" ] && [ "$old" != "$LIVE" ]; then
               aws s3 rm "s3://$R2_BUCKET/$old/" --recursive --quiet
             fi
           done
-
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-      - id: deployment
-        uses: actions/deploy-pages@v4
