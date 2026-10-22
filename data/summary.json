@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-21T19:02:32+00:00",
+  "updated_at": "2026-10-22T15:44:52+00:00",
   "coverage": {
     "first_event_date": "1963-12-02",
     "last_event_date": "2026-10-19",
@@ -7,17 +7,17 @@
     "last_event_id": "sherdog:114593"
   },
   "rows": {
-    "promotions": 12359,
-    "promotion_aliases": 12328,
-    "fighters": 180306,
-    "fighter_aliases": 196105,
+    "promotions": 12362,
+    "promotion_aliases": 12331,
+    "fighters": 180311,
+    "fighter_aliases": 196110,
     "fighter_redirects": 83,
-    "events": 61454,
+    "events": 61457,
     "event_aliases": 2156,
-    "event_cards": 61448,
-    "event_pages": 75364,
-    "fights": 372384,
-    "fight_participants": 744768,
+    "event_cards": 61451,
+    "event_pages": 75448,
+    "fights": 372389,
+    "fight_participants": 744778,
     "round_stats": 71798,
     "smartcage_round_stats": 3548,
     "sofascore_round_stats": 18998,
