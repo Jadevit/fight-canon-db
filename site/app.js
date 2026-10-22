@@ -106,7 +106,16 @@ const BOUTS = `CREATE OR REPLACE VIEW bouts AS
   LEFT JOIN fight_participants b ON b.fight_id = x.fight_id AND b.corner = 1
   LEFT JOIN fighters fb ON fb.fighter_id = b.fighter_id`;
 // A query's rows as objects; DuckDB's 64-bit integers come back as BigInt, made Numbers here.
-const plain = (v) => (typeof v === "bigint" ? Number(v) : v);
+// A SUM of integers is a 128-bit integer (and some results decimals), which come back as
+// objects that are numbers only as text: they become Numbers too.
+function plain(v) {
+  if (typeof v === "bigint") return Number(v);
+  if (v && typeof v === "object" && !Array.isArray(v) && !(v instanceof Date)) {
+    const s = String(v);
+    if (/^-?\d+(\.\d+)?$/.test(s)) return Number(s);
+  }
+  return v;
+}
 async function q(sql, params = []) {
   const conn = await db();
   await views(conn, sql);
@@ -449,14 +458,14 @@ async function route() {
   const path = location.pathname;
   window.dispatchEvent(new Event("route"));
   const [name = "", id = ""] = path.split("/").filter(Boolean);
-  const views = { "": landing, fighters, fighter, events, event, fight, leaders, sql };
+  const views = { "": landing, fighters, fighter, events, event, fight, leaders, query, sql: query };
   const view = views[name] || landing;
   const mine = ++page;
   const show = (html) => { if (mine !== page) return false; app.innerHTML = html; return true; };
   document.body.classList.toggle("landing", view === landing);
   nav.classList.remove("open");
   menuBtn.setAttribute("aria-expanded", "false");
-  const section = { fighter: "fighters", event: "events", fight: "events" }[name] || name;
+  const section = { fighter: "fighters", event: "events", fight: "events", sql: "query" }[name] || name;
   nav.querySelectorAll("a").forEach((a) =>
     a.toggleAttribute("aria-current", a.getAttribute("href") === `/${section}`));
   if (view !== landing) app.innerHTML = loading();
@@ -487,7 +496,7 @@ async function landing(_, show) {
       </section>
       <section class="ctas">
         <a class="btn primary" href="/fighters">Browse the database</a>
-        <a class="btn" href="/sql">${ICON.terminal}Query it with SQL</a>
+        <a class="btn" href="/query">${ICON.terminal}Ask your own question</a>
       </section>
       <section class="section">
         <span class="label">What's inside</span>
@@ -1022,58 +1031,277 @@ async function leaders(_, show) {
   await render();
 }
 
+// --- the Query page ------------------------------------------------------------------
+// Ask a question, get the query from an AI assistant (the page writes the prompt: the rules
+// and tables from query.json, then the question), run it, and read the results as a table
+// with readable headers, formatted values and links; or write SQL directly.
+
+// Examples, as the questions they answer. Their columns are named the way the prompt asks
+// assistants to name them, with the ids the page turns into links.
 const EXAMPLES = {
-  "Latest events": "SELECT date, name, location, promotion FROM events ORDER BY date DESC LIMIT 20;",
-  "The most active fighter's fights": `SELECT date, event, method, a_name, a_res, b_name, b_res, fight_id
-FROM bouts
-WHERE (SELECT fighter_id FROM fight_participants GROUP BY ALL ORDER BY count(*) DESC LIMIT 1) IN (a_id, b_id)
-ORDER BY date;`,
-  "Most knockdowns in one fight": `SELECT f.name, b.event, b.date, SUM(r.knockdowns) AS kd, r.fight_id
-FROM round_stats r
-JOIN fighters f USING (fighter_id)
-JOIN bouts b USING (fight_id)
-GROUP BY ALL
-ORDER BY kd DESC LIMIT 20;`,
-  "Highest strike output per round": `SELECT b.event, b.date, f.name, COUNT(*) AS rounds,
-       round(SUM(r.sig_str_land) / COUNT(*), 1) AS sig_per_round, r.fight_id
+  "What were the latest events?": `SELECT date AS "Date", name AS "Event", promotion AS "Promotion", location AS "Location", event_id
+FROM events ORDER BY date DESC LIMIT 20;`,
+  "Who has the most fights in the database?": `SELECT f.name AS "Fighter", COUNT(*) AS "Fights",
+       count_if(p.result = 'W') AS "Wins", count_if(p.result = 'L') AS "Losses", p.fighter_id
+FROM fight_participants p JOIN fighters f USING (fighter_id)
+GROUP BY ALL ORDER BY "Fights" DESC LIMIT 25;`,
+  "Who lands the most significant strikes per round in the UFC?": `SELECT f.name AS "Fighter", COUNT(*) AS "Rounds",
+       round(SUM(r.sig_str_land) / COUNT(*), 1) AS "Sig. Strikes Per Round", r.fighter_id
 FROM round_stats r JOIN fighters f USING (fighter_id) JOIN bouts b USING (fight_id)
-WHERE r.source = 'ufcstats'
-GROUP BY ALL HAVING COUNT(*) >= 3
-ORDER BY sig_per_round DESC LIMIT 25;`,
-  "UFC finish rate by year": `SELECT substr(date, 1, 4) AS year, COUNT(*) AS fights,
-       round(100 * avg((method LIKE '%KO%' OR method LIKE '%Submission%')::INT), 1) AS finish_pct
+WHERE r.source = 'ufcstats' AND b.promotion = 'UFC'
+GROUP BY ALL HAVING COUNT(*) >= 30
+ORDER BY "Sig. Strikes Per Round" DESC LIMIT 25;`,
+  "Which fights had the most knockdowns?": `SELECT b.date AS "Date", b.event AS "Event", f.name AS "Fighter",
+       SUM(r.knockdowns) AS "Knockdowns", r.fighter_id, r.fight_id
+FROM round_stats r JOIN fighters f USING (fighter_id) JOIN bouts b USING (fight_id)
+GROUP BY ALL ORDER BY "Knockdowns" DESC LIMIT 20;`,
+  "How has the UFC's finish rate changed?": `SELECT substr(date, 1, 4) AS "Year", COUNT(*) AS "Fights",
+       round(100 * avg((method ILIKE '%KO%' OR method ILIKE '%Submission%')::INT), 1) AS "Finish %"
 FROM bouts WHERE promotion = 'UFC'
-GROUP BY ALL ORDER BY year;`,
-  "Where round stats come from": "SELECT source, COUNT(DISTINCT fight_id) AS fights, COUNT(*) AS fighter_rounds FROM round_stats GROUP BY ALL ORDER BY fights DESC;",
-  "Promotions with the most events": "SELECT promotion, COUNT(*) AS events FROM events GROUP BY ALL ORDER BY events DESC LIMIT 30;",
-  "How fights end": "SELECT method, COUNT(*) AS fights FROM fights GROUP BY ALL ORDER BY fights DESC;",
-  "Fights per division": "SELECT division, COUNT(*) AS fights FROM bouts GROUP BY ALL ORDER BY fights DESC;",
-  "All tables and columns": "SELECT table_name, column_name, data_type FROM information_schema.columns ORDER BY table_name, ordinal_position;",
+GROUP BY ALL ORDER BY "Year";`,
+  "How do fights end?": `SELECT method AS "Method", COUNT(*) AS "Fights" FROM fights GROUP BY ALL ORDER BY "Fights" DESC LIMIT 50;`,
+  "How many fights per division?": `SELECT division AS "Division", COUNT(*) AS "Fights" FROM bouts GROUP BY ALL ORDER BY "Fights" DESC;`,
+  "Which promotions have held the most events?": `SELECT promotion AS "Promotion", COUNT(*) AS "Events", MIN(date) AS "First Event", MAX(date) AS "Latest Event"
+FROM events GROUP BY ALL ORDER BY "Events" DESC LIMIT 30;`,
+  "Where do the round stats come from?": `SELECT source AS "Source", COUNT(DISTINCT fight_id) AS "Fights", COUNT(*) AS "Fighter Rounds"
+FROM round_stats GROUP BY ALL ORDER BY "Fights" DESC;`,
 };
 
-async function sql(_, show) {
+// Headers: our own column names get their label; others are Title Cased ("sig_per_round" ->
+// "Sig Per Round", "finish_pct" -> "Finish %"); a name that already has capitals or spaces
+// (AS "Control Time") is shown as written.
+const LABELS = {
+  fighter_id: "Fighter ID", event_id: "Event ID", fight_id: "Fight ID", a_name: "Fighter A", b_name: "Fighter B",
+  a_res: "Result A", b_res: "Result B", a_id: "Fighter A ID", b_id: "Fighter B ID", dob: "Date of Birth",
+  height_in: "Height", reach_in: "Reach", weight_lbs: "Weight (lbs)", end_round: "Round", end_time: "Time",
+  sig_str_land: "Sig. Strikes Landed", sig_str_att: "Sig. Strikes Attempted",
+  total_str_land: "Total Strikes Landed", total_str_att: "Total Strikes Attempted",
+  td_land: "Takedowns Landed", td_att: "Takedowns Attempted", sub_att: "Submission Attempts",
+  ctrl_sec: "Control Time", kd: "Knockdowns", n: "Fights", w: "Wins", l: "Losses", d: "Draws", nc: "No Contests",
+};
+const UPPER = new Set(["id", "ufc", "ko", "tko", "kd", "pfl", "mma", "td", "dob", "nc"]);
+function label(c) {
+  if (LABELS[c]) return LABELS[c];
+  if (/[A-Z ]/.test(c)) return c;
+  return c.split(/[_\s]+/).filter(Boolean).map((w) => (w === "pct" ? "%" : UPPER.has(w) ? w.toUpperCase()
+    : w[0].toUpperCase() + w.slice(1))).join(" ");
+}
+const colKey = (c) => c.toLowerCase().replace(/[^a-z0-9%]+/g, "_").replace(/^_|_$/g, "");
+
+// How a column's values are shown, from its name and values.
+function kindOf(c, values) {
+  const k = colKey(c), some = values.filter((v) => v != null);
+  const numeric = some.length > 0 && some.every((v) => typeof v === "number");
+  if (numeric && (/(^|_)(sec|secs|seconds)$/.test(k) || /(^|_)(ctrl|control)(_|$)/.test(k))) return "time";
+  if (numeric && k === "height_in") return "height";
+  if (numeric && k === "reach_in") return "inches";
+  if (some.length && some.every((v) => typeof v === "string" && /^\d{4}-\d\d-\d\d$/.test(v))) return "date";
+  if (numeric && /(pct|percent|%)/.test(k)) return "pct";
+  if (numeric && /(^|_)(acc|accuracy|rate|ratio)(_|$)/.test(k) && some.every((v) => v >= 0 && v <= 1)) return "share";
+  if (numeric && k === "year") return "year";
+  return numeric ? "num" : "text";
+}
+function shown(v, kind) {
+  if (v == null) return "—";
+  switch (kind) {
+    case "time": {
+      const s = Math.round(v);
+      return s >= 3600 ? `${Math.floor(s / 3600)}:${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}` : mmss(s);
+    }
+    case "height": return `${Math.floor(v / 12)}′${v % 12}″`;
+    case "inches": return `${v}″`;
+    case "date": return longDate(v);
+    case "pct": return `${Number(v).toLocaleString("en-US", { maximumFractionDigits: 1 })}%`;
+    case "share": return `${(v * 100).toLocaleString("en-US", { maximumFractionDigits: 1 })}%`;
+    case "year": return String(v);
+    case "num": return Number(v).toLocaleString("en-US", { maximumFractionDigits: 2 });
+    default: return typeof v === "object" ? JSON.stringify(v) : String(v);
+  }
+}
+
+// Ids become links: on the name beside them (fighter_id + "Fighter"), or a link of their own.
+// A fight gets a "Fight" column at the end.
+const ID_NAMES = { fighter_id: ["fighter", "name", "fighter_name"], a_id: ["a_name", "fighter_a"],
+                   b_id: ["b_name", "fighter_b"], event_id: ["event", "event_name", "name"] };
+const HREF = { fighter_id: "/fighter/", a_id: "/fighter/", b_id: "/fighter/", event_id: "/event/", fight_id: "/fight/" };
+function layout(columns, rows) {
+  const keys = columns.map(colKey), cols = columns.map((c, i) => ({ name: c, i, label: label(c), hidden: false, link: null }));
+  for (const [id, names] of Object.entries(ID_NAMES)) {
+    const at = keys.indexOf(id);
+    if (at < 0) continue;
+    const partner = names.map((n) => keys.indexOf(n)).find((j) => j >= 0 && !cols[j].link);
+    if (partner !== undefined) { cols[partner].link = { href: HREF[id], from: at }; cols[at].hidden = true; }
+    else cols[at].link = { href: HREF[id], from: at };
+  }
+  const fight = keys.indexOf("fight_id");
+  if (fight >= 0) {
+    cols[fight].hidden = true;
+    cols.push({ name: "", i: fight, label: "Fight", hidden: false, link: { href: "/fight/", from: fight, text: "View →" } });
+  }
+  for (const c of cols) c.kind = c.link?.text ? "text" : kindOf(c.name, rows.map((r) => r[c.i]));
+  return cols.filter((c) => !c.hidden);
+}
+const cellText = (c, r) => (c.link?.text ? c.link.text : shown(r[c.i], c.kind));
+const RIGHT = new Set(["num", "pct", "share", "time"]);
+
+function resultTable(cols, rows) {
+  return `<div class="grid-out"><table><thead><tr>${cols.map((c, j) =>
+      `<th data-j="${j}" class="${RIGHT.has(c.kind) ? "r" : ""}" title="Sort">${esc(c.label)}</th>`).join("")}</tr></thead>
+    <tbody>${rows.slice(0, 1000).map((r) => `<tr>${cols.map((c) => {
+      const v = r[c.i], cls = [RIGHT.has(c.kind) ? "r" : "", v == null ? "null" : ""].join(" ").trim();
+      const text = esc(cellText(c, r));
+      const id = c.link && r[c.link.from];
+      return `<td class="${cls}">${id ? `<a href="${c.link.href}${esc(id)}">${text}</a>` : text}</td>`;
+    }).join("")}</tr>`).join("")}</tbody></table></div>`;
+}
+
+// The table as Markdown (Reddit, Discord, GitHub), CSV, or tab-separated text (pastes into a
+// spreadsheet). Markdown keeps the links, to fightcanon.com.
+function asMarkdown(cols, rows) {
+  const cell = (s) => String(s).replaceAll("|", "\\|").replace(/\s+/g, " ");
+  const line = (cells) => `| ${cells.join(" | ")} |`;
+  const body = rows.map((r) => line(cols.map((c) => {
+    const id = c.link && r[c.link.from], text = cell(cellText(c, r));
+    return id ? `[${text}](${location.origin}${c.link.href}${encodeURIComponent(id)})` : text;
+  })));
+  return [line(cols.map((c) => cell(c.label))), line(cols.map((c) => (RIGHT.has(c.kind) ? "--:" : "---"))), ...body,
+          "", `*Data: [Fight Canon](${location.origin})*`].join("\n");
+}
+// For a spreadsheet: numbers and dates as they are (1234, 2024-11-16), empty for missing, and
+// a fight's link instead of "View".
+function rawText(c, r) {
+  const v = r[c.i];
+  if (c.link?.text) return `${location.origin}${c.link.href}${encodeURIComponent(v)}`;
+  if (v == null) return "";
+  return ["num", "pct", "share", "year", "date"].includes(c.kind) ? String(v) : shown(v, c.kind);
+}
+function asDelimited(cols, rows, sep) {
+  const cell = (s) => (sep === "," && /[",\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s.replace(/[\t\n]/g, " "));
+  return [cols.map((c) => cell(c.label)), ...rows.map((r) => cols.map((c) => cell(rawText(c, r))))]
+    .map((cells) => cells.join(sep)).join("\n");
+}
+async function copyText(text, btn, done = "Copied") {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const t = document.createElement("textarea");
+    t.value = text;
+    document.body.appendChild(t);
+    t.select();
+    document.execCommand("copy");
+    t.remove();
+  }
+  const was = btn.textContent;
+  btn.textContent = done;
+  setTimeout(() => (btn.textContent = was), 2000);
+}
+
+// What an assistant needs: the rules, the tables, and the question.
+function prompt(help, question) {
+  const tables = help.tables.map((t) => `\n${t.name}${t.about ? `: ${t.about}` : ""}\n` + t.columns.map(([n, type, about]) =>
+    `  ${n}${type ? ` ${type}` : ""}${about ? ` -- ${about}` : ""}`).join("\n")).join("\n");
+  return `${help.rules}\nTables:\n${tables}\n\nQuestion: ${question || "(write your question here)"}\n`;
+}
+const ASSISTANTS = [["ChatGPT", "https://chatgpt.com/", "?q="], ["Claude", "https://claude.ai/new", "?q="]];
+
+async function query(_, show) {
+  const p = params();
   const first = Object.values(EXAMPLES)[0];
   if (!show(`
-    <div class="page-head"><h1>SQL</h1>
-      <p class="muted">Query the whole database directly, with <a href="https://duckdb.org/docs/sql/introduction">DuckDB's SQL</a>.
-        It runs in your browser, so you can't break anything, and it reads only the columns and parts of
-        the database a query needs, so even queries over every fight take a moment. For heavy work,
-        <a href="${RELEASES}">download the database</a> (SQLite).</p>
-      <p class="note" style="margin:0">The tables are the database's own. <code>bouts</code> is each fight with its
-        event, both fighters and its <code>division</code>; <code>division(weight_class)</code> names the
-        division of any bout title. Columns named <code>fighter_id</code>, <code>event_id</code> or
-        <code>fight_id</code> become links. The query engine loads the first time you run something.</p>
+    <div class="page-head"><h1>Query</h1>
+      <p class="muted">Ask the database anything: records, streaks, stats, trends. You don't need to know SQL:
+        an AI assistant writes the query from your question, and this page runs it. It runs in your browser,
+        so you can't break anything.</p>
     </div>
-    <div class="chips scroll-x" id="ex" style="margin-bottom:12px">${Object.keys(EXAMPLES).map((k) =>
-      `<button class="chip" type="button">${esc(k)}</button>`).join("")}</div>
-    <textarea id="sqltext" class="editor" spellcheck="false" aria-label="SQL">${esc(params().get("q") || first)}</textarea>
+    <section class="card ask">
+      <ol class="steps">
+        <li><b>Ask your question</b>
+          <textarea id="question" rows="2" placeholder="e.g. Which UFC fighters have the most knockouts since 2015?">${esc(p.get("ask") || "")}</textarea></li>
+        <li><b>Get the query from an AI assistant</b>
+          <span class="muted">The prompt tells it how this database works, with your question at the end.</span>
+          <div class="run-row"><button class="btn primary" id="copy-prompt" type="button">Copy prompt</button>
+            ${ASSISTANTS.map(([name]) => `<button class="btn" type="button" data-ai="${name}">Open ${name}</button>`).join("")}</div>
+          <span class="note" id="ask-status"></span></li>
+        <li><b>Paste the query it writes below, and run it</b></li>
+      </ol>
+    </section>
+    <details class="tables-help"><summary>Tables and columns</summary><div id="tables">${loading()}</div></details>
+    <div class="section"><span class="label">Or start from an example</span>
+      <div class="chips scroll-x" id="ex" style="margin-top:8px">${Object.keys(EXAMPLES).map((k) =>
+        `<button class="chip" type="button">${esc(k)}</button>`).join("")}</div></div>
+    <textarea id="sqltext" class="editor" spellcheck="false" aria-label="SQL">${esc(p.get("q") || first)}</textarea>
     <div class="run-row"><button class="btn primary" id="run">Run</button><span class="note" style="margin:0">Ctrl+Enter</span>
       <span class="note" id="status" style="margin:0"></span></div>
-    <div id="out"></div>`)) return;
-  const ta = document.getElementById("sqltext");
+    <div id="out"></div>
+    <p class="note">For your own analysis, the whole database is a <a href="${RELEASES}">free download</a> (SQLite).</p>`)) return;
+  const ta = document.getElementById("sqltext"), qa = document.getElementById("question");
+  const help = api("query.json");
+  const keep = () => setParams(new URLSearchParams({ ...(qa.value.trim() && { ask: qa.value.trim() }), q: ta.value }));
+  qa.oninput = debounce(keep, 400);
+
+  // Tables and columns: click a name to put it in the query.
+  help.then((h) => {
+    document.getElementById("tables").innerHTML = (h?.tables || []).map((t) => `
+      <div class="table-help"><button class="tname" type="button" data-ins="${esc(t.name)}">${esc(t.name)}</button>
+        <p class="note">${esc(t.about)}</p>
+        <ul>${t.columns.map(([n, type, about]) => `<li><button type="button" data-ins="${esc(n)}">${esc(n)}</button>
+          <span class="faint">${esc(type)}</span>${about ? ` <span class="muted">${esc(about)}</span>` : ""}</li>`).join("")}</ul></div>`).join("");
+    document.querySelectorAll("#tables [data-ins]").forEach((b) => (b.onclick = () => {
+      const at = ta.selectionStart ?? ta.value.length;
+      ta.value = ta.value.slice(0, at) + b.dataset.ins + ta.value.slice(ta.selectionEnd ?? at);
+      ta.focus();
+      ta.selectionStart = ta.selectionEnd = at + b.dataset.ins.length;
+    }));
+  }).catch(() => {});
+
+  const askStatus = document.getElementById("ask-status");
+  document.getElementById("copy-prompt").onclick = async (e) => {
+    await copyText(prompt(await help, qa.value.trim()), e.target, "Prompt copied");
+    askStatus.textContent = "Paste it into your AI assistant, then paste the query it writes below.";
+  };
+  document.querySelectorAll("[data-ai]").forEach((b) => (b.onclick = async () => {
+    const [name, url, q] = ASSISTANTS.find(([n]) => n === b.dataset.ai);
+    const text = prompt(await help, qa.value.trim());
+    await copyText(text, b, "Prompt copied");
+    // A long prompt doesn't fit in a link: it's on the clipboard to paste instead.
+    const link = encodeURIComponent(text).length < 7000 ? url + q + encodeURIComponent(text) : url;
+    window.open(link, "_blank", "noopener");
+    askStatus.textContent = link === url ? `Prompt copied: paste it into ${name} (Ctrl+V), then paste the query it writes below.`
+      : `Then paste the query ${name} writes below.`;
+  }));
+
+  let current = null;  // the last result: {cols, rows, sorted, dir}, rows sorted as shown
+  const out = document.getElementById("out"), status = document.getElementById("status");
+  const draw = () => {
+    const { cols, rows } = current;
+    out.innerHTML = `<div class="run-row result-actions">
+        <button class="btn small" type="button" id="copy-md">Copy as Markdown</button>
+        <button class="btn small" type="button" id="copy-tsv">Copy table</button>
+        <button class="btn small" type="button" id="csv">Download CSV</button></div>` + resultTable(cols, rows);
+    out.querySelectorAll("th[data-j]").forEach((th) => (th.onclick = () => {
+      const c = cols[th.dataset.j];
+      const dir = current.sorted === th.dataset.j ? -current.dir : (RIGHT.has(c.kind) ? -1 : 1);
+      rows.sort((a, b) => {
+        const x = a[c.i], y = b[c.i];
+        if (x == null) return 1;
+        if (y == null) return -1;
+        return (x < y ? -1 : x > y ? 1 : 0) * dir;
+      });
+      Object.assign(current, { sorted: th.dataset.j, dir });
+      draw();
+    }));
+    document.getElementById("copy-md").onclick = (e) => copyText(asMarkdown(cols, rows), e.target);
+    document.getElementById("copy-tsv").onclick = (e) => copyText(asDelimited(cols, rows, "\t"), e.target);
+    document.getElementById("csv").onclick = () => {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([asDelimited(cols, rows, ",")], { type: "text/csv" }));
+      a.download = "fight-canon.csv";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    };
+  };
   const run = async () => {
-    const out = document.getElementById("out"), status = document.getElementById("status");
-    setParams(new URLSearchParams({ q: ta.value }));
+    keep();
     out.innerHTML = "";
     status.textContent = engine ? "Running…" : "Loading the query engine…";
     try {
@@ -1084,17 +1312,19 @@ async function sql(_, show) {
       const res = await conn.query(ta.value);
       const took = `${((performance.now() - t) / 1000).toFixed(2)} s`;
       const columns = res.schema.fields.map((f) => f.name);
-      const values = res.toArray().map((r) => columns.map((c) => plain(r[c])));
+      const rows = res.toArray().map((r) => columns.map((c) => plain(r[c])));
       if (!columns.length) { status.textContent = `Done in ${took}.`; return; }
-      const cell = (c, v) => v == null ? `<td class="null">NULL</td>`
-        : `<td>${c === "fighter_id" ? fighterLink(v, v) : c === "event_id" ? eventLink(v, v)
-          : c === "fight_id" ? `<a href="/fight/${esc(v)}">${esc(v)}</a>` : esc(typeof v === "object" ? JSON.stringify(v) : v)}</td>`;
-      status.textContent = `${plural(values.length, "row")}${values.length > 1000 ? " (showing 1,000)" : ""} · ${took}`;
-      out.innerHTML = `<div class="grid-out"><table><thead><tr>${columns.map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead>
-        <tbody>${values.slice(0, 1000).map((row) => `<tr>${row.map((v, i) => cell(columns[i], v)).join("")}</tr>`).join("")}</tbody></table></div>`;
+      status.textContent = `${plural(rows.length, "row")}${rows.length > 1000 ? " (showing 1,000; copies and downloads have them all)" : ""} · ${took}`;
+      current = { cols: layout(columns, rows), rows };
+      draw();
     } catch (e) {
       status.textContent = "";
-      out.innerHTML = `<p class="error" style="margin-top:12px">${esc(e.message)}</p>`;
+      out.innerHTML = `<div class="error" style="margin-top:12px"><p>${esc(e.message)}</p>
+        <p class="note">Asking an AI assistant? Copy this and paste it back to it: it has your question, the query and the error.</p>
+        <button class="btn small" type="button" id="copy-fix">Copy for your assistant</button></div>`;
+      document.getElementById("copy-fix").onclick = (ev) => copyText(
+        `${qa.value.trim() ? `My question: ${qa.value.trim()}\n\n` : ""}This query failed in DuckDB:\n\n${ta.value}\n\n` +
+        `Error: ${e.message}\n\nPlease fix the query. Reply with only the corrected query in one code block.`, ev.target);
     }
   };
   document.getElementById("run").onclick = run;

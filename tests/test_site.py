@@ -98,6 +98,12 @@ def test_site_json(tmp_path, monkeypatch):
     assert ufc["split"] and [r["event_id"] for r in rows(ufc)] == ["e2"]
 
     assert read("l/results/wins.json")["0"][0][:3] == ["a" * 16, "José Aldo", 2]
+    # The Query page's help: the rules for an assistant, and the tables with schema.sql's comments.
+    help_ = read("query.json")
+    assert "DuckDB" in help_["rules"] and "Lightweight" in help_["rules"]
+    tables = {t["name"]: t for t in help_["tables"]}
+    assert "bouts" in tables and "event_pages" not in tables
+    assert dict((c[0], c[2]) for c in tables["fights"]["columns"])["end_time"] == "m:ss"
     m = read("meta.json")
     assert m["stats"]["events"] == 2 and m["boards"]["results"]["stats"]["wins"]["label"] == "Wins"
     assert m["sums"]["round_stats"]["sl"] == "sig_str_land" and "kd" in m["stats_cols"]

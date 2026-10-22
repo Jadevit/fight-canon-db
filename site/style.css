@@ -283,6 +283,31 @@ a.card:hover { text-decoration: none; background: color-mix(in srgb, var(--surfa
 .grid-out th { position: sticky; top: 0; background: var(--surface); font-weight: 500; color: var(--text-muted); white-space: nowrap; }
 .grid-out td { font-variant-numeric: tabular-nums; }
 .grid-out td.null { color: var(--text-faint); }
+.grid-out th { cursor: pointer; user-select: none; }
+.grid-out th:hover { color: var(--text); }
+.grid-out th.r, .grid-out td.r { text-align: right; }
+.grid-out td a { color: var(--gold); }
+.btn.small { height: 34px; padding: 0 14px; font-size: 13px; }
+.result-actions { margin-top: 14px; }
+.result-actions + .grid-out { margin-top: 10px; }
+
+/* The Query page: question, prompt, paste. */
+.ask { padding: 18px; margin-bottom: 16px; }
+.steps { margin: 0; padding-left: 22px; display: grid; gap: 16px; }
+.steps li::marker { color: var(--gold); font: 700 16px var(--display); }
+.steps b { display: block; font-weight: 500; margin-bottom: 6px; }
+.steps .muted { display: block; font-size: 13px; margin-bottom: 8px; }
+.steps textarea { width: 100%; background: var(--bg); border: 1px solid var(--border-strong); border-radius: 8px;
+  padding: 10px 12px; resize: vertical; }
+.steps textarea:focus { border-color: var(--gold); outline: none; }
+.steps .run-row { margin-top: 0; }
+.tables-help { border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 18px; }
+.tables-help > summary { cursor: pointer; padding: 12px 14px; font-weight: 500; }
+.tables-help #tables { padding: 0 14px 14px; display: grid; gap: 14px; max-height: 60vh; overflow: auto; }
+.table-help ul { list-style: none; margin: 6px 0 0; padding: 0; font-size: 13px; display: grid; gap: 3px; }
+.table-help button { background: none; border: 0; padding: 0; color: var(--gold); font: 13px var(--mono); cursor: pointer; }
+.table-help .tname { font-size: 14px; font-weight: 600; }
+.table-help .note { margin-top: 2px; }
 code { font: 13px var(--mono); background: var(--surface); padding: 1px 5px; border-radius: 4px; }
 
 /* --- footer ---------------------------------------------------------------------- */
