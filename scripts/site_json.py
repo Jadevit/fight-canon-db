@@ -6,6 +6,7 @@ public API too, under /v1/.
 
     python scripts/site_json.py build [canon.db] [out dir]   # writes <out>/v1/; defaults: data/canon.db site/db
     python scripts/site_json.py upload <out dir>             # to R2: only what changed
+    python scripts/site_json.py purge <out dir>              # then clear those from Cloudflare's cache
 
 The database is read into DuckDB (in memory), where the lists the pages show are built as
 `site_` tables: each fight with its event and both fighters, events with their fight counts,
@@ -16,7 +17,9 @@ more than SEARCH_CAP matches gets a file of its top SEARCH_TOP (most fights; new
 and the top SEARCH_EXACT of those whose word is the prefix itself (a common word, such as a
 country, would otherwise bring tens of thousands), and a file for each prefix a letter longer.
 Upload compares each file's hash with the manifest of the last upload (v1-manifest.json in
-the bucket) and sends only the changed ones.
+the bucket) and sends only the changed ones. Browsers keep a file 5 minutes and Cloudflare a
+day, so visits don't read R2; purge clears the files the upload changed (or deleted) from
+Cloudflare's cache, so an update still shows within minutes.
 """
 
 from __future__ import annotations
@@ -36,7 +39,11 @@ VERSION = "v1"
 SEARCH_CAP = 800
 SEARCH_TOP = 100
 SEARCH_EXACT = 300
-CACHE = "public, max-age=300"  # files keep their names, so a daily update shows up within minutes
+# Files keep their names: browsers check again after 5 minutes, Cloudflare after a day (purge
+# clears changed files from it sooner), so a visit reads R2 at most once a day per data center.
+CACHE = "public, max-age=300, s-maxage=86400"
+PURGE_BATCH = 30  # URLs per purge request (the free plan's limit)
+PURGE_ALL = 3000  # more changed files than this: clear the whole cache in one request instead
 
 # The divisions a bout title can name, the first that matches wins. Keep in step with
 # division() in site/app.js (made from this list, in meta.json).
@@ -568,7 +575,36 @@ def upload(out: Path, workers: int = 32) -> None:
     for i in range(0, len(gone), 1000):
         s3.delete_objects(Bucket=bucket, Delete={"Objects": [{"Key": k} for k in gone[i:i + 1000]], "Quiet": True})
     s3.put_object(Bucket=bucket, Key=manifest, Body=json.dumps(hashes).encode(), ContentType="application/json")
+    (out / "purge.txt").write_text("\n".join(changed + gone))
     print(f"{len(files)} files: {len(changed)} uploaded, {len(gone)} deleted")
+
+
+def purge(out: Path) -> None:
+    """Clear the files the last upload changed or deleted (<out>/purge.txt) from Cloudflare's
+    cache (R2_URL's zone: CLOUDFLARE_ZONE_ID, and CLOUDFLARE_API_TOKEN with Cache Purge)."""
+    import time
+    import urllib.error
+    import urllib.request
+    keys = (out / "purge.txt").read_text().split()
+    if not keys:
+        return
+    base, zone, token = os.environ["R2_URL"], os.environ["CLOUDFLARE_ZONE_ID"], os.environ["CLOUDFLARE_API_TOKEN"]
+    urls = [f"{base}/{k}" for k in keys]
+    batches = ([{"purge_everything": True}] if len(urls) > PURGE_ALL
+               else [{"files": urls[i:i + PURGE_BATCH]} for i in range(0, len(urls), PURGE_BATCH)])
+    for body in batches:
+        for attempt in range(5):
+            req = urllib.request.Request(f"https://api.cloudflare.com/client/v4/zones/{zone}/purge_cache",
+                                         data=json.dumps(body).encode(), method="POST",
+                                         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
+            try:
+                with urllib.request.urlopen(req, timeout=30):
+                    break
+            except urllib.error.HTTPError as e:
+                if e.code != 429 or attempt == 4:  # too many requests: wait, then again
+                    raise SystemExit(f"purge: HTTP {e.code}: {e.read()[:300].decode(errors='replace')}")
+                time.sleep(10)
+    print("cleared Cloudflare's cache" if len(urls) > PURGE_ALL else f"cleared {len(urls)} files from Cloudflare's cache")
 
 
 if __name__ == "__main__":
@@ -578,5 +614,7 @@ if __name__ == "__main__":
         print(f"{w.n} files, {w.bytes / 1e6:.0f} MB")
     elif cmd == "upload":
         upload(Path(rest[0]))
+    elif cmd == "purge":
+        purge(Path(rest[0]))
     else:
         sys.exit(__doc__)

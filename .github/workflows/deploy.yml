@@ -85,6 +85,13 @@ jobs:
           wranglerVersion: "4.151.2"
           command: deploy
 
+      # Cloudflare keeps the JSON a day: clear the files that changed, so updates show now.
+      - name: Clear changed files from Cloudflare's cache
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+        run: python scripts/site_json.py purge _json
+
       # Database builds other than the live one and the one before it (v1/ stays).
       - name: Remove old builds from R2
         continue-on-error: true
