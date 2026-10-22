@@ -4,7 +4,7 @@
 // DuckDB-WASM over the database as Parquet (scripts/export_parquet.py), reading only the
 // columns and parts of the files a query needs; it loads the first time it's needed.
 // Views are chosen by the path: / (landing), /fighters, /fighter/<id>, /events, /event/<id>,
-// /fight/<id>, /leaders, /sql (the server answers every path with this page). How it looks is
+// /fight/<id>, /leaders, /query (the server answers every path with this page). How it looks is
 // in DESIGN.md.
 
 const DUCKDB = "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.29.0/+esm";
@@ -237,19 +237,24 @@ function searchWords(term) {
   return { words, first: words[0] };
 }
 
+// Whether every word of a term starts a different word of a name ("jon jones" isn't
+// "Edwynn Jones", though "jon" starts "jones").
+function wordsMatch(terms, words, used = new Set()) {
+  if (!terms.length) return true;
+  const [t, ...rest] = terms;
+  return words.some((w, i) => !used.has(i) && w.startsWith(t) && wordsMatch(rest, words, new Set(used).add(i)));
+}
+
 // Search a split index (sf/ fighters, se/ events): read the file of the longest word's first
 // two letters, a letter deeper while that file is split, and keep the rows in which every
-// word of the term starts a word. Rows come in rank order (most fights; newest).
+// word of the term starts a different word. Rows come in rank order (most fights; newest).
 async function searchIndex(folder, s) {
   let p = s.first.slice(0, 2), file = await api(`${folder}/${hex(p)}.json`);
   while (file?.split && p.length < s.first.length) {
     p = s.first.slice(0, p.length + 1);
     file = await api(`${folder}/${hex(p)}.json`);
   }
-  return objs(file).filter((r) => {
-    const ws = r.words.split(" ");
-    return s.words.every((t) => ws.some((w) => w.startsWith(t)));
-  });
+  return objs(file).filter((r) => wordsMatch(s.words, r.words.split(" ")));
 }
 
 // Seconds actually fought, from "3 Rnd (5-5-5)" + end round + end time.
@@ -312,19 +317,45 @@ const eventRow = (e) => `
   </a>`;
 
 // --- comparison bars -----------------------------------------------------------------
-// Mirrored bars: the left side (the fighter whose page it is, or the winner) in gold, growing
-// left from the middle; the other side in slate, growing right. Rows where neither side was
-// recorded aren't drawn.
+// Mirrored bars, a row per stat: the left fighter's grows left from the middle, the other's
+// right. Color marks who won the stat, not the fight: the side that landed more is gold, the
+// other pewter (both pewter on a tie), and what was attempted but missed is grey, after the
+// landed part. A row is scaled to the larger number of attempts (or of the value, for stats
+// with none). A recorded 0 keeps its row, though with 0 on both sides (and 0 attempts) there
+// are no bars; a stat not recorded for either side has no row.
 
-// `text`, if given, is what each end shows instead of fmt(value) (e.g. "12 /30").
-function mirrorRow(label, a, b, max, fmt = num, text = null) {
-  if (a == null && b == null) return "";
-  const w = (v) => (v == null || !max ? 0 : (100 * Math.max(0, v)) / max);
-  const side = (v, cls) => `<span class="${cls}${v ? "" : " zero"}" style="width:${w(v).toFixed(1)}%"></span>`;
-  const end = (v, i) => (text ? text[i] : v == null ? "—" : fmt(v));
-  return `<div class="cap">${label}</div>
-    <div class="v l">${end(a, 0)}</div><div class="track l">${side(a, "fill-me")}</div>
-    <div class="track">${side(b, "fill-them")}</div><div class="v r">${end(b, 1)}</div>`;
+// `a`, `b`: [landed (or the count), attempted (null if none)]. `text`, if given, is what each
+// end shows instead of fmt(value) (e.g. "12 /30"). `key` names the row's bars, so a redraw
+// can move them (fight page).
+function mirrorRow(label, a, b, fmt = num, text = null, key = label) {
+  if (a[0] == null || b[0] == null) return "";
+  const len = ([v, att]) => Math.max(0, att ?? v);  // how long a side's bar is
+  const max = Math.max(len(a), len(b));
+  const won = a[0] === b[0] ? -1 : a[0] > b[0] ? 0 : 1;
+  const side = ([v, att], i) => {
+    const n = len([v, att]);
+    const bar = max ? (100 * n) / max : 0;  // both sides at 0: no bars
+    const hit = n ? (100 * Math.max(0, v)) / n : 0;
+    return `<div class="track${i ? "" : " l"}" data-k="${esc(key)}:${i}"><span class="extent${n ? " some" : ""}" style="width:${bar.toFixed(1)}%">` +
+      `<span class="hit${won === i ? " win" : ""}${v ? " some" : ""}" style="width:${hit.toFixed(1)}%"></span></span></div>`;
+  };
+  const end = (v, i) => `<div class="v ${i ? "r" : "l"}${won < 0 ? "" : won === i ? " win" : " lose"}">${
+    text ? text[i] : fmt(v)}</div>`;
+  return `<div class="cap">${label}</div>${end(a[0], 0)}${side(a, 0)}${side(b, 1)}${end(b[0], 1)}`;
+}
+// Redraw rows of bars, moving those that were there before from their old lengths.
+function redraw(el, html) {
+  const was = new Map([...el.querySelectorAll("[data-k]")].map((t) =>
+    [t.dataset.k, [...t.querySelectorAll("span")].map((s) => s.style.width)]));
+  el.innerHTML = html;
+  const moves = [];
+  el.querySelectorAll("[data-k]").forEach((t) => {
+    const old = was.get(t.dataset.k);
+    if (old) t.querySelectorAll("span").forEach((s, i) => { moves.push([s, s.style.width]); s.style.width = old[i]; });
+  });
+  if (!moves.length) return;
+  void el.offsetWidth;  // lay out the old lengths, so the change to the new ones is animated
+  moves.forEach(([s, w]) => (s.style.width = w));
 }
 const landed = (l, a) => (l == null ? (a == null ? "—" : `${a} thr.`) : `${l}${a != null ? ` <small>/${a}</small>` : ""}`);
 
@@ -349,17 +380,16 @@ async function glance(fid, eid, left, names) {
   const key = st.cage ? "total_str_land" : "sig_str_land";
   const per = (k) => rounds.map((n) => [get(left, n)[k], get(right, n)[k]]);
   const strikes = per(key), ctrl = per("ctrl_sec");
-  const maxOf = (pairs) => Math.max(1, ...pairs.flat().filter((v) => v != null));
-  const ms = maxOf(strikes), mc = maxOf(ctrl);
   const kd = [sum(left, "knockdowns"), sum(right, "knockdowns")], td = [sum(left, "td_land"), sum(right, "td_land")];
+  const row = (label, [a, b], fmt) => mirrorRow(label, [a, null], [b, null], fmt);
   return `<div class="glance">
     <div class="glance-head"><span class="label">At a glance</span>${badge(SOURCE_NAMES[st.source] || st.source)}</div>
     <div class="who"><span class="gold">${esc(names[left] || "")}</span><span class="muted">${esc(names[right] || "")}</span></div>
     <div class="mirror">
-      ${strikes.map(([a, b], i) => mirrorRow(`${st.cage ? "Strikes" : "Sig. strikes"}, round ${rounds[i]}`, a, b, ms)).join("")}
-      ${st.cage ? "" : ctrl.map(([a, b], i) => mirrorRow(`Control, round ${rounds[i]}`, a, b, mc, mmss)).join("")}
-      ${mirrorRow("Knockdowns", kd[0], kd[1], Math.max(1, ...kd.filter((v) => v != null)))}
-      ${mirrorRow("Takedowns", td[0], td[1], Math.max(1, ...td.filter((v) => v != null)))}
+      ${strikes.map((p, i) => row(`${st.cage ? "Strikes" : "Sig. Strikes"}, Round ${rounds[i]}`, p)).join("")}
+      ${st.cage ? "" : ctrl.map((p, i) => row(`Control, Round ${rounds[i]}`, p, mmss)).join("")}
+      ${row("Knockdowns", kd)}
+      ${row("Takedowns", td)}
     </div>
     <a class="go" href="${fightLink(fid, eid)}">Full fight page →</a>
   </div>`;
@@ -614,7 +644,7 @@ async function fighter(id, show) {
         <div class="tile"><b class="num">${kinds.ko}</b><span>KO/TKO</span></div>
         <div class="tile"><b class="num">${kinds.sub}</b><span>Submission</span></div>
         <div class="tile"><b class="num">${kinds.dec}</b><span>Decision</span></div>
-        <div class="tile gold"><b class="num">${Math.round((100 * (kinds.ko + kinds.sub)) / winsHere)}%</b><span>Finish rate</span></div>
+        <div class="tile gold"><b class="num">${Math.round((100 * (kinds.ko + kinds.sub)) / winsHere)}%</b><span>Finish Rate</span></div>
       </div>
       ${winsHere !== r.w ? `<p class="note">From the ${plural(winsHere, "win")} in the database.</p>` : ""}
     </section>` : "";
@@ -638,13 +668,13 @@ async function fighter(id, show) {
       if (row.opp_sa != null) { os += row.opp_sl || 0; oa += row.opp_sa; }
     }
     const tiles = [
-      secs && ["Sig. strikes / min", (slTimed / (secs / 60)).toFixed(2)],
-      seen.sa && pct(t.sla, t.sa) && ["Sig. strike accuracy", pct(t.sla, t.sa)],
-      oa && ["Sig. strike defense", pct(oa - os, oa)],
+      secs && ["Sig. Strikes / Min", (slTimed / (secs / 60)).toFixed(2)],
+      seen.sa && pct(t.sla, t.sa) && ["Sig. Strike Accuracy", pct(t.sla, t.sa)],
+      oa && ["Sig. Strike Defense", pct(oa - os, oa)],
       seen.tl && ["Takedowns", `${t.tl}${seen.ta && t.ta ? ` <small class="muted" style="font:500 14px var(--sans)">${pct(t.tla, t.ta)}</small>` : ""}`],
       seen.kd && ["Knockdowns", t.kd],
-      seen.sub && ["Sub. attempts", t.sub],
-      seen.ctrl && ["Control time", hmm(t.ctrl)],
+      seen.sub && ["Sub. Attempts", t.sub],
+      seen.ctrl && ["Control Time", hmm(t.ctrl)],
     ].filter(Boolean);
     return `<div class="grid4">${tiles.map(([label, v], i) =>
         `<div class="tile${i ? "" : " gold"}"><b class="num">${v}</b><span>${label}</span></div>`).join("")}</div>
@@ -798,18 +828,18 @@ async function event(id, show) {
 
 // Every stat of a fight: [label, landed (or the count), attempted, format].
 const ROUND_ROWS = [
-  ["Knockdowns", "knockdowns"], ["Sig. strikes", "sig_str_land", "sig_str_att"],
-  ["Total strikes", "total_str_land", "total_str_att"], ["Takedowns", "td_land", "td_att"],
-  ["Sub. attempts", "sub_att"], ["Reversals", "reversals"], ["Control time", "ctrl_sec", null, mmss],
+  ["Knockdowns", "knockdowns"], ["Sig. Strikes", "sig_str_land", "sig_str_att"],
+  ["Total Strikes", "total_str_land", "total_str_att"], ["Takedowns", "td_land", "td_att"],
+  ["Sub. Attempts", "sub_att"], ["Reversals", "reversals"], ["Control Time", "ctrl_sec", null, mmss],
   ["Head", "head_land", "head_att"], ["Body", "body_land", "body_att"], ["Leg", "leg_land", "leg_att"],
   ["Distance", "dist_land", "dist_att"], ["Clinch", "clinch_land", "clinch_att"], ["Ground", "ground_land", "ground_att"],
 ];
 const SMARTCAGE_ROWS = [
-  ["Knockdowns", "knockdowns"], ["Total strikes", "total_str_land", "total_str_att"],
-  ["Arm strikes", "arm_land", "arm_att"], ["Leg strikes", "leg_land", "leg_att"],
-  ["Ground strikes", "ground_land", "ground_att"], ["Power strikes", "power_land"],
-  ["Takedowns", "td_land", "td_att"], ["Sub. attempts", "sub_att"], ["Dominant positions", "dominant_positions"],
-  ["Time on the ground", "ground_sec", null, mmss], ["Time standing", "standing_sec", null, mmss],
+  ["Knockdowns", "knockdowns"], ["Total Strikes", "total_str_land", "total_str_att"],
+  ["Arm Strikes", "arm_land", "arm_att"], ["Leg Strikes", "leg_land", "leg_att"],
+  ["Ground Strikes", "ground_land", "ground_att"], ["Power Strikes", "power_land"],
+  ["Takedowns", "td_land", "td_att"], ["Sub. Attempts", "sub_att"], ["Dominant Positions", "dominant_positions"],
+  ["Time on the Ground", "ground_sec", null, mmss], ["Time Standing", "standing_sec", null, mmss],
 ];
 
 async function fight(id, show) {
@@ -902,15 +932,16 @@ async function fight(id, show) {
   const pick = (n, fid) => (n === "t" ? total(fid) : st.rows.find((r) => r.round === Number(n) && r.fighter_id === fid) || {});
   const render = (n) => {
     const a = pick(n, L.id), b = pick(n, R.id);
-    document.getElementById("bars").innerHTML = (st.cage ? SMARTCAGE_ROWS : ROUND_ROWS).map(([label, l, att, fmt]) => {
+    redraw(document.getElementById("bars"), (st.cage ? SMARTCAGE_ROWS : ROUND_ROWS).map(([label, l, att, fmt]) => {
       // Sofascore counts total strikes thrown only: then the bar is what was thrown.
-      if (att && a[l] == null && b[l] == null && (a[att] != null || b[att] != null)) {
-        return mirrorRow(`${label} thrown`, a[att], b[att], Math.max(1, a[att] || 0, b[att] || 0));
+      if (att && a[l] == null && b[l] == null) {
+        return mirrorRow(`${label} Thrown`, [a[att], null], [b[att], null], num, null, l);
       }
-      const max = Math.max(1, a[l] || 0, b[l] || 0);
-      return mirrorRow(label, a[l], b[l], max, fmt || num,
-        att ? [landed(a[l], a[att]), landed(b[l], b[att])] : null);
-    }).join("");
+      // Sources that count only what landed have no attempts: one solid bar, like a count.
+      const has = att && (a[att] != null || b[att] != null);
+      return mirrorRow(label, [a[l], has ? a[att] : null], [b[l], has ? b[att] : null], fmt || num,
+        has ? [landed(a[l], a[att]), landed(b[l], b[att])] : null, l);
+    }).join(""));
   };
   document.querySelectorAll("#rounds .chip").forEach((btn) => (btn.onclick = () => {
     document.querySelectorAll("#rounds .chip").forEach((c) => c.setAttribute("aria-pressed", String(c === btn)));
@@ -1210,23 +1241,24 @@ async function query(_, show) {
   if (!show(`
     <div class="page-head"><h1>Query</h1>
       <p class="muted">Ask the database anything: records, streaks, stats, trends. You don't need to know SQL:
-        an AI assistant writes the query from your question, and this page runs it. It runs in your browser,
-        so you can't break anything.</p>
+        type your question, and this page adds it to a prompt for your own AI assistant (ChatGPT, Claude or
+        any other). The assistant writes the query; paste it back here and the page runs it. It runs in your
+        browser, so you can't break anything.</p>
     </div>
     <section class="card ask">
       <ol class="steps">
         <li><b>Ask your question</b>
           <textarea id="question" rows="2" placeholder="e.g. Which UFC fighters have the most knockouts since 2015?">${esc(p.get("ask") || "")}</textarea></li>
-        <li><b>Get the query from an AI assistant</b>
-          <span class="muted">The prompt tells it how this database works, with your question at the end.</span>
-          <div class="run-row"><button class="btn primary" id="copy-prompt" type="button">Copy prompt</button>
-            ${ASSISTANTS.map(([name]) => `<button class="btn" type="button" data-ai="${name}">Open ${name}</button>`).join("")}</div>
+        <li><b>Give the prompt to your AI assistant</b>
+          <span class="muted">It explains how this database works, and ends with your question.</span>
+          <div class="run-row"><button class="btn primary" id="copy-prompt" type="button" disabled>Copy prompt</button>
+            ${ASSISTANTS.map(([name]) => `<a class="btn" data-ai="${name}" target="_blank" rel="noopener" aria-disabled="true">Open in ${name}</a>`).join("")}</div>
           <span class="note" id="ask-status"></span></li>
         <li><b>Paste the query it writes below, and run it</b></li>
       </ol>
     </section>
     <details class="tables-help"><summary>Tables and columns</summary><div id="tables">${loading()}</div></details>
-    <div class="section"><span class="label">Or start from an example</span>
+    <div class="section examples"><span class="label">Or start from an example</span>
       <div class="chips scroll-x" id="ex" style="margin-top:8px">${Object.keys(EXAMPLES).map((k) =>
         `<button class="chip" type="button">${esc(k)}</button>`).join("")}</div></div>
     <textarea id="sqltext" class="editor" spellcheck="false" aria-label="SQL">${esc(p.get("q") || first)}</textarea>
@@ -1237,7 +1269,6 @@ async function query(_, show) {
   const ta = document.getElementById("sqltext"), qa = document.getElementById("question");
   const help = api("query.json");
   const keep = () => setParams(new URLSearchParams({ ...(qa.value.trim() && { ask: qa.value.trim() }), q: ta.value }));
-  qa.oninput = debounce(keep, 400);
 
   // Tables and columns: click a name to put it in the query.
   help.then((h) => {
@@ -1254,21 +1285,41 @@ async function query(_, show) {
     }));
   }).catch(() => {});
 
-  const askStatus = document.getElementById("ask-status");
-  document.getElementById("copy-prompt").onclick = async (e) => {
-    await copyText(prompt(await help, qa.value.trim()), e.target, "Prompt copied");
-    askStatus.textContent = "Paste it into your AI assistant, then paste the query it writes below.";
+  // The prompt's buttons work once there's a question (and the prompt's rules have loaded).
+  // The assistants' buttons are plain links, kept up to date, so a phone opens the app or the
+  // site, not both; a click copies the prompt as it opens.
+  const askStatus = document.getElementById("ask-status"), copyBtn = document.getElementById("copy-prompt");
+  const aiLinks = [...document.querySelectorAll("[data-ai]")];
+  let rules = null;
+  const text = () => prompt(rules, qa.value.trim());
+  const sync = () => {
+    const ready = Boolean(rules && qa.value.trim());
+    copyBtn.disabled = !ready;
+    for (const a of aiLinks) {
+      const [, url, q] = ASSISTANTS.find(([n]) => n === a.dataset.ai);
+      if (!ready) { a.removeAttribute("href"); a.setAttribute("aria-disabled", "true"); continue; }
+      // A long prompt doesn't fit in a link: it's on the clipboard to paste instead.
+      const enc = encodeURIComponent(text());
+      a.dataset.filled = enc.length < 7000 ? "1" : "";
+      a.href = a.dataset.filled ? url + q + enc : url;
+      a.removeAttribute("aria-disabled");
+    }
+    askStatus.textContent = qa.value.trim() ? "" : "Type your question first.";
   };
-  document.querySelectorAll("[data-ai]").forEach((b) => (b.onclick = async () => {
-    const [name, url, q] = ASSISTANTS.find(([n]) => n === b.dataset.ai);
-    const text = prompt(await help, qa.value.trim());
-    await copyText(text, b, "Prompt copied");
-    // A long prompt doesn't fit in a link: it's on the clipboard to paste instead.
-    const link = encodeURIComponent(text).length < 7000 ? url + q + encodeURIComponent(text) : url;
-    window.open(link, "_blank", "noopener");
-    askStatus.textContent = link === url ? `Prompt copied: paste it into ${name} (Ctrl+V), then paste the query it writes below.`
-      : `Then paste the query ${name} writes below.`;
-  }));
+  help.then((h) => { rules = h; sync(); }).catch(() => {});
+  sync();
+  const keepSoon = debounce(keep, 400);
+  qa.oninput = () => { sync(); keepSoon(); };
+  copyBtn.onclick = () => {
+    copyText(text(), copyBtn, "Prompt copied");
+    askStatus.textContent = "Now paste it into your AI assistant.";
+  };
+  for (const a of aiLinks) a.onclick = (e) => {
+    if (!a.href) { e.preventDefault(); return; }
+    copyText(text(), a, "Prompt copied");  // starts the copy now, while the click still counts
+    askStatus.textContent = a.dataset.filled ? `${a.dataset.ai} opens with the prompt filled in.`
+      : `Paste the prompt into ${a.dataset.ai}.`;
+  };
 
   let current = null;  // the last result: {cols, rows, sorted, dir}, rows sorted as shown
   const out = document.getElementById("out"), status = document.getElementById("status");
@@ -1276,7 +1327,7 @@ async function query(_, show) {
     const { cols, rows } = current;
     out.innerHTML = `<div class="run-row result-actions">
         <button class="btn small" type="button" id="copy-md">Copy as Markdown</button>
-        <button class="btn small" type="button" id="copy-tsv">Copy table</button>
+        <button class="btn small" type="button" id="copy-tsv">Copy Raw</button>
         <button class="btn small" type="button" id="csv">Download CSV</button></div>` + resultTable(cols, rows);
     out.querySelectorAll("th[data-j]").forEach((th) => (th.onclick = () => {
       const c = cols[th.dataset.j];

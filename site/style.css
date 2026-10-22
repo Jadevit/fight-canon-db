@@ -10,6 +10,8 @@
   --text-faint: #6F7890;
   --gold: #E3A63B;
   --slate-loss: #5A6478;
+  --bar-pewter: #9AA3B5;
+  --bar-missed: #3E465A;
   --sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --display: "Barlow Condensed", "Oswald", "Arial Narrow", sans-serif;
   --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
@@ -110,6 +112,7 @@ input[type="search"]::-webkit-search-cancel-button { filter: grayscale(1); }
 .btn:hover { text-decoration: none; border-color: var(--text-faint); }
 .btn.primary { background: var(--gold); border-color: var(--gold); color: var(--bg); }
 .btn.primary:hover { filter: brightness(1.06); }
+.btn:disabled, .btn[aria-disabled="true"] { opacity: .4; cursor: default; pointer-events: none; }
 
 /* Chips: a select dressed as a pill, so it stays native on phones. */
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -172,22 +175,30 @@ details[open] .chev { transform: rotate(180deg); }
 .chev-space { flex: none; width: 20px; }
 .glance { background: var(--surface); border-radius: var(--radius); padding: 14px; margin: 0 0 12px; }
 .glance-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-.glance .go { display: inline-block; margin-top: 12px; font-weight: 500; }
+.glance .go { display: block; width: fit-content; margin: 12px 0 0 auto; font-weight: 500; }
 
-/* Mirrored comparison bars: one side grows left from the middle, the other right. */
+/* Mirrored comparison bars: one side grows left from the middle, the other right. Each bar is
+   the attempts in grey with what landed over it, from the middle out: gold for the side that
+   won the stat, pewter for the other. */
 .mirror { display: grid; grid-template-columns: 62px 1fr 1fr 62px; align-items: center; column-gap: 4px; row-gap: 3px; }
 .mirror .cap { grid-column: 1 / -1; text-align: center; font-size: 12px; color: var(--text-muted); margin-top: 8px; }
 .mirror .cap:first-child { margin-top: 0; }
 .mirror .v { font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .mirror .v.l { text-align: left; }
 .mirror .v.r { text-align: right; }
+.mirror .v.win { font-weight: 500; }
+.mirror .v.lose { color: var(--text-muted); }
 .mirror .v small { color: var(--text-faint); font-size: 11px; }
 .mirror .track { height: 8px; display: flex; }
-.mirror .track.l { justify-content: flex-end; }
-.mirror .track span { display: block; height: 100%; border-radius: 2px; min-width: 2px; }
-.mirror .track span.zero { min-width: 0; }
-.fill-me { background: var(--gold); }
-.fill-them { background: var(--slate-loss); }
+.mirror .track.l { margin-right: 2px; flex-direction: row-reverse; }
+.mirror .track:not(.l) { margin-left: 2px; }
+.mirror .extent { display: flex; height: 100%; border-radius: 2px; overflow: hidden; background: var(--bar-missed); }
+.mirror .track.l .extent { flex-direction: row-reverse; }
+.mirror .hit { display: block; height: 100%; background: var(--bar-pewter); }
+.mirror .hit.win { background: var(--gold); }
+.mirror .extent.some, .mirror .hit.some { min-width: 2px; }
+.mirror .extent, .mirror .hit { transition: width .35s ease, min-width .35s ease; }
+@media (prefers-reduced-motion: reduce) { .mirror .extent, .mirror .hit { transition: none; } }
 .who { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; gap: 12px; }
 .who span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -301,6 +312,7 @@ a.card:hover { text-decoration: none; background: color-mix(in srgb, var(--surfa
   padding: 10px 12px; resize: vertical; }
 .steps textarea:focus { border-color: var(--gold); outline: none; }
 .steps .run-row { margin-top: 0; }
+.examples { margin-bottom: 14px; }
 .tables-help { border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 18px; }
 .tables-help > summary { cursor: pointer; padding: 12px 14px; font-weight: 500; }
 .tables-help #tables { padding: 0 14px 14px; display: grid; gap: 14px; max-height: 60vh; overflow: auto; }
