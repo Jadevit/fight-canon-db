@@ -46,8 +46,9 @@ function shard(id) {
   return (h & 0xff).toString(16).padStart(2, "0");
 }
 
-// The database, started the first time something queries it: a DuckDB connection with a view
-// per table over its Parquet file, plus division() and the bouts view.
+// The database, started the first time something queries it: a DuckDB connection with
+// division(). Views over the Parquet files are made as queries need them (views()): each
+// one reads its file's header, and the files are far away.
 const sqlString = (s) => `'${String(s).replaceAll("'", "''")}'`;
 let engine;
 function db() {
@@ -59,20 +60,42 @@ function db() {
     await instance.instantiate(bundle.mainModule, bundle.pthreadWorker);
     URL.revokeObjectURL(url);
     const conn = await instance.connect();
-    const at = new URL(config.parquet ?? "", base).href;
-    for (const t of config.tables) await conn.query(`CREATE VIEW ${t} AS SELECT * FROM read_parquet('${at}${t}.parquet')`);
+    await conn.query("SET enable_http_metadata_cache = true");
     // The division a bout title names (as the site lists them; keep in step with site_db.py).
     const names = objs(m.divisions).map((d) => d.division).filter((d) => d !== "Other");
     await conn.query(`CREATE MACRO division(wc) AS coalesce(list_filter([${names.map(sqlString).join(", ")}],
       d -> contains(regexp_replace(coalesce(wc, ''), '(?i)catchweight', 'Catch Weight'), d))[1], 'Other')`);
-    await conn.query(BOUTS);
     return conn;
   })();
   engine.catch(() => { engine = null; });  // a failed start is tried again next time
   return engine;
 }
+// The views a query needs: the tables it names, and bouts' tables if it names bouts (every
+// table if it looks at the catalogue). Made one at a time, in turn, whatever asks for them.
+const made = new Set();
+let making = Promise.resolve();
+function views(conn, sql) {
+  making = making.catch(() => {}).then(async () => {  // one failure doesn't stop the next
+    const config = await CONFIG;
+    const at = new URL(config.parquet ?? "", base).href;
+    const words = new Set(sql.toLowerCase().match(/[a-z_]+/g) || []);
+    const all = words.has("information_schema") || [...words].some((w) => w.startsWith("duckdb_"));
+    const bouts = all || words.has("bouts");
+    const want = config.tables.filter((t) => all || words.has(t) || (bouts && BOUT_TABLES.includes(t)));
+    for (const t of want.filter((t) => !made.has(t))) {
+      await conn.query(`CREATE OR REPLACE VIEW ${t} AS SELECT * FROM read_parquet('${at}${t}.parquet')`);
+      made.add(t);
+    }
+    if (bouts && !made.has("bouts")) {
+      await conn.query(BOUTS);
+      made.add("bouts");
+    }
+  });
+  return making;
+}
+const BOUT_TABLES = ["fights", "events", "fight_participants", "fighters"];
 // Each fight with its event and both fighters.
-const BOUTS = `CREATE VIEW bouts AS
+const BOUTS = `CREATE OR REPLACE VIEW bouts AS
   SELECT x.fight_id, x.event_id, e.date, e.name AS event, e.promotion, division(x.weight_class) AS division,
          a.fighter_id AS a_id, fa.name AS a_name, a.result AS a_res, b.fighter_id AS b_id, fb.name AS b_name,
          b.result AS b_res, x.* EXCLUDE (fight_id, event_id)
@@ -84,7 +107,9 @@ const BOUTS = `CREATE VIEW bouts AS
 // A query's rows as objects; DuckDB's 64-bit integers come back as BigInt, made Numbers here.
 const plain = (v) => (typeof v === "bigint" ? Number(v) : v);
 async function q(sql, params = []) {
-  const st = await (await db()).prepare(sql);
+  const conn = await db();
+  await views(conn, sql);
+  const st = await conn.prepare(sql);
   try {
     return (await st.query(...params)).toArray().map((r) =>
       Object.fromEntries(Object.entries(r.toJSON()).map(([k, v]) => [k, plain(v)])));
@@ -1054,6 +1079,7 @@ async function sql(_, show) {
       const conn = await db();
       status.textContent = "Running…";
       const t = performance.now();
+      await views(conn, ta.value);
       const res = await conn.query(ta.value);
       const took = `${((performance.now() - t) / 1000).toFixed(2)} s`;
       const columns = res.schema.fields.map((f) => f.name);
