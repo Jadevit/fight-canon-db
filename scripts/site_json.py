@@ -28,7 +28,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from site_db import words  # noqa: E402
+from site_db import STATS, SUMS, words  # noqa: E402
 
 VERSION = "v1"
 SEARCH_CAP = 800
@@ -261,6 +261,7 @@ def meta(conn: sqlite3.Connection, w: Writer) -> None:
                                          "ORDER BY events DESC, code")),
         "divisions": table(conn.execute("SELECT code, division FROM site_divisions ORDER BY code")),
         "boards": json.loads(conn.execute("SELECT json FROM site_boards").fetchone()[0]),
+        "sums": SUMS, "stats_cols": STATS,  # stats boards: column -> its stats table's column
         "top_fighters": table(conn.execute("SELECT * FROM site_top_fighters ORDER BY n DESC, name")),
     })
 

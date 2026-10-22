@@ -1,27 +1,19 @@
-"""Build the website's copy of canon.db. It's what scripts/site_json.py writes the browsing
-pages from, and what the SQL page and filtered leaderboards query in the browser with
-sql.js-httpvfs, which fetches only the pages a query touches, one request at a time; so
-each such query should read a few contiguous ranges, not hundreds of scattered rows.
+"""Build the working copy of canon.db that scripts/site_json.py writes the site's pages from:
+`site_` tables with what the pages list (search names, events, leaderboard totals and their
+opening views), each row holding what it shows.
 
-- fights and fight_participants become one table, site_fights: each fight with its event's
-  date and name and both fighters, in card order (an event's fights are contiguous). Views
-  named fights and fight_participants give the original columns back for the SQL page.
-- `site_` tables hold the lists the pages show (search names, events, leaderboard totals and
-  their opening views), with what each row displays in the row itself.
-- The round stats tables are stored in fight order, so a fight's rounds are together and a
-  query that reads them all by fight reads the table straight through.
-- Pages are 4 KB and the file is split into 10 MB chunks.
+- site_fights: each fight with its event's date and name and both fighters, in card order.
+- site_results / site_leaders: leaderboard totals per fighter, promotion, division (and year
+  on the stats boards); site_top: each board's opening view. Boards are defined in BOARDS.
 
-    python scripts/site_db.py [canon.db] [out dir] [keep]   # defaults: data/canon.db site/db
+    python scripts/site_db.py [canon.db] [out file]   # defaults: data/canon.db site/db/site.db
 
-`keep` also saves the whole file (for scripts/site_json.py).
-
-Writes <out>/canon.db.000, .001, ... and <out>/config.json.
+The SQL page doesn't read this file: it queries canon.db itself, as Parquet
+(scripts/export_parquet.py).
 """
 
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 import shutil
@@ -30,9 +22,6 @@ import sys
 import tempfile
 import unicodedata
 from pathlib import Path
-
-PAGE = 4096                   # SQLite page size, and the size of each range request
-CHUNK = 10 * 1024 * 1024      # bytes per file on the server
 
 # Keep in step with division() and norm() in site/app.js.
 DIVISIONS = ["Women's Strawweight", "Women's Flyweight", "Women's Bantamweight",
@@ -83,8 +72,7 @@ BOARDS = {
                "ko": dict(label="KO/TKO wins", expr="ko"),
                "subw": dict(label="Submission wins", expr="subw"),
                "fights": dict(label="Fights", expr="n")},
-        note="Counts pro fights in this database, which doesn't have every fighter's whole career. "
-             "All years: results aren't split by year."),
+        note="Counts pro fights in this database, which doesn't have every fighter's whole career."),
     "ufcstats": dict(label="UFC Stats", source=("round_stats", "ufcstats"), stats=FULL,
                      note="Fights counted by UFC Stats: the UFC, and the other promotions it covers."),
     "pfl": dict(label="PFL (from Dec 2025)", source=("round_stats", "pfl"), stats=FULL,
@@ -193,18 +181,6 @@ CREATE TABLE site_top (board TEXT, stat TEXT, division INTEGER, rank INTEGER, fi
     n INTEGER, val REAL, PRIMARY KEY (board, stat, division, rank)) WITHOUT ROWID;
 """
 
-# fights and fight_participants, rebuilt from site_fights for the SQL page.
-VIEWS_SQL = f"""
-DROP TABLE fight_participants;
-DROP TABLE fights;
-CREATE VIEW fights AS SELECT fight_id, event_id, {", ".join(FIGHT_COLS)} FROM site_fights;
-CREATE VIEW fight_participants AS
-    SELECT fight_id, a_id AS fighter_id, 0 AS corner, a_res AS result FROM site_fights WHERE a_id IS NOT NULL
-    UNION ALL
-    SELECT fight_id, b_id, 1, b_res FROM site_fights WHERE b_id IS NOT NULL;
-"""
-
-
 def leaders(conn: sqlite3.Connection) -> None:
     """Fill site_results, site_leaders and site_top: each board's fights, per fighter, rolled
     up over every mix of promotion, division and year being 'all'."""
@@ -250,32 +226,11 @@ def leaders(conn: sqlite3.Connection) -> None:
                            ROW_NUMBER() OVER (PARTITION BY division ORDER BY {s['expr']} DESC, n) rank
                     FROM {table} WHERE promotion = 0 {board_filter} AND {keep})
                 JOIN fighters f USING (fighter_id) WHERE rank <= 50""")
-    conn.execute("INSERT INTO site_boards VALUES (?)",
-                 (json.dumps({k: {c: v for c, v in b.items() if c != "source"} for k, b in BOARDS.items()}),))
-    # One promotion's slice is small enough to read whole; all promotions together are ranked
-    # through an index per stat.
-    conn.execute("CREATE INDEX site_results_slice ON site_results(promotion, division) WHERE promotion <> 0")
-    for c in RESULTS:
-        conn.execute(f"CREATE INDEX site_results_{c} ON site_results(division, {c} DESC, n) WHERE promotion = 0")
-
-
-def cluster(conn: sqlite3.Connection, table: str, order: str) -> None:
-    """Rewrite a table with its rows stored in `order`, so reading it in that order (through
-    its primary key, say) is one long range instead of a request per row."""
-    sql = conn.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)).fetchone()[0]
-    indexes = [r[0] for r in conn.execute(
-        "SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = ? AND sql IS NOT NULL", (table,))]
-    conn.execute(f"ALTER TABLE {table} RENAME TO {table}_unsorted")
-    conn.execute(sql)
-    conn.execute(f"INSERT INTO {table} SELECT * FROM {table}_unsorted ORDER BY {order}")
-    conn.execute(f"DROP TABLE {table}_unsorted")
-    for s in indexes:
-        conn.execute(s)
+    conn.execute("INSERT INTO site_boards VALUES (?)", (json.dumps(BOARDS),))
 
 
 def fill(conn: sqlite3.Connection) -> None:
-    """Add the site's tables, swap fights and fight_participants for views, then rewrite the
-    file in the site's page size."""
+    """Add the site's tables."""
     conn.create_function("division", 1, division, deterministic=True)
     conn.create_function("norm", 1, norm, deterministic=True)
     conn.executescript(SITE_SQL)
@@ -291,21 +246,12 @@ def fill(conn: sqlite3.Connection) -> None:
             out += [(t, fid, search, r[7], *r[1:7], *r[8:12]) for t in words(search)]
     conn.executemany("INSERT OR IGNORE INTO site_names VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", out)
     leaders(conn)
-    conn.executescript(VIEWS_SQL)
-    for table in ("round_stats", "smartcage_round_stats", "sofascore_round_stats"):
-        cluster(conn, table, "fight_id, fighter_id, round")
-    conn.commit()
-    conn.execute("PRAGMA journal_mode = DELETE")
-    conn.execute(f"PRAGMA page_size = {PAGE}")
-    conn.execute("VACUUM")
-    conn.execute("ANALYZE")
     conn.commit()
 
 
-def build(src: Path, out: Path, keep: Path | None = None) -> dict:
-    """Write the site's database to `out` in chunks, with its config.json; returns the config.
-    `keep`: also save the whole file there (scripts/site_json.py reads it)."""
-    out.mkdir(parents=True, exist_ok=True)
+def build(src: Path, out: Path) -> None:
+    """Write the site's working copy of `src` to `out`."""
+    out.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
         db = Path(tmp) / "site.db"
         shutil.copyfile(src, db)
@@ -314,24 +260,11 @@ def build(src: Path, out: Path, keep: Path | None = None) -> dict:
             fill(conn)
         finally:
             conn.close()
-        if keep:
-            shutil.copyfile(db, keep)
-        for old in out.glob("canon.db.*"):
-            old.unlink()
-        size, digest = db.stat().st_size, hashlib.sha256()
-        with open(db, "rb") as fh:
-            for i in range((size + CHUNK - 1) // CHUNK):
-                data = fh.read(CHUNK)
-                digest.update(data)
-                (out / f"canon.db.{i:03d}").write_bytes(data)
-    config = dict(serverMode="chunked", requestChunkSize=PAGE, databaseLengthBytes=size, serverChunkSize=CHUNK,
-                  urlPrefix="canon.db.", suffixLength=3, cacheBust=digest.hexdigest()[:12])
-    (out / "config.json").write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
-    return config
+        shutil.copyfile(db, out)
 
 
 if __name__ == "__main__":
     args = sys.argv[1:]
-    c = build(Path(args[0] if args else "data/canon.db"), Path(args[1] if len(args) > 1 else "site/db"),
-              Path(args[2]) if len(args) > 2 else None)
-    print(f"{c['databaseLengthBytes'] / 1e6:.0f} MB in {-(-c['databaseLengthBytes'] // CHUNK)} chunks")
+    out = Path(args[1] if len(args) > 1 else "site/db/site.db")
+    build(Path(args[0] if args else "data/canon.db"), out)
+    print(f"{out}: {out.stat().st_size / 1e6:.0f} MB")

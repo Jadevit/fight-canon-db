@@ -1,15 +1,15 @@
 # Deploys the website to fightcanon.com: the page (site/) as the fightcanon Worker's static
 # assets (wrangler.jsonc), and the latest release's data in R2 (bucket fightcanon-db, served
-# at db.fightcanon.com): the pages as JSON (scripts/site_json.py, under v1/) and the site's
-# copy of the database (scripts/site_db.py, in chunks, for the SQL page and filtered
+# at db.fightcanon.com): the pages as JSON (scripts/site_json.py, under v1/) and the database
+# as Parquet (scripts/export_parquet.py, a folder per build, for the SQL page and filtered
 # leaderboards). Runs when the site changes, after each database update, or by hand.
 name: Deploy site
 
 on:
   push:
     branches: [main]
-    paths: ["site/**", "scripts/site_db.py", "scripts/site_json.py", "wrangler.jsonc",
-            ".github/workflows/deploy.yml"]
+    paths: ["site/**", "scripts/site_db.py", "scripts/site_json.py", "scripts/export_parquet.py",
+            "wrangler.jsonc", ".github/workflows/deploy.yml"]
   workflow_run:
     workflows: ["Update database", "Discover events"]
     types: [completed]
@@ -46,22 +46,24 @@ jobs:
         with:
           python-version: "3.14"
 
-      # _db/: the database in chunks; _json/v1/: the pages as JSON; _cf/: the Worker's assets,
+      # _json/v1/: the pages as JSON; _pq/: the database as Parquet; _cf/: the Worker's assets,
       # whose config.json points at both in R2.
       - name: Build site
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release download --pattern canon.db --dir data
-          python scripts/site_db.py data/canon.db _db _site.db
+          pip install -q duckdb boto3
+          python scripts/site_db.py data/canon.db _site.db
           python scripts/site_json.py build _site.db _json
+          python scripts/export_parquet.py data/canon.db _pq
           mkdir _cf
           cp -r site/* _cf/
-          mkdir _cf/db
-          build=$(jq -r .cacheBust _db/config.json)
-          jq --arg p "$R2_URL/$build/canon.db." --arg a "$R2_URL/v1/" '.urlPrefix = $p | .api = $a' \
-            _db/config.json > _cf/db/config.json
-          live=$(curl -sf https://fightcanon.com/db/config.json | jq -r .urlPrefix | sed -nE 's#.*/([^/]+)/canon\.db\.$#\1#p' || true)
+          mkdir -p _cf/db
+          build=$(jq -r .build _pq/config.json)
+          jq --arg p "$R2_URL/$build/" --arg a "$R2_URL/v1/" '.parquet = $p | .api = $a' \
+            _pq/config.json > _cf/db/config.json
+          live=$(curl -sf https://fightcanon.com/db/config.json | jq -r '.parquet // ""' | sed -nE 's#.*/([0-9a-f]{12})/$#\1#p' || true)
           echo "BUILD=$build" >> "$GITHUB_ENV"
           echo "LIVE=$live" >> "$GITHUB_ENV"
 
@@ -69,14 +71,12 @@ jobs:
       # reading the files it started with.
       - name: Upload the database to R2
         run: |
-          aws s3 cp _db/ "s3://$R2_BUCKET/$BUILD/" --recursive --exclude config.json \
+          aws s3 cp _pq/ "s3://$R2_BUCKET/$BUILD/" --recursive --exclude config.json \
             --content-type application/octet-stream --cache-control "public, max-age=31536000, immutable"
 
       # Only the files that changed since the last upload (v1-manifest.json in the bucket).
       - name: Upload the JSON to R2
-        run: |
-          pip install boto3
-          python scripts/site_json.py upload _json
+        run: python scripts/site_json.py upload _json
 
       - name: Deploy the Worker
         uses: cloudflare/wrangler-action@v3

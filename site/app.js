@@ -1,13 +1,13 @@
 // Fight Canon. Browsing pages read JSON files written daily by scripts/site_json.py: one per
 // fighter and per event, the event lists, a search index split by prefix, and the
-// leaderboards' opening views. Only the SQL page and filtered leaderboards query the
-// database, with sql.js-httpvfs, which fetches the 4 KB pages of the site's copy
-// (scripts/site_db.py) that a query touches; it loads the first time it's needed.
+// leaderboards' opening views. Only the SQL page and filtered leaderboards query the database:
+// DuckDB-WASM over the database as Parquet (scripts/export_parquet.py), reading only the
+// columns and parts of the files a query needs; it loads the first time it's needed.
 // Views are chosen by the path: / (landing), /fighters, /fighter/<id>, /events, /event/<id>,
 // /fight/<id>, /leaders, /sql (the server answers every path with this page). How it looks is
 // in DESIGN.md.
 
-const VFS = "/vendor/sql.js-httpvfs/";
+const DUCKDB = "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.29.0/+esm";
 const DB_DIR = "/db/";
 const REPO = "https://github.com/jadevit/fight-canon-db";
 const RELEASES = `${REPO}/releases/latest`;
@@ -46,16 +46,52 @@ function shard(id) {
   return (h & 0xff).toString(16).padStart(2, "0");
 }
 
-// The database, started the first time something queries it.
-let worker;
+// The database, started the first time something queries it: a DuckDB connection with a view
+// per table over its Parquet file, plus division() and the bouts view.
+const sqlString = (s) => `'${String(s).replaceAll("'", "''")}'`;
+let engine;
 function db() {
-  return (worker ||= CONFIG.then((config) => {
-    config.urlPrefix = new URL(config.urlPrefix, base).href;
-    const abs = (f) => new URL(VFS + f, location.href).href;
-    return createDbWorker([{ from: "inline", config }], abs("sqlite.worker.js"), abs("sql-wasm.wasm"));
-  }));
+  engine ||= (async () => {
+    const [config, m, duckdb] = await Promise.all([CONFIG, meta(), import(DUCKDB)]);
+    const bundle = await duckdb.selectBundle(duckdb.getJsDelivrBundles());
+    const url = URL.createObjectURL(new Blob([`importScripts("${bundle.mainWorker}");`], { type: "text/javascript" }));
+    const instance = new duckdb.AsyncDuckDB(new duckdb.ConsoleLogger(duckdb.LogLevel.WARNING), new Worker(url));
+    await instance.instantiate(bundle.mainModule, bundle.pthreadWorker);
+    URL.revokeObjectURL(url);
+    const conn = await instance.connect();
+    const at = new URL(config.parquet ?? "", base).href;
+    for (const t of config.tables) await conn.query(`CREATE VIEW ${t} AS SELECT * FROM read_parquet('${at}${t}.parquet')`);
+    // The division a bout title names (as the site lists them; keep in step with site_db.py).
+    const names = objs(m.divisions).map((d) => d.division).filter((d) => d !== "Other");
+    await conn.query(`CREATE MACRO division(wc) AS coalesce(list_filter([${names.map(sqlString).join(", ")}],
+      d -> contains(regexp_replace(coalesce(wc, ''), '(?i)catchweight', 'Catch Weight'), d))[1], 'Other')`);
+    await conn.query(BOUTS);
+    return conn;
+  })();
+  engine.catch(() => { engine = null; });  // a failed start is tried again next time
+  return engine;
 }
-const q = async (sql, params = []) => (await db()).db.query(sql, params);
+// Each fight with its event and both fighters.
+const BOUTS = `CREATE VIEW bouts AS
+  SELECT x.fight_id, x.event_id, e.date, e.name AS event, e.promotion, division(x.weight_class) AS division,
+         a.fighter_id AS a_id, fa.name AS a_name, a.result AS a_res, b.fighter_id AS b_id, fb.name AS b_name,
+         b.result AS b_res, x.* EXCLUDE (fight_id, event_id)
+  FROM fights x JOIN events e USING (event_id)
+  LEFT JOIN fight_participants a ON a.fight_id = x.fight_id AND a.corner = 0
+  LEFT JOIN fighters fa ON fa.fighter_id = a.fighter_id
+  LEFT JOIN fight_participants b ON b.fight_id = x.fight_id AND b.corner = 1
+  LEFT JOIN fighters fb ON fb.fighter_id = b.fighter_id`;
+// A query's rows as objects; DuckDB's 64-bit integers come back as BigInt, made Numbers here.
+const plain = (v) => (typeof v === "bigint" ? Number(v) : v);
+async function q(sql, params = []) {
+  const st = await (await db()).prepare(sql);
+  try {
+    return (await st.query(...params)).toArray().map((r) =>
+      Object.fromEntries(Object.entries(r.toJSON()).map(([k, v]) => [k, plain(v)])));
+  } finally {
+    await st.close();
+  }
+}
 
 // --- helpers -------------------------------------------------------------------------
 
@@ -65,7 +101,6 @@ const num = (n) => (n == null ? "—" : Number(n).toLocaleString("en-US"));
 const pct = (l, a) => (l == null || !a ? null : Math.round((100 * l) / a) + "%");
 const mmss = (s) => (s == null ? "—" : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`);
 const hmm = (s) => (s == null ? "—" : `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`);
-const mb = (bytes) => `${(bytes / 1e6).toFixed(bytes < 1e7 ? 1 : 0)} MB`;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const monthYear = (d) => (d ? `${MONTHS[Number(d.slice(5, 7)) - 1]} ${d.slice(0, 4)}` : "");
 const longDate = (d) => (d ? `${Number(d.slice(8, 10))} ${MONTHS[Number(d.slice(5, 7)) - 1]} ${d.slice(0, 4)}` : "");
@@ -851,37 +886,37 @@ async function fight(id, show) {
 
 // Leaderboards, one board per source of numbers: results come from every fight, and each
 // stats source (they count differently) ranks only its own fights, with the stats it has.
-// The boards and their stats (SQL over pre-computed per-fighter totals) are defined in
-// scripts/site_db.py and read from site_boards.
-const LEADER_SUMS = "SUM(n) n, " + ["kd", "sl", "sa", "tsl", "tsa", "tl", "ta", "suba", "ctrl", "arm", "leg", "grd"]
-  .map((c) => `SUM(${c}) ${c}`).join(", ");
+// The boards and their stats (SQL over per-fighter totals: n, w, fin, ko, subw, and the stats
+// columns) are defined in scripts/site_db.py and come in meta.json.
 
-// The top 50 for a board, stat and filters (the opening view is a file: l/<board>/<stat>.json).
-// The results board, which has all years only, ranks across all promotions through an index
-// per stat or reads one promotion's slice; a stats board sums its fighters' years in range.
-function leaderQuery(board, stat, s, f, allYears) {
-  const keep = `n >= ? AND ${s.expr} IS NOT NULL ${s.where ? `AND ${s.where}` : ""}`;
-  const top = `ORDER BY ${s.expr} DESC, n LIMIT 50`;
-  const named = (sql) => `SELECT t.fighter_id, f.name, t.n, t.val FROM (${sql}) t
-                          JOIN fighters f USING (fighter_id) ORDER BY t.val DESC, t.n`;
-  if (board === "results") {
-    // Spelled out so SQLite picks the partial indexes.
-    const promo = f.promo === "0" ? "promotion = 0" : "promotion = ? AND promotion <> 0";
-    return [named(`SELECT fighter_id, n, ${s.expr} val FROM site_results
-                   WHERE ${promo} AND division = ? AND ${keep} ${top}`),
-            [...(f.promo === "0" ? [] : [Number(f.promo)]), Number(f.div), Number(f.min)]];
+// The top 50 for a board, stat and filters, from the fights themselves (the opening view is a
+// file: l/<board>/<stat>.json). `promo` and `div` are names ("" for all), `from`/`to` years.
+function leaderQuery(b, s, f, promo, div, m) {
+  const where = ["e.date IS NOT NULL"], args = [];
+  if (promo) { where.push("e.promotion = ?"); args.push(promo); }
+  if (div) { where.push("division(x.weight_class) = ?"); args.push(div); }
+  where.push("e.date >= ? AND e.date < ?");
+  args.push(f.from, String(Number(f.to) + 1));
+  const won = "p.result = 'W'", ko = "x.method LIKE '%KO%'", sub = "x.method LIKE '%Submission%'";
+  const results = `COUNT(*) n, count_if(${won}) w, count_if(${won} AND (${ko} OR ${sub})) fin,
+                   count_if(${won} AND ${ko}) ko, count_if(${won} AND ${sub}) subw`;
+  let from = "fight_participants p", stats = "", source = [];
+  if (b.source) {  // the fighter's totals in each fight this source counted
+    const [table, src] = b.source, cols = m.sums[table];
+    from = `(SELECT fight_id, fighter_id, ${Object.entries(cols).map(([k, c]) => `SUM(${c}) ${k}`).join(", ")}
+             FROM ${table} WHERE source = ? GROUP BY ALL) r
+            JOIN fight_participants p ON p.fight_id = r.fight_id AND p.fighter_id = r.fighter_id`;
+    source = [src];
+    stats = ", " + m.stats_cols.map((k) => (cols[k] ? `SUM(r.${k}) ${k}` : `NULL ${k}`)).join(", ");
   }
-  if (allYears) {
-    return [named(`SELECT fighter_id, n, ${s.expr} val FROM site_leaders
-                   WHERE board = ? AND promotion = ? AND division = ? AND year = 0 AND ${keep} ${top}`),
-            [board, Number(f.promo), Number(f.div), Number(f.min)]];
-  }
-  return [named(`SELECT fighter_id, n, ${s.expr} val FROM (
-                   SELECT fighter_id, ${LEADER_SUMS} FROM site_leaders
-                   WHERE board = ? AND promotion = ? AND division = ? AND year BETWEEN ? AND ?
-                   GROUP BY fighter_id)
-                 WHERE ${keep} ${top}`),
-          [board, Number(f.promo), Number(f.div), Number(f.from), Number(f.to), Number(f.min)]];
+  return [`SELECT t.fighter_id, fr.name, t.n, ${s.expr} val FROM (
+             SELECT p.fighter_id, ${results}${stats}
+             FROM ${from} JOIN fights x ON x.fight_id = p.fight_id JOIN events e ON e.event_id = x.event_id
+             WHERE ${where.join(" AND ")} GROUP BY p.fighter_id) t
+           JOIN fighters fr ON fr.fighter_id = t.fighter_id
+           WHERE t.n >= ? AND ${s.expr} IS NOT NULL ${s.where ? `AND ${s.where}` : ""}
+           ORDER BY val DESC, t.n LIMIT 50`,
+          [...source, ...args, Number(f.min)]];
 }
 
 const MIN_FIGHTS = [1, 3, 5, 10, 15, 20, 30];
@@ -919,10 +954,11 @@ async function leaders(_, show) {
       const top = await api(`l/${f.board}/${stat}.json`);
       return (top?.[f.div] || []).map(([fighter_id, name, n, val]) => ({ fighter_id, name, n, val }));
     }
-    document.getElementById("results").innerHTML = loading("Loading the database…");
-    return q(...leaderQuery(f.board, stat, s, f, allYears));
+    document.getElementById("results").innerHTML = loading("Loading the query engine…");
+    const promo = promos.find((x) => String(x.code) === f.promo)?.promotion || "";
+    const div = divisions.find((d) => String(d.code) === f.div)?.division || "";
+    return q(...leaderQuery(BOARDS[f.board], s, f, promo, div, m));
   });
-  const era = document.getElementById("era");
   const render = async () => {
     const f = { board: val("board"), stat: val("stat"), promo: val("promo"), div: val("div"), from: val("from"),
                 to: val("to"), min: val("min") };
@@ -933,12 +969,11 @@ async function leaders(_, show) {
     document.getElementById("to").closest(".chip").classList.toggle("on", f.to !== maxY);
     document.getElementById("board").closest(".chip").classList.toggle("on", f.board !== "results");
     const results = f.board === "results";
-    era.hidden = results;  // the results board has all years only
     setParams(new URLSearchParams(f));
     const b = BOARDS[f.board];
     const stat = b.stats[f.stat] ? f.stat : Object.keys(b.stats)[0];
     const s = b.stats[stat];
-    const rows = await find(f, stat, s, results || (f.from === minY && f.to === maxY));
+    const rows = await find(f, stat, s, f.from === minY && f.to === maxY);
     if (rows === undefined) return;
     const shown = (v) => s.fmt === "pct" ? Math.round(v * 1000) / 10 + "%" : s.fmt === "time" ? hmm(v) : num(v);
     document.getElementById("results").innerHTML = (rows.length ? `<div class="list">${rows.map((r, i) => `
@@ -962,36 +997,46 @@ async function leaders(_, show) {
 }
 
 const EXAMPLES = {
-  "Latest events": "SELECT date, name, location FROM events ORDER BY date DESC LIMIT 20;",
-  "A fighter's fights": `SELECT date, event, method, a_name, a_res, b_name, b_res, fight_id
-FROM site_fights
-WHERE (SELECT fighter_id FROM site_top_fighters LIMIT 1) IN (a_id, b_id)
+  "Latest events": "SELECT date, name, location, promotion FROM events ORDER BY date DESC LIMIT 20;",
+  "The most active fighter's fights": `SELECT date, event, method, a_name, a_res, b_name, b_res, fight_id
+FROM bouts
+WHERE (SELECT fighter_id FROM fight_participants GROUP BY ALL ORDER BY count(*) DESC LIMIT 1) IN (a_id, b_id)
 ORDER BY date;`,
-  "Most knockdowns in one fight": `SELECT f.name, x.event, x.date, SUM(r.knockdowns) AS kd, r.fight_id
+  "Most knockdowns in one fight": `SELECT f.name, b.event, b.date, SUM(r.knockdowns) AS kd, r.fight_id
 FROM round_stats r
 JOIN fighters f USING (fighter_id)
-JOIN site_fights x USING (fight_id)
-GROUP BY r.fight_id, r.fighter_id
+JOIN bouts b USING (fight_id)
+GROUP BY ALL
 ORDER BY kd DESC LIMIT 20;`,
-  "Where round stats come from": "SELECT source, COUNT(DISTINCT fight_id) AS fights, COUNT(*) AS fighter_rounds FROM round_stats GROUP BY source;",
-  "Promotions with the most events": "SELECT promotion, events FROM site_promotions ORDER BY events DESC LIMIT 30;",
-  "How fights end (reads every fight)": "SELECT method, COUNT(*) AS fights FROM fights GROUP BY method ORDER BY fights DESC;",
-  "Fights per division (reads every fight)": "SELECT division, COUNT(*) AS fights FROM site_fights GROUP BY division ORDER BY fights DESC;",
-  "All tables and columns": "SELECT type, name, sql FROM sqlite_master WHERE type IN ('table', 'view');",
+  "Highest strike output per round": `SELECT b.event, b.date, f.name, COUNT(*) AS rounds,
+       round(SUM(r.sig_str_land) / COUNT(*), 1) AS sig_per_round, r.fight_id
+FROM round_stats r JOIN fighters f USING (fighter_id) JOIN bouts b USING (fight_id)
+WHERE r.source = 'ufcstats'
+GROUP BY ALL HAVING COUNT(*) >= 3
+ORDER BY sig_per_round DESC LIMIT 25;`,
+  "UFC finish rate by year": `SELECT substr(date, 1, 4) AS year, COUNT(*) AS fights,
+       round(100 * avg((method LIKE '%KO%' OR method LIKE '%Submission%')::INT), 1) AS finish_pct
+FROM bouts WHERE promotion = 'UFC'
+GROUP BY ALL ORDER BY year;`,
+  "Where round stats come from": "SELECT source, COUNT(DISTINCT fight_id) AS fights, COUNT(*) AS fighter_rounds FROM round_stats GROUP BY ALL ORDER BY fights DESC;",
+  "Promotions with the most events": "SELECT promotion, COUNT(*) AS events FROM events GROUP BY ALL ORDER BY events DESC LIMIT 30;",
+  "How fights end": "SELECT method, COUNT(*) AS fights FROM fights GROUP BY ALL ORDER BY fights DESC;",
+  "Fights per division": "SELECT division, COUNT(*) AS fights FROM bouts GROUP BY ALL ORDER BY fights DESC;",
+  "All tables and columns": "SELECT table_name, column_name, data_type FROM information_schema.columns ORDER BY table_name, ordinal_position;",
 };
 
 async function sql(_, show) {
   const first = Object.values(EXAMPLES)[0];
   if (!show(`
     <div class="page-head"><h1>SQL</h1>
-      <p class="muted">Query the whole database directly. It runs in your browser, so you can't break anything.
-        Only the parts of the database a query reads are downloaded: lookups by id are quick, but a
-        query that reads a whole table downloads that table, which can be tens of MB. For heavy
-        work, <a href="${RELEASES}">download the database</a>.</p>
-      <p class="note" style="margin:0">This copy is arranged for the site: <code>fights</code> and
-        <code>fight_participants</code> are views over <code>site_fights</code>, which has each fight with its
-        event, both fighters and its <code>division</code>. Columns named <code>fighter_id</code>,
-        <code>event_id</code> or <code>fight_id</code> become links.</p>
+      <p class="muted">Query the whole database directly, with <a href="https://duckdb.org/docs/sql/introduction">DuckDB's SQL</a>.
+        It runs in your browser, so you can't break anything, and it reads only the columns and parts of
+        the database a query needs, so even queries over every fight take a moment. For heavy work,
+        <a href="${RELEASES}">download the database</a> (SQLite).</p>
+      <p class="note" style="margin:0">The tables are the database's own. <code>bouts</code> is each fight with its
+        event, both fighters and its <code>division</code>; <code>division(weight_class)</code> names the
+        division of any bout title. Columns named <code>fighter_id</code>, <code>event_id</code> or
+        <code>fight_id</code> become links. The query engine loads the first time you run something.</p>
     </div>
     <div class="chips scroll-x" id="ex" style="margin-bottom:12px">${Object.keys(EXAMPLES).map((k) =>
       `<button class="chip" type="button">${esc(k)}</button>`).join("")}</div>
@@ -1004,19 +1049,20 @@ async function sql(_, show) {
     const out = document.getElementById("out"), status = document.getElementById("status");
     setParams(new URLSearchParams({ q: ta.value }));
     out.innerHTML = "";
-    status.textContent = "Running…";
-    const w = await db();
-    const before = (await w.worker.getStats()).totalFetchedBytes;
+    status.textContent = engine ? "Running…" : "Loading the query engine…";
     try {
-      const resl = await w.db.exec(ta.value);
-      const read = (await w.worker.getStats()).totalFetchedBytes - before;
-      const fetched = read ? ` · ${mb(read)} downloaded` : "";
-      if (!resl.length) { status.textContent = `Done. No rows returned${fetched}.`; return; }
-      const { columns, values } = resl[resl.length - 1];
+      const conn = await db();
+      status.textContent = "Running…";
+      const t = performance.now();
+      const res = await conn.query(ta.value);
+      const took = `${((performance.now() - t) / 1000).toFixed(2)} s`;
+      const columns = res.schema.fields.map((f) => f.name);
+      const values = res.toArray().map((r) => columns.map((c) => plain(r[c])));
+      if (!columns.length) { status.textContent = `Done in ${took}.`; return; }
       const cell = (c, v) => v == null ? `<td class="null">NULL</td>`
         : `<td>${c === "fighter_id" ? fighterLink(v, v) : c === "event_id" ? eventLink(v, v)
-          : c === "fight_id" ? `<a href="/fight/${esc(v)}">${esc(v)}</a>` : esc(v)}</td>`;
-      status.textContent = `${plural(values.length, "row")}${values.length > 1000 ? " (showing 1,000)" : ""}${fetched}`;
+          : c === "fight_id" ? `<a href="/fight/${esc(v)}">${esc(v)}</a>` : esc(typeof v === "object" ? JSON.stringify(v) : v)}</td>`;
+      status.textContent = `${plural(values.length, "row")}${values.length > 1000 ? " (showing 1,000)" : ""} · ${took}`;
       out.innerHTML = `<div class="grid-out"><table><thead><tr>${columns.map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead>
         <tbody>${values.slice(0, 1000).map((row) => `<tr>${row.map((v, i) => cell(columns[i], v)).join("")}</tr>`).join("")}</tbody></table></div>`;
     } catch (e) {

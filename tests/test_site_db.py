@@ -36,16 +36,8 @@ def _canon(path):
 
 def test_site_db(tmp_path):
     canon = _canon(tmp_path / "canon.db")
-    before = {t: sorted(canon.execute(f"SELECT * FROM {t}")) for t in ("fights", "fight_participants")}
-    config = site_db.build(tmp_path / "canon.db", tmp_path / "out")
-    assert config["databaseLengthBytes"] % site_db.PAGE == 0
-    whole = tmp_path / "site.db"
-    whole.write_bytes(b"".join(p.read_bytes() for p in sorted((tmp_path / "out").glob("canon.db.*"))))
-    site = sqlite3.connect(whole)
-    assert site.execute("PRAGMA page_size").fetchone() == (site_db.PAGE,)
-    # The views give back the original rows.
-    for t, rows in before.items():
-        assert sorted(site.execute(f"SELECT * FROM {t}")) == rows
+    site_db.build(tmp_path / "canon.db", tmp_path / "site.db")
+    site = sqlite3.connect(tmp_path / "site.db")
     # A fighter's fights from either side; an event's fights in card order.
     assert site.execute("SELECT fight_id FROM site_fights WHERE ? IN (a_id, b_id) ORDER BY date",
                         ("a" * 16,)).fetchall() == [("f1",), ("f3",)]
@@ -66,6 +58,7 @@ def test_site_db(tmp_path):
                         ).fetchall() == [("a" * 16, 30), ("a" * 16, 30)]  # all divisions, and Featherweight
     boards = json.loads(site.execute("SELECT json FROM site_boards").fetchone()[0])
     assert boards["ufcstats"]["stats"]["sigacc"]["where"] == "sa >= 100"
+    assert boards["ufcstats"]["source"] == ["round_stats", "ufcstats"] and boards["results"]["source"] is None
 
 
 spec_json = importlib.util.spec_from_file_location("site_json", db.ROOT / "scripts" / "site_json.py")
@@ -75,7 +68,7 @@ spec_json.loader.exec_module(site_json)
 
 def test_site_json(tmp_path, monkeypatch):
     _canon(tmp_path / "canon.db")
-    site_db.build(tmp_path / "canon.db", tmp_path / "out", tmp_path / "site.db")
+    site_db.build(tmp_path / "canon.db", tmp_path / "site.db")
     monkeypatch.setattr(site_json, "SEARCH_CAP", 1)  # split every prefix with two matches
     monkeypatch.setattr(site_json, "SEARCH_TOP", 1)
     monkeypatch.setattr(site_json, "SEARCH_EXACT", 1)
@@ -114,3 +107,23 @@ def test_site_json(tmp_path, monkeypatch):
     assert read("l/results/wins.json")["0"][0][:3] == ["a" * 16, "José Aldo", 2]
     m = read("meta.json")
     assert m["stats"]["events"] == 2 and m["boards"]["results"]["stats"]["wins"]["label"] == "Wins"
+    assert m["sums"]["round_stats"]["sl"] == "sig_str_land" and "kd" in m["stats_cols"]
+
+
+def test_export_parquet(tmp_path):
+    duckdb = __import__("pytest").importorskip("duckdb")
+    spec_pq = importlib.util.spec_from_file_location("export_parquet", db.ROOT / "scripts" / "export_parquet.py")
+    export_parquet = importlib.util.module_from_spec(spec_pq)
+    spec_pq.loader.exec_module(export_parquet)
+    canon = _canon(tmp_path / "canon.db")
+    config = export_parquet.export(tmp_path / "canon.db", tmp_path / "pq")
+    con = duckdb.connect()
+    assert "fights" in config["tables"] and len(config["build"]) == 12
+    # Every table comes through whole; events in date order.
+    for t in config["tables"]:
+        n = con.execute(f"SELECT COUNT(*) FROM '{(tmp_path / 'pq' / t).as_posix()}.parquet'").fetchone()[0]
+        assert n == canon.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0], t
+    assert con.execute(f"SELECT list(event_id) FROM '{(tmp_path / 'pq').as_posix()}/events.parquet'").fetchone()[0] == [
+        "e1", "e2"]
+    # The same input gives the same files (the build name doesn't change without new data).
+    assert export_parquet.export(tmp_path / "canon.db", tmp_path / "pq2")["build"] == config["build"]

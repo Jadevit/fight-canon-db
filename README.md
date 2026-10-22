@@ -106,13 +106,18 @@ Sherdog's new and recent event cards, with PFL's, Oktagon's and Sofascore's stat
 
 `site/` is a static page (fightcanon.com): fighters, events, round-by-round fight stats,
 leaderboards and a SQL box. Its pages read JSON files written by `scripts/site_json.py`; the
-SQL box and filtered leaderboards query a copy of the database in the browser with
-[sql.js-httpvfs](https://github.com/phiresky/sql.js-httpvfs), which downloads only the parts
-of the file a query reads (the copy is arranged for the site by `scripts/site_db.py`).
+SQL box and filtered leaderboards query the database in the browser with
+[DuckDB-WASM](https://duckdb.org/docs/api/wasm/overview), from Parquet files written by
+`scripts/export_parquet.py`, reading only the columns a query needs.
 `.github/workflows/deploy.yml` publishes it after every database update. To look at it
-locally: `python scripts/site_db.py data/canon.db site/db site/db/site.db`, then
-`python scripts/site_json.py build site/db/site.db site/db` and `python scripts/serve.py`, and open
-http://localhost:8000/.
+locally (needs `pip install duckdb`):
+
+```bash
+python scripts/site_db.py data/canon.db site/db/site.db
+python scripts/site_json.py build site/db/site.db site/db
+python scripts/export_parquet.py data/canon.db site/db
+python scripts/serve.py      # then open http://localhost:8000/
+```
 
 ## Run locally
 
