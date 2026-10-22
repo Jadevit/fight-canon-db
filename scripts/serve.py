@@ -2,8 +2,7 @@
 SQL page reads the database in pieces; python -m http.server always sends whole files), and
 index.html for any path that isn't a file (the page routes on the path).
 
-    python scripts/site_db.py data/canon.db site/db/site.db      # build site/db/ first
-    python scripts/site_json.py build site/db/site.db site/db
+    python scripts/site_json.py build data/canon.db site/db      # build site/db/ first
     python scripts/export_parquet.py data/canon.db site/db
     python scripts/serve.py [port]                               # then open http://localhost:8000/
 """

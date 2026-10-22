@@ -61,10 +61,11 @@ function db() {
     URL.revokeObjectURL(url);
     const conn = await instance.connect();
     await conn.query("SET enable_http_metadata_cache = true");
-    // The division a bout title names (as the site lists them; keep in step with site_db.py).
+    // The division a bout title names: the first in meta's list (site_json.py builds the same).
     const names = objs(m.divisions).map((d) => d.division).filter((d) => d !== "Other");
-    await conn.query(`CREATE MACRO division(wc) AS coalesce(list_filter([${names.map(sqlString).join(", ")}],
-      d -> contains(regexp_replace(coalesce(wc, ''), '(?i)catchweight', 'Catch Weight'), d))[1], 'Other')`);
+    const title = "regexp_replace(coalesce(wc, ''), '(?i)catchweight', 'Catch Weight')";
+    await conn.query(`CREATE MACRO division(wc) AS CASE ${names.map((d) =>
+      `WHEN contains(${title}, ${sqlString(d)}) THEN ${sqlString(d)}`).join(" ")} ELSE 'Other' END`);
     return conn;
   })();
   engine.catch(() => { engine = null; });  // a failed start is tried again next time
@@ -269,8 +270,8 @@ async function eventList(s, year, promo) {
     let rows;
     if (s) rows = await searchIndex("se", s);
     else if (promo) {
-      const code = (await promotions()).find((x) => x.promotion === promo)?.code;
-      rows = code == null ? [] : objs(await api(`events/p/${code}.json`));
+      const listed = (await promotions()).some((x) => x.promotion === promo);
+      rows = listed ? objs(await api(`events/p/${hex(promo)}.json`)) : [];
     } else rows = objs(await api(`events/y/${year}.json`));
     rows = rows.filter((e) => inYear(e) && ofPromo(e));
     return { rows, total: rows.length, more: done };
@@ -912,7 +913,7 @@ async function fight(id, show) {
 // Leaderboards, one board per source of numbers: results come from every fight, and each
 // stats source (they count differently) ranks only its own fights, with the stats it has.
 // The boards and their stats (SQL over per-fighter totals: n, w, fin, ko, subw, and the stats
-// columns) are defined in scripts/site_db.py and come in meta.json.
+// columns) are defined in scripts/site_json.py and come in meta.json.
 
 // The top 50 for a board, stat and filters, from the fights themselves (the opening view is a
 // file: l/<board>/<stat>.json). `promo` and `div` are names ("" for all), `from`/`to` years.
@@ -922,16 +923,17 @@ function leaderQuery(b, s, f, promo, div, m) {
   if (div) { where.push("division(x.weight_class) = ?"); args.push(div); }
   where.push("e.date >= ? AND e.date < ?");
   args.push(f.from, String(Number(f.to) + 1));
-  const won = "p.result = 'W'", ko = "x.method LIKE '%KO%'", sub = "x.method LIKE '%Submission%'";
+  // ILIKE: Sherdog writes some methods in lower case ("submission (armbar)").
+  const won = "p.result = 'W'", ko = "x.method ILIKE '%KO%'", sub = "x.method ILIKE '%Submission%'";
   const results = `COUNT(*) n, count_if(${won}) w, count_if(${won} AND (${ko} OR ${sub})) fin,
                    count_if(${won} AND ${ko}) ko, count_if(${won} AND ${sub}) subw`;
   let from = "fight_participants p", stats = "", source = [];
-  if (b.source) {  // the fighter's totals in each fight this source counted
-    const [table, src] = b.source, cols = m.sums[table];
-    from = `(SELECT fight_id, fighter_id, ${Object.entries(cols).map(([k, c]) => `SUM(${c}) ${k}`).join(", ")}
-             FROM ${table} WHERE source = ? GROUP BY ALL) r
-            JOIN fight_participants p ON p.fight_id = r.fight_id AND p.fighter_id = r.fighter_id`;
-    source = [src];
+  if (b.source) {  // everyone in each fight this source counted, with their totals if they have rows
+    const [table, src] = b.source, cols = m.sums[table];  // (a fighter with nothing in any round can have none)
+    from = `fight_participants p JOIN (SELECT DISTINCT fight_id FROM ${table} WHERE source = ?) c ON c.fight_id = p.fight_id
+            LEFT JOIN (SELECT fight_id, fighter_id, ${Object.entries(cols).map(([k, c]) => `SUM(${c}) ${k}`).join(", ")}
+             FROM ${table} WHERE source = ? GROUP BY ALL) r ON r.fight_id = p.fight_id AND r.fighter_id = p.fighter_id`;
+    source = [src, src];
     stats = ", " + m.stats_cols.map((k) => (cols[k] ? `SUM(r.${k}) ${k}` : `NULL ${k}`)).join(", ");
   }
   return [`SELECT t.fighter_id, fr.name, t.n, ${s.expr} val FROM (
@@ -953,7 +955,7 @@ async function leaders(_, show) {
   const [minY, maxY] = [c.first_date.slice(0, 4), c.last_date.slice(0, 4)];
   const years = [];
   for (let y = Number(maxY); y >= Number(minY); y--) years.push([String(y), String(y)]);
-  const code = (k) => (/^\d+$/.test(p.get(k) || "") ? p.get(k) : "0");  // older links named the promotion
+  const code = (k) => (/^\d+$/.test(p.get(k) || "") ? p.get(k) : "0");  // a division's number
   const board0 = BOARDS[p.get("board")] ? p.get("board") : "results";
   const min0 = String(Math.max(1, Number(p.get("min")) || 1));
   const mins = MIN_FIGHTS.includes(Number(min0)) ? MIN_FIGHTS : [...MIN_FIGHTS, Number(min0)].sort((a, b) => a - b);
@@ -963,7 +965,7 @@ async function leaders(_, show) {
       <div class="chips">
         ${chip("board", "Board", Object.entries(BOARDS).map(([k, b]) => [k, b.label]), board0)}
         <span id="stat-chip">${chip("stat", "Stat", statOptions(board0), p.get("stat") || "")}</span>
-        ${chip("promo", "Promotion", [["0", "All"], ...promos.map((x) => [x.code, x.promotion])], code("promo"))}
+        ${chip("promo", "Promotion", [["", "All"], ...promos.map((x) => [x.promotion, x.promotion])], p.get("promo") || "")}
         ${chip("div", "Division", [["0", "All"], ...divisions.map((d) => [d.code, d.division])], code("div"))}
         <span id="era">${chip("from", "From", [...years].reverse(), p.get("from") || minY)}
         ${chip("to", "To", years, p.get("to") || maxY)}</span>
@@ -975,14 +977,13 @@ async function leaders(_, show) {
   // A board's opening view (all promotions and years, min. 1 fight) is a file; other filters
   // query the database.
   const find = latest(async (f, stat, s, allYears) => {
-    if (f.promo === "0" && allYears && f.min === "1") {
+    if (!f.promo && allYears && f.min === "1") {
       const top = await api(`l/${f.board}/${stat}.json`);
       return (top?.[f.div] || []).map(([fighter_id, name, n, val]) => ({ fighter_id, name, n, val }));
     }
     document.getElementById("results").innerHTML = loading("Loading the query engine…");
-    const promo = promos.find((x) => String(x.code) === f.promo)?.promotion || "";
     const div = divisions.find((d) => String(d.code) === f.div)?.division || "";
-    return q(...leaderQuery(BOARDS[f.board], s, f, promo, div, m));
+    return q(...leaderQuery(BOARDS[f.board], s, f, f.promo, div, m));
   });
   const render = async () => {
     const f = { board: val("board"), stat: val("stat"), promo: val("promo"), div: val("div"), from: val("from"),

@@ -8,7 +8,7 @@ name: Deploy site
 on:
   push:
     branches: [main]
-    paths: ["site/**", "scripts/site_db.py", "scripts/site_json.py", "scripts/export_parquet.py",
+    paths: ["site/**", "scripts/site_json.py", "scripts/export_parquet.py",
             "wrangler.jsonc", ".github/workflows/deploy.yml"]
   workflow_run:
     workflows: ["Update database", "Discover events"]
@@ -54,8 +54,7 @@ jobs:
         run: |
           gh release download --pattern canon.db --dir data
           pip install -q duckdb boto3
-          python scripts/site_db.py data/canon.db _site.db
-          python scripts/site_json.py build _site.db _json
+          python scripts/site_json.py build data/canon.db _json
           python scripts/export_parquet.py data/canon.db _pq
           mkdir _cf
           cp -r site/* _cf/

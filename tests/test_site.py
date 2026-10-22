@@ -1,14 +1,26 @@
-"""Tests for scripts/site_db.py, the website's copy of the database."""
+"""Tests for the site's build: scripts/site_json.py (the pages as JSON) and
+scripts/export_parquet.py (the database as Parquet)."""
 
 import importlib.util
 import json
 import sqlite3
 
+import pytest
+
 from canon_db import db
 
-spec = importlib.util.spec_from_file_location("site_db", db.ROOT / "scripts" / "site_db.py")
-site_db = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(site_db)
+pytest.importorskip("duckdb")
+
+
+def _script(name):
+    spec = importlib.util.spec_from_file_location(name, db.ROOT / "scripts" / f"{name}.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+site_json = _script("site_json")
+export_parquet = _script("export_parquet")
 
 
 def _canon(path):
@@ -34,45 +46,26 @@ def _canon(path):
     return conn
 
 
-def test_site_db(tmp_path):
+def test_site_tables(tmp_path):
     canon = _canon(tmp_path / "canon.db")
-    site_db.build(tmp_path / "canon.db", tmp_path / "site.db")
-    site = sqlite3.connect(tmp_path / "site.db")
+    con = site_json.load(tmp_path / "canon.db")
     # A fighter's fights from either side; an event's fights in card order.
-    assert site.execute("SELECT fight_id FROM site_fights WHERE ? IN (a_id, b_id) ORDER BY date",
-                        ("a" * 16,)).fetchall() == [("f1",), ("f3",)]
-    assert site.execute("SELECT fight_id, division, has_stats FROM site_fights WHERE event_id = 'e1' "
-                        "ORDER BY card").fetchall() == [("f2", "Lightweight", 0), ("f1", "Featherweight", 1)]
-    # Search by any word of any name, accents dropped.
-    assert site.execute("SELECT DISTINCT fighter_id, n, wins FROM site_names WHERE token IN ('jose', 'junior')"
-                        ).fetchall() == [("a" * 16, 2, 31)]
-    assert site.execute("SELECT event_id FROM site_events LIMIT 1").fetchone() == ("e2",)  # newest first
-    assert site.execute("SELECT events, promotions FROM site_stats").fetchone() == (
+    assert con.execute("SELECT fight_id FROM site_fights WHERE ? IN (a_id, b_id) ORDER BY date",
+                       ["a" * 16]).fetchall() == [("f1",), ("f3",)]
+    assert con.execute("SELECT fight_id, division, has_stats FROM site_fights WHERE event_id = 'e1' "
+                       "ORDER BY card").fetchall() == [("f2", "Lightweight", 0), ("f1", "Featherweight", 1)]
+    assert con.execute("SELECT events, promotions FROM site_stats").fetchone() == (
         canon.execute("SELECT COUNT(*), COUNT(DISTINCT promotion) FROM events").fetchone())
-    # Leaderboards: totals and the pre-computed opening view.
-    assert site.execute("SELECT n, w, ko, subw FROM site_results WHERE promotion = 0 AND division = 0 "
-                        "AND fighter_id = ?", ("a" * 16,)).fetchone() == (2, 2, 1, 1)
-    assert site.execute("SELECT fighter_id, val FROM site_top WHERE board = 'results' AND stat = 'wins' "
-                        "AND division = 0 ORDER BY rank").fetchall() == [("a" * 16, 2), ("b" * 16, 1), ("c" * 16, 0)]
-    assert site.execute("SELECT fighter_id, val FROM site_top WHERE board = 'ufcstats' AND stat = 'sig'"
-                        ).fetchall() == [("a" * 16, 30), ("a" * 16, 30)]  # all divisions, and Featherweight
-    boards = json.loads(site.execute("SELECT json FROM site_boards").fetchone()[0])
-    assert boards["ufcstats"]["stats"]["sigacc"]["where"] == "sa >= 100"
-    assert boards["ufcstats"]["source"] == ["round_stats", "ufcstats"] and boards["results"]["source"] is None
-
-
-spec_json = importlib.util.spec_from_file_location("site_json", db.ROOT / "scripts" / "site_json.py")
-site_json = importlib.util.module_from_spec(spec_json)
-spec_json.loader.exec_module(site_json)
+    assert con.execute("SELECT division('UFC Women''s Flyweight Title Bout'), division('Catchweight Bout'), "
+                       "division(NULL)").fetchone() == ("Women's Flyweight", "Catch Weight", "Other")
 
 
 def test_site_json(tmp_path, monkeypatch):
     _canon(tmp_path / "canon.db")
-    site_db.build(tmp_path / "canon.db", tmp_path / "site.db")
     monkeypatch.setattr(site_json, "SEARCH_CAP", 1)  # split every prefix with two matches
     monkeypatch.setattr(site_json, "SEARCH_TOP", 1)
     monkeypatch.setattr(site_json, "SEARCH_EXACT", 1)
-    site_json.build(tmp_path / "site.db", tmp_path / "json")
+    site_json.build(tmp_path / "canon.db", tmp_path / "json")
     root = tmp_path / "json" / "v1"
     read = lambda p: json.loads((root / p).read_text(encoding="utf-8"))  # noqa: E731
     rows = lambda t: [dict(zip(t["cols"], r)) for r in t["rows"]]  # noqa: E731
@@ -108,13 +101,17 @@ def test_site_json(tmp_path, monkeypatch):
     m = read("meta.json")
     assert m["stats"]["events"] == 2 and m["boards"]["results"]["stats"]["wins"]["label"] == "Wins"
     assert m["sums"]["round_stats"]["sl"] == "sig_str_land" and "kd" in m["stats_cols"]
+    assert m["boards"]["ufcstats"]["source"] == ["round_stats", "ufcstats"] and m["boards"]["results"]["source"] is None
+    assert [r[0] for r in m["top_fighters"]["rows"]] == ["b" * 16, "c" * 16, "a" * 16]  # 2 fights each: by name
+    # Leaderboards' opening views: every division (0) and each one.
+    assert [r[:4] for r in read("l/results/wins.json")["0"]] == [["a" * 16, "José Aldo", 2, 2], ["b" * 16, "Ben Baker", 2, 1],
+                                                               ["c" * 16, "Carl Cole", 2, 0]]
+    sig = read("l/ufcstats/sig.json")
+    assert sig["0"] == [["a" * 16, "José Aldo", 1, 30]] and list(sig) == ["0", "9"]  # all, and Featherweight
 
 
 def test_export_parquet(tmp_path):
-    duckdb = __import__("pytest").importorskip("duckdb")
-    spec_pq = importlib.util.spec_from_file_location("export_parquet", db.ROOT / "scripts" / "export_parquet.py")
-    export_parquet = importlib.util.module_from_spec(spec_pq)
-    spec_pq.loader.exec_module(export_parquet)
+    import duckdb
     canon = _canon(tmp_path / "canon.db")
     config = export_parquet.export(tmp_path / "canon.db", tmp_path / "pq")
     con = duckdb.connect()

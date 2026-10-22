@@ -113,8 +113,7 @@ SQL box and filtered leaderboards query the database in the browser with
 locally (needs `pip install duckdb`):
 
 ```bash
-python scripts/site_db.py data/canon.db site/db/site.db
-python scripts/site_json.py build site/db/site.db site/db
+python scripts/site_json.py build data/canon.db site/db
 python scripts/export_parquet.py data/canon.db site/db
 python scripts/serve.py      # then open http://localhost:8000/
 ```
