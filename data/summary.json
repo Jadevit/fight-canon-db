@@ -1,27 +1,27 @@
 {
-  "updated_at": "2026-10-22T15:44:52+00:00",
+  "updated_at": "2026-10-23T15:40:42+00:00",
   "coverage": {
     "first_event_date": "1963-12-02",
-    "last_event_date": "2026-10-19",
-    "last_event": "Shooto - Lemino Shooto Vol. 9",
-    "last_event_id": "sherdog:114593"
+    "last_event_date": "2026-10-23",
+    "last_event": "Top FC 24 - Breakthrough",
+    "last_event_id": "sherdog:114848"
   },
   "rows": {
-    "promotions": 12362,
-    "promotion_aliases": 12331,
-    "fighters": 180311,
-    "fighter_aliases": 196110,
+    "promotions": 12364,
+    "promotion_aliases": 12333,
+    "fighters": 180316,
+    "fighter_aliases": 196225,
     "fighter_redirects": 83,
-    "events": 61457,
-    "event_aliases": 2156,
-    "event_cards": 61451,
-    "event_pages": 75448,
-    "fights": 372389,
-    "fight_participants": 744778,
-    "round_stats": 71798,
+    "events": 61461,
+    "event_aliases": 2157,
+    "event_cards": 61455,
+    "event_pages": 75464,
+    "fights": 372420,
+    "fight_participants": 744840,
+    "round_stats": 71844,
     "smartcage_round_stats": 3548,
-    "sofascore_round_stats": 18998,
+    "sofascore_round_stats": 19044,
     "judge_scores": 24450,
-    "odds": 22738
+    "odds": 22916
   }
 }
