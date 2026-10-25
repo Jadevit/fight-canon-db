@@ -1,27 +1,27 @@
 {
-  "updated_at": "2026-10-24T14:47:03+00:00",
+  "updated_at": "2026-10-25T15:06:06+00:00",
   "coverage": {
     "first_event_date": "1963-12-02",
     "last_event_date": "2026-10-24",
-    "last_event": "WLF / OFC 70 - W.A.R.S. 97 / Open Fighting Championship 70",
-    "last_event_id": "sherdog:114589"
+    "last_event": "UFC 333: Volkanovski vs. Evloev",
+    "last_event_id": "cc18abc046b382c9"
   },
   "rows": {
-    "promotions": 12364,
-    "promotion_aliases": 12333,
-    "fighters": 180323,
-    "fighter_aliases": 196310,
-    "fighter_redirects": 83,
-    "events": 61469,
-    "event_aliases": 2157,
-    "event_cards": 61463,
-    "event_pages": 75464,
-    "fights": 372451,
-    "fight_participants": 744902,
-    "round_stats": 71844,
+    "promotions": 12367,
+    "promotion_aliases": 12336,
+    "fighters": 180344,
+    "fighter_aliases": 196491,
+    "fighter_redirects": 84,
+    "events": 61489,
+    "event_aliases": 2158,
+    "event_cards": 61483,
+    "event_pages": 75476,
+    "fights": 372560,
+    "fight_participants": 745120,
+    "round_stats": 71906,
     "smartcage_round_stats": 3548,
     "sofascore_round_stats": 19044,
     "judge_scores": 24450,
-    "odds": 23052
+    "odds": 23460
   }
 }
