@@ -21,15 +21,18 @@ const CONFIG = fetch(DB_DIR + "config.json", { cache: "no-cache" }).then((r) => 
 const base = new URL(DB_DIR, location.href);
 const API = CONFIG.then((c) => new URL(c.api || "v1/", base).href);
 
-// A JSON file of the API, fetched once per page load; null if there's no such file.
-const files = new Map();
+// A JSON file of the API, fetched once per page load; null if there's no such file. `ready`
+// holds the files that have arrived.
+const files = new Map(), ready = new Map();
 function api(path) {
   if (!files.has(path)) {
     files.set(path, (async () => {
       const r = await fetch((await API) + path);
       if (r.status === 404 || r.status === 403) return null;
       if (!r.ok) throw new Error(`${path}: HTTP ${r.status}`);
-      return r.json();
+      const j = await r.json();
+      ready.set(path, j);
+      return j;
     })().catch((e) => { files.delete(path); throw e; }));
   }
   return files.get(path);
@@ -245,16 +248,28 @@ function wordsMatch(terms, words, used = new Set()) {
   return words.some((w, i) => !used.has(i) && w.startsWith(t) && wordsMatch(rest, words, new Set(used).add(i)));
 }
 
-// Search a split index (sf/ fighters, se/ events): read the file of the longest word's first
-// two letters, a letter deeper while that file is split, and keep the rows in which every
-// word of the term starts a different word. Rows come in rank order (most fights; newest).
-async function searchIndex(folder, s) {
-  let p = s.first.slice(0, 2), file = await api(`${folder}/${hex(p)}.json`);
-  while (file?.split && p.length < s.first.length) {
-    p = s.first.slice(0, p.length + 1);
-    file = await api(`${folder}/${hex(p)}.json`);
+// Search a split index (sf/ fighters, se/ events): read the file of the longest word's prefix,
+// as deep as the index is split (meta.json lists the split prefixes), and keep the rows in
+// which every word of the term starts a different word. Rows come in rank order (most fights;
+// newest). While that file loads, early() gets the matches in a shorter prefix's file that is
+// already here: the top of the same list.
+async function searchIndex(folder, s, early) {
+  const split = new Set((await meta()).splits?.[folder]);
+  const path = (p) => `${folder}/${hex(p)}.json`;
+  const keep = (file) => objs(file).filter((r) => wordsMatch(s.words, r.words.split(" ")));
+  let p = s.first.slice(0, 2);
+  while (split.has(p) && p.length < s.first.length) p = s.first.slice(0, p.length + 1);
+  if (early && !ready.has(path(p))) {
+    for (let q = p.slice(0, -1); q.length >= 2; q = q.slice(0, -1)) {
+      if (ready.get(path(q))) { early(keep(ready.get(path(q)))); break; }
+    }
   }
-  return objs(file).filter((r) => wordsMatch(s.words, r.words.split(" ")));
+  let file = await api(path(p));
+  while (file?.split && p.length < s.first.length) {  // a meta.json older than the files
+    p = s.first.slice(0, p.length + 1);
+    file = await api(path(p));
+  }
+  return keep(file);
 }
 
 // Seconds actually fought, from "3 Rnd (5-5-5)" + end round + end time.
@@ -270,7 +285,8 @@ function fightSeconds(timeFormat, endRound, endTime) {
   return mins.slice(0, endRound - 1).reduce((a, b) => a + b, 0) * 60 + last;
 }
 
-const searchFighters = async (s, limit) => (await searchIndex("sf", s)).slice(0, limit);
+const searchFighters = async (s, limit, early) =>
+  (await searchIndex("sf", s, early && ((rows) => early(rows.slice(0, limit))))).slice(0, limit);
 
 // Events, newest first: a search's, a promotion's (listed ones) or a year's, narrowed by year
 // and promotion; with none of those, a year's file at a time from the newest. Returns
@@ -307,7 +323,7 @@ const fighterRow = (r) => `
   <a class="row" href="/fighter/${esc(r.fighter_id)}">
     <div class="main"><div class="title">${esc(r.name)}</div>
       ${r.nickname ? `<div class="sub">“${esc(r.nickname)}”</div>` : ""}</div>
-    <div class="end"><b class="num">${proRecord(r, r)}</b>${plural(r.n, "fight")} here</div>
+    <div class="end"><b class="num">${proRecord(r, r)}</b>${plural(r.n, "fight")}</div>
   </a>`;
 const eventRow = (e) => `
   <a class="row" href="/event/${esc(e.event_id)}">
@@ -431,19 +447,21 @@ menuBtn.onclick = () => {
   const box = document.getElementById("suggest");
   let links = [], active = -1;
   const close = () => { box.hidden = true; active = -1; };
-  const find = latest(async (term) => {
-    const s = searchWords(term);
-    if (!s) return null;
-    const [people, events] = await Promise.all([searchFighters(s, 6), eventList(s, "", "")]);
-    return [people, events.rows.slice(0, 5)];
-  });
+  let n = 0;  // only the latest search draws: an older one can finish last
   const render = async () => {
-    const term = input.value.trim();
+    const term = input.value.trim(), mine = ++n;
     if (!term) { close(); return; }
-    const got = await find(term);
-    if (got === undefined) return;
-    if (got === null) { box.innerHTML = `<p>Type at least two letters.</p>`; box.hidden = false; return; }
-    const [people, events] = got;
+    const s = searchWords(term);
+    if (!s) { box.innerHTML = `<p>Type at least two letters.</p>`; box.hidden = false; return; }
+    const early = [null, null], soon = (i) => (rows) => {
+      early[i] = rows;
+      if (early[0] && early[1]) draw(mine, early[0], early[1].slice(0, 5));
+    };
+    const [people, events] = await Promise.all([searchFighters(s, 6, soon(0)), searchIndex("se", s, soon(1))]);
+    draw(mine, people, events.slice(0, 5));
+  };
+  const draw = (mine, people, events) => {
+    if (mine !== n) return;
     box.innerHTML = (people.length ? `<span class="label">Fighters</span>` + people.map((r) =>
         `<a href="/fighter/${esc(r.fighter_id)}">${esc(r.name)}<small>${proRecord(r, r)}</small></a>`).join("") : "") +
       (events.length ? `<span class="label">Events</span>` + events.map((e) =>
@@ -453,7 +471,7 @@ menuBtn.onclick = () => {
     active = -1;
     box.hidden = false;
   };
-  input.addEventListener("input", debounce(render, 200));
+  input.addEventListener("input", debounce(render, 120));
   input.addEventListener("focus", () => { if (input.value.trim()) render(); });
   input.addEventListener("keydown", (e) => {
     if (e.key === "Escape") { close(); input.blur(); return; }
@@ -547,7 +565,7 @@ async function landing(_, show) {
           <h3 style="font-size:20px;margin-top:12px">Ratings</h3>
           <p>One scale for all of MMA: every fighter, every promotion and every era rated against each
              other. Each rating shows how sure it is, so a thin record or a weak link between
-             promotions shows up as a wider range, not false precision.</p>
+             promotions shows up as a wider range.</p>
         </div>
         <svg viewBox="0 0 320 120" aria-hidden="true">
           <path d="M0 108 C60 104 90 70 140 40 S220 6 250 18 S300 70 320 92 L320 40 C300 30 270 -6 250 4 S180 14 140 22 S50 60 0 70 Z" fill="#E3A63B" opacity=".2"/>
@@ -576,21 +594,21 @@ async function fighters(_, show) {
       <input type="search" id="q" placeholder="Search by name" value="${esc(p.get("q") || "")}" autofocus></div>
     <div id="results">${loading()}</div>`)) return;
   const input = document.getElementById("q");
-  const find = latest(async (term) => {
-    if (!term) return objs((await meta()).top_fighters);
-    const s = searchWords(term);
-    return s ? searchFighters(s, 50) : null;
-  });
+  let n = 0;  // only the latest search draws: an older one can finish last
   const render = async () => {
-    const term = input.value.trim();
+    const term = input.value.trim(), mine = ++n;
     setParams(new URLSearchParams(term ? { q: term } : {}));
-    const rows = await find(term);
-    if (rows === undefined) return;  // a newer search is on its way
-    document.getElementById("results").innerHTML = rows === null ? nothing("Type at least two letters of a name.")
-      : (term ? "" : `<span class="label" style="display:block;margin-bottom:10px">Most fights in the database</span>`) +
-        (rows.length ? `<div class="list">${rows.map(fighterRow).join("")}</div>` : nothing());
+    const draw = (rows) => {
+      if (mine !== n) return;
+      document.getElementById("results").innerHTML = rows === null ? nothing("Type at least two letters of a name.")
+        : (term ? "" : `<span class="label" style="display:block;margin-bottom:10px">Most fights in the database</span>`) +
+          (rows.length ? `<div class="list">${rows.map(fighterRow).join("")}</div>` : nothing());
+    };
+    if (!term) return draw(objs((await meta()).top_fighters));
+    const s = searchWords(term);
+    draw(s ? await searchFighters(s, 50, draw) : null);
   };
-  input.oninput = debounce(render, 250);
+  input.oninput = debounce(render, 120);
   await render();
 }
 
@@ -783,7 +801,7 @@ async function events(_, show) {
     while (list.rows.length < shown && (list.canMore = await list.more()));
     draw();
   };
-  qi.oninput = debounce(render, 250);
+  qi.oninput = debounce(render, 120);
   yi.onchange = pi.onchange = render;
   await render();
 }

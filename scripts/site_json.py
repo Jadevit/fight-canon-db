@@ -457,9 +457,12 @@ def event_lists(con, w: Writer) -> None:
                                                         "ORDER BY date DESC, event_id", (promo,)))
 
 
-def trie(w: Writer, folder: str, cols: list[str], entries: list[tuple[set[str], list]]) -> None:
+def trie(w: Writer, folder: str, cols: list[str], entries: list[tuple[set[str], list]]) -> list[str]:
     """Search files for entries (their words, the row shown), already in rank order: a file per
-    two-letter prefix, split a letter deeper while a prefix has more than SEARCH_CAP matches."""
+    two-letter prefix, split a letter deeper while a prefix has more than SEARCH_CAP matches.
+    Returns the split prefixes, so the page can read the deepest file a term needs at once."""
+    splits = []
+
     def emit(prefix: str, items: list[int]) -> None:
         if len(items) <= SEARCH_CAP or len(prefix) >= 16:
             w(f"{folder}/{hexname(prefix)}.json", {"split": False, "cols": cols, "rows": [entries[i][1] for i in items]})
@@ -467,6 +470,7 @@ def trie(w: Writer, folder: str, cols: list[str], entries: list[tuple[set[str], 
         exact = [i for i in items if prefix in entries[i][0]][:SEARCH_EXACT]
         keep = sorted(set(items[:SEARCH_TOP]) | set(exact))
         w(f"{folder}/{hexname(prefix)}.json", {"split": True, "cols": cols, "rows": [entries[i][1] for i in keep]})
+        splits.append(prefix)
         children = defaultdict(list)
         for i in items:
             for nxt in {wd[:len(prefix) + 1] for wd in entries[i][0] if wd.startswith(prefix) and len(wd) > len(prefix)}:
@@ -480,11 +484,13 @@ def trie(w: Writer, folder: str, cols: list[str], entries: list[tuple[set[str], 
             top[p].append(i)
     for p, items in sorted(top.items()):
         emit(p, items)
+    return splits
 
 
-def search(con, w: Writer) -> None:
+def search(con, w: Writer) -> dict:
     """sf/: fighters by every word of every name they go by, most fights first.
-    se/: events by every word of their name and place, newest first."""
+    se/: events by every word of their name and place, newest first. Returns each folder's
+    split prefixes."""
     names = defaultdict(set)
     for fid, name in rows(con, "SELECT fighter_id, name FROM fighters UNION ALL "
                                "SELECT fighter_id, name FROM fighter_aliases")[1]:
@@ -495,14 +501,15 @@ def search(con, w: Writer) -> None:
         ws = names.get(r[0], set())
         if ws:
             entries.append((ws, r + [" ".join(sorted(ws))]))
-    trie(w, "sf", ["fighter_id", "name", "nickname", "wins", "losses", "draws", "no_contests", "n", "w", "l", "d",
-                   "nc", "words"], entries)
+    sf = trie(w, "sf", ["fighter_id", "name", "nickname", "wins", "losses", "draws", "no_contests", "n", "w", "l", "d",
+                        "nc", "words"], entries)
     evs = []
     for eid, name, date, loc, promo, n in rows(
             con, "SELECT event_id, name, date, location, promotion, n FROM site_events ORDER BY date DESC, event_id")[1]:
         ws = words(f"{name} {loc or ''}")
         evs.append((ws, [eid, name, date, loc, promo, n, " ".join(sorted(ws))]))
-    trie(w, "se", ["event_id", "name", "date", "location", "promotion", "n", "words"], evs)
+    se = trie(w, "se", ["event_id", "name", "date", "location", "promotion", "n", "words"], evs)
+    return {"sf": sf, "se": se}
 
 
 def leaders(con, w: Writer) -> None:
@@ -523,8 +530,9 @@ def leaders(con, w: Writer) -> None:
             w(f"l/{board}/{stat}.json", divs)
 
 
-def meta(con, w: Writer) -> None:
-    """meta.json: the landing page's numbers, the latest event, and the lists the filters offer."""
+def meta(con, w: Writer, splits: dict) -> None:
+    """meta.json: the landing page's numbers, the latest event, the lists the filters offer, and
+    the search files that are split."""
     stats = table(con, "SELECT * FROM site_stats")
     w("meta.json", {
         "stats": dict(zip(stats["cols"], stats["rows"][0])),
@@ -536,6 +544,7 @@ def meta(con, w: Writer) -> None:
         "boards": BOARDS,
         "sums": SUMS, "stats_cols": STATS,  # stats boards: column -> its stats table's column
         "top_fighters": table(con, "SELECT * FROM site_cards ORDER BY n DESC, name, fighter_id LIMIT 50"),
+        "splits": splits,
     })
 
 
@@ -543,7 +552,8 @@ def build(src: Path, out: Path) -> Writer:
     w = Writer(out)
     con = load(src)
     try:
-        for step in (meta, query_help, leaders, event_lists, search, events, fighters):
+        meta(con, w, search(con, w))
+        for step in (query_help, leaders, event_lists, events, fighters):
             step(con, w)
     finally:
         con.close()

@@ -109,6 +109,7 @@ def test_site_json(tmp_path, monkeypatch):
     assert m["sums"]["round_stats"]["sl"] == "sig_str_land" and "kd" in m["stats_cols"]
     assert m["boards"]["ufcstats"]["source"] == ["round_stats", "ufcstats"] and m["boards"]["results"]["source"] is None
     assert [r[0] for r in m["top_fighters"]["rows"]] == ["b" * 16, "c" * 16, "a" * 16]  # 2 fights each: by name
+    assert {"uf", "ufc"} <= set(m["splits"]["se"]) and "jo" not in m["splits"]["sf"]  # the split search files
     # Leaderboards' opening views: every division (0) and each one.
     assert [r[:4] for r in read("l/results/wins.json")["0"]] == [["a" * 16, "José Aldo", 2, 2], ["b" * 16, "Ben Baker", 2, 1],
                                                                ["c" * 16, "Carl Cole", 2, 0]]
