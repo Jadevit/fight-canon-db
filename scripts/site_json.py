@@ -16,10 +16,11 @@ Search: names (fighters) and words (events) are split into files by prefix. A pr
 more than SEARCH_CAP matches gets a file of its top SEARCH_TOP (most fights; newest events)
 and the top SEARCH_EXACT of those whose word is the prefix itself (a common word, such as a
 country, would otherwise bring tens of thousands), and a file for each prefix a letter longer.
-Upload compares each file's hash with the manifest of the last upload (v1-manifest.json in
-the bucket) and sends only the changed ones. Browsers keep a file 5 minutes and Cloudflare a
-day, so visits don't read R2; purge clears the files the upload changed (or deleted) from
-Cloudflare's cache, so an update still shows within minutes.
+Upload compares each file's hash with the bucket's own (its listing's ETags), so it sends only
+the changed ones even after a run that stopped partway. Browsers keep a file 5 minutes and
+Cloudflare a day, so visits don't read R2; purge clears the files that changed (or were
+deleted) since the last finished upload (v1-manifest.json in the bucket) from Cloudflare's
+cache, so an update still shows within minutes.
 """
 
 from __future__ import annotations
@@ -567,10 +568,14 @@ def build(src: Path, out: Path) -> Writer:
 
 
 def upload(out: Path, workers: int = 32) -> None:
-    """Send the files that changed since the last upload to R2 (R2_BUCKET; AWS_ENDPOINT_URL and
-    keys from the environment), delete the ones that are gone, then save the new manifest."""
+    """Send the files whose hash differs from the bucket's copy to R2 (R2_BUCKET; AWS_ENDPOINT_URL
+    and keys from the environment), delete the bucket's files the build doesn't have, then save
+    the manifest. The files to purge are those that differ from the last manifest."""
     import boto3
-    s3 = boto3.client("s3", endpoint_url=os.environ["AWS_ENDPOINT_URL"])
+    from botocore.config import Config
+    s3 = boto3.client("s3", endpoint_url=os.environ["AWS_ENDPOINT_URL"],
+                      config=Config(max_pool_connections=workers, read_timeout=300,
+                                    retries={"max_attempts": 10, "mode": "adaptive"}))
     bucket, manifest = os.environ["R2_BUCKET"], f"{VERSION}-manifest.json"
     root = out / VERSION
     files = {f"{VERSION}/{p.relative_to(root).as_posix()}": p for p in root.rglob("*.json")}
@@ -579,8 +584,14 @@ def upload(out: Path, workers: int = 32) -> None:
         old = json.loads(s3.get_object(Bucket=bucket, Key=manifest)["Body"].read())
     except s3.exceptions.NoSuchKey:
         old = {}
-    changed = [k for k, h in hashes.items() if old.get(k) != h]
-    gone = [k for k in old if k not in hashes]
+    live = {o["Key"]: o["ETag"].strip('"') for page in s3.get_paginator("list_objects_v2").paginate(
+        Bucket=bucket, Prefix=f"{VERSION}/") for o in page.get("Contents", [])}
+    same = [k for k, h in hashes.items() if old.get(k) == h and k in live]
+    if same and not any(live[k] == hashes[k] for k in same[:1000]):  # ETags that aren't MD5s
+        print("The bucket's ETags don't match file hashes; comparing with the manifest instead.")
+        live = {k: old.get(k) for k in live}
+    changed = [k for k, h in hashes.items() if live.get(k) != h]
+    gone = [k for k in live if k not in hashes]
 
     def put(k: str) -> None:
         s3.put_object(Bucket=bucket, Key=k, Body=files[k].read_bytes(), ContentType="application/json",
@@ -588,11 +599,12 @@ def upload(out: Path, workers: int = 32) -> None:
 
     with ThreadPoolExecutor(workers) as pool:
         list(pool.map(put, changed))
-    for i in range(0, len(gone), 1000):
-        s3.delete_objects(Bucket=bucket, Delete={"Objects": [{"Key": k} for k in gone[i:i + 1000]], "Quiet": True})
+    for i in range(0, len(gone), 200):
+        s3.delete_objects(Bucket=bucket, Delete={"Objects": [{"Key": k} for k in gone[i:i + 200]], "Quiet": True})
     s3.put_object(Bucket=bucket, Key=manifest, Body=json.dumps(hashes).encode(), ContentType="application/json")
-    (out / "purge.txt").write_text("\n".join(changed + gone))
-    print(f"{len(files)} files: {len(changed)} uploaded, {len(gone)} deleted")
+    stale = [k for k, h in hashes.items() if old.get(k) != h] + [k for k in old if k not in hashes]
+    (out / "purge.txt").write_text("\n".join(stale))
+    print(f"{len(files)} files: {len(changed)} uploaded, {len(gone)} deleted, {len(stale)} to purge")
 
 
 def purge(out: Path) -> None:
