@@ -1,27 +1,29 @@
 {
-  "updated_at": "2026-10-26T17:18:08+00:00",
+  "updated_at": "2026-10-27T19:19:02+00:00",
   "coverage": {
     "first_event_date": "1963-12-02",
     "last_event_date": "2026-10-25",
-    "last_event": "Shooto / Torao Nation State - Force 24",
-    "last_event_id": "sherdog:114323"
+    "last_event": "Grachan - Grachan 86",
+    "last_event_id": 61496
   },
   "rows": {
-    "promotions": 12367,
-    "promotion_aliases": 12336,
-    "fighters": 180361,
-    "fighter_aliases": 196546,
-    "fighter_redirects": 84,
-    "events": 61498,
-    "event_aliases": 2160,
-    "event_cards": 61492,
-    "event_pages": 75480,
-    "fights": 372605,
-    "fight_participants": 745210,
+    "promotions": 12368,
+    "promotion_aliases": 12337,
+    "fighters": 180387,
+    "fighter_aliases": 196587,
+    "merged_ids": 0,
+    "events": 61513,
+    "event_aliases": 63673,
+    "event_cards": 61507,
+    "event_pages": 75491,
+    "non_pro_bouts": 664,
+    "fights": 372659,
+    "fight_aliases": 384186,
+    "fight_participants": 745318,
     "round_stats": 71992,
     "smartcage_round_stats": 3548,
     "sofascore_round_stats": 19130,
     "judge_scores": 24450,
-    "odds": 23492
+    "odds": 23518
   }
 }
