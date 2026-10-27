@@ -26,7 +26,7 @@ SCHEMA = Path(__file__).resolve().parent / "schema.sql"
 PROMOTIONS = Path(__file__).resolve().parent / "promotions.csv"
 
 TABLES = ("promotions", "promotion_aliases", "fighters", "fighter_aliases", "merged_ids", "events",
-          "event_aliases", "event_cards", "event_pages", "fights", "fight_aliases", "fight_participants",
+          "event_aliases", "event_cards", "event_pages", "non_pro_bouts", "fights", "fight_aliases", "fight_participants",
           "round_stats", "smartcage_round_stats", "sofascore_round_stats", "judge_scores", "odds")
 
 

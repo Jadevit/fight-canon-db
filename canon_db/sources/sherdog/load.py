@@ -483,6 +483,9 @@ def mark_bout_types(conn: sqlite3.Connection, pages: dict[str, dict]) -> set[str
             for f in page.get(key, []) if f["event_id"] and f["opponent_id"]]
     conn.executemany("UPDATE fights SET bout_type = ? WHERE fight_id = "
                      "(SELECT fight_id FROM fight_aliases WHERE source = 'sherdog' AND source_id = ?)", rows)
+    # A bout Sherdog now lists as pro comes back with its card.
+    conn.executemany("DELETE FROM non_pro_bouts WHERE source = 'sherdog' AND source_id = ?",
+                     [(key,) for kind, key in rows if kind == "pro"])
     return {r[1] for r in rows}
 
 
@@ -495,11 +498,16 @@ def default_pro(conn: sqlite3.Connection) -> None:
 
 def drop_non_pro(conn: sqlite3.Connection) -> int:
     """Delete amateur and exhibition fights that no promotion's site has (pro MMA only), then
-    fighters and events left with no fights. Returns the number of fights deleted."""
+    fighters and events left with no fights. Their Sherdog ids go in non_pro_bouts, so cards
+    skip them. Returns the number of fights deleted."""
     gone = [r[0] for r in conn.execute(
         f"SELECT fight_id FROM fights WHERE bout_type IN ('amateur', 'exhibition') AND fight_id NOT IN "
         f"(SELECT fight_id FROM fight_aliases WHERE source IN ({', '.join('?' * len(ids.OFFICIAL))}))",
         sorted(ids.OFFICIAL))]
+    conn.executemany(
+        "INSERT OR REPLACE INTO non_pro_bouts (source, source_id, bout_type) SELECT a.source, a.source_id, "
+        "f.bout_type FROM fight_aliases a JOIN fights f USING (fight_id) WHERE a.fight_id = ? AND a.source = ?",
+        [(fight, NAME) for fight in gone])
     for fight in gone:
         ids.delete_fight(conn, fight)
     ids.drop_empty(conn)

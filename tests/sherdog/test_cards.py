@@ -156,6 +156,16 @@ def test_non_pro_fights_are_dropped():
     assert conn.execute("SELECT count(*) FROM fighters").fetchone() == (3,)
     assert conn.execute("SELECT count(*) FROM round_stats").fetchone() == (0,)
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+    # Reading the cards again doesn't bring them back, and the cards stay complete.
+    assert sorted(conn.execute("SELECT source_id, bout_type FROM non_pro_bouts")) == [
+        ("902:300-400", "amateur"), ("903:300-500", "exhibition")]
+    counts = write(conn, [_bout(902, "2019-06-06", ("Carl Cole", "300"), ("Dan Dent", "400")),
+                          _bout(903, "2019-07-07", ("Carl Cole", "300"), ("Eve East", "500"))])
+    assert counts["non-pro skipped"] == 2 and not counts["new fights"]
+    assert not ids.find(conn, "fight", "sherdog", "902:300-400")
+    # Until Sherdog lists one as pro.
+    mark_bout_types(conn, {"300": dict(fights=[dict(event_id="903", opponent_id="500")], exhibition=[], amateur=[])})
+    assert write(conn, [_bout(903, "2019-07-07", ("Carl Cole", "300"), ("Eve East", "500"))])["new fights"] == 1
 
 
 def test_event_pages_due():

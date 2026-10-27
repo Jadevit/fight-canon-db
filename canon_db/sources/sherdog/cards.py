@@ -64,6 +64,9 @@ def write(conn: sqlite3.Connection, st: State, bouts: list[dict]) -> Counter:
     ok = [b for b in bouts if b.get("placed", True) and b["event"] and all(s["sid"] for s in b["sides"])
           and b["sides"][0]["sid"] != b["sides"][1]["sid"]]  # a few cards list one fighter on both sides
     written = {id(b) for b in ok}
+    non_pro = {k for (k,) in conn.execute("SELECT source_id FROM non_pro_bouts WHERE source = ?", (NAME,))}
+    ok = [b for b in ok if fight_key(b["event"], *(s["sid"] for s in b["sides"])) not in non_pro]
+    counts["non-pro skipped"] = len(written) - len(ok)
     while True:  # a new link can make another bout matchable
         before = len(st.new_links)
         for b in ok:

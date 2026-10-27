@@ -96,6 +96,15 @@ CREATE TABLE event_cards (
     fetched_at   TEXT                       -- YYYY-MM-DD the card was read
 );
 
+-- Bouts a source lists that were deleted as amateur or exhibition, so reading their card
+-- again doesn't bring them back.
+CREATE TABLE non_pro_bouts (
+    source       TEXT NOT NULL,             -- 'sherdog'
+    source_id    TEXT NOT NULL,             -- the bout's id there (as in fight_aliases)
+    bout_type    TEXT NOT NULL,             -- 'amateur' or 'exhibition'
+    PRIMARY KEY (source, source_id)
+);
+
 -- Event pages a source's card reader has read, whatever came of them: an event that left
 -- nothing in the database (not held yet, or only amateur and exhibition bouts) is still here,
 -- so it isn't read again.

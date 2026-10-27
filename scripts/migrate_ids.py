@@ -103,7 +103,7 @@ def migrate(src: Path, out: Path) -> dict[str, int]:
     counts = {}
     for t in db.TABLES:
         counts[t] = conn.execute(f"SELECT COUNT(*) FROM main.{t}").fetchone()[0]
-        old_t = {"merged_ids": None, "fight_aliases": None}.get(t, t)
+        old_t = {"merged_ids": None, "fight_aliases": None, "non_pro_bouts": None}.get(t, t)
         if old_t and t not in ("event_aliases",):
             n_old = conn.execute(f"SELECT COUNT(*) FROM old.{old_t}").fetchone()[0]
             if n_old != counts[t]:
