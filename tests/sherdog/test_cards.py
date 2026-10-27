@@ -1,20 +1,26 @@
 import sqlite3
 
-from canon_db import db
+from canon_db import db, ids
 from canon_db.sources.sherdog import cards
 from canon_db.sources.sherdog.load import State
 
+
 def _db():
+    """Alan Able (1, linked to Sherdog 100) and Ben Baker (2, not linked) fought at UFC 1:
+    UFC Stats rows."""
     conn = sqlite3.connect(":memory:")
     conn.executescript(db.SCHEMA.read_text())
     db.sync_promotions(conn)
     conn.executemany("INSERT INTO fighters (fighter_id, name, height_in) VALUES (?,?,?)",
-                     [("a" * 16, "Alan Able", 70), ("b" * 16, "Ben Baker", None)])
-    conn.execute("INSERT INTO fighter_aliases VALUES (?, 'sherdog', '100', 'Alan Able')", ("a" * 16,))
-    conn.execute("INSERT INTO events (event_id, name, date) VALUES ('e1', 'UFC 1', '2020-01-02')")
-    conn.execute("INSERT INTO fights (fight_id, event_id) VALUES ('f1', 'e1')")
-    conn.executemany("INSERT INTO fight_participants VALUES ('f1', ?, ?, ?)",
-                     [("a" * 16, 0, "W"), ("b" * 16, 1, "L")])
+                     [(1, "Alan Able", 70), (2, "Ben Baker", None)])
+    conn.executemany("INSERT INTO fighter_aliases VALUES (?,?,?,?)",
+                     [(1, "ufcstats", "a" * 16, "Alan Able"), (1, "sherdog", "100", "Alan Able"),
+                      (2, "ufcstats", "b" * 16, "Ben Baker")])
+    conn.execute("INSERT INTO events (event_id, name, date) VALUES (1, 'UFC 1', '2020-01-02')")
+    conn.execute("INSERT INTO event_aliases VALUES (1, 'ufcstats', 'e1')")
+    conn.execute("INSERT INTO fights (fight_id, event_id) VALUES (1, 1)")
+    conn.execute("INSERT INTO fight_aliases VALUES (1, 'ufcstats', 'f1')")
+    conn.executemany("INSERT INTO fight_participants VALUES (1, ?, ?, ?)", [(1, 0, "W"), (2, 1, "L")])
     return conn
 
 
@@ -39,41 +45,42 @@ def test_load_cards():
     rows = [_bout(900, "2020-01-01", ("Alan Able", "100"), ("Ben Baker", "200")),   # UFC Stats has it
             _bout(901, "2019-05-05", ("Carl Cole", "300"), ("Alan Able", "100"))]   # regional
     counts = write(conn, rows)
-    assert counts["bouts UFC Stats has"] == 1 and counts["new fights"] == 1
-    # The shared fight links Ben Baker and makes the Sherdog event ours.
-    assert conn.execute("SELECT fighter_id FROM fighter_aliases WHERE source_id = '200'").fetchone() == ("b" * 16,)
-    assert conn.execute("SELECT event_id FROM event_aliases WHERE source_id = '900'").fetchone() == ("e1",)
-    assert conn.execute("SELECT fight_id, event_id, weight_class, end_round, end_time FROM fights "
-                        "WHERE source = 'sherdog'").fetchall() == [
-        ("sherdog:901:100-300", "sherdog:901", "Lightweight", 2, "3:10")]
-    assert conn.execute("SELECT promotion, location FROM events WHERE event_id = 'sherdog:901'").fetchone() == (
+    assert counts["fights a promotion's site has"] == 1 and counts["new fights"] == 1
+    # The shared fight links Ben Baker, gets Sherdog's alias, and makes the Sherdog event ours.
+    assert ids.find(conn, "fighter", "sherdog", "200") == 2
+    assert ids.find(conn, "event", "sherdog", "900") == 1
+    assert ids.find(conn, "fight", "sherdog", "900:100-200") == 1
+    # Sherdog only fills the UFC Stats fight's blanks.
+    assert conn.execute("SELECT weight_class, method FROM fights WHERE fight_id = 1").fetchone() == (
+        "Lightweight", "TKO (Punches)")
+    assert conn.execute("SELECT result FROM fight_participants WHERE fight_id = 1 ORDER BY corner").fetchall() == [
+        ("W",), ("L",)]
+    fight, event, carl = (ids.find(conn, k, "sherdog", s) for k, s in (("fight", "901:100-300"), ("event", "901"),
+                                                                      ("fighter", "300")))
+    assert conn.execute("SELECT event_id, weight_class, end_round, end_time FROM fights WHERE fight_id = ?",
+                        (fight,)).fetchone() == (event, "Lightweight", 2, "3:10")
+    assert conn.execute("SELECT promotion, location FROM events WHERE event_id = ?", (event,)).fetchone() == (
         "CWFC", "Leeds")
-    assert sorted(conn.execute("SELECT fighter_id, result FROM fight_participants "
-                               "WHERE fight_id = 'sherdog:901:100-300'")) == [("a" * 16, "L"), ("sherdog:300", "W")]
-    # A new fighter gets the whole bio; a UFC Stats fighter only a missing dob.
-    assert conn.execute("SELECT dob, height_in, weight_lbs, nationality FROM fighters "
-                        "WHERE fighter_id = 'sherdog:300'").fetchone() == ("1990-01-01", 72, 155, "England")
-    assert conn.execute("SELECT dob, height_in, nationality FROM fighters WHERE fighter_id = ?",
-                        ("a" * 16,)).fetchone() == ("1990-01-01", 70, None)
-    assert conn.execute("SELECT 1 FROM fighters WHERE fighter_id = 'sherdog:400'").fetchone() is None
+    assert sorted(conn.execute("SELECT fighter_id, result FROM fight_participants WHERE fight_id = ?",
+                               (fight,))) == [(1, "L"), (carl, "W")]
+    # Bios fill blank columns: all of a new fighter's, only the blanks of a UFC Stats fighter.
+    assert conn.execute("SELECT dob, height_in, weight_lbs, nationality FROM fighters WHERE fighter_id = ?",
+                        (carl,)).fetchone() == ("1990-01-01", 72, 155, "England")
+    assert conn.execute("SELECT dob, height_in, nationality FROM fighters WHERE fighter_id = 1").fetchone() == (
+        "1990-01-01", 70, "England")
     assert sorted(conn.execute("SELECT event_id, via, complete FROM event_cards")) == [
-        ("e1", "event_page", 1), ("sherdog:901", "event_page", 1)]
+        (1, "event_page", 1), (event, "event_page", 1)]
 
 
-def test_event_page_replaces_sherdog_fight():
+def test_event_page_replaces_sherdog_values():
     conn = _db()
-    conn.execute("INSERT INTO events (event_id, name, date, source) VALUES ('sherdog:901', 'CW 901', "
-                 "'2019-05-05', 'sherdog')")
-    conn.execute("INSERT INTO fighters (fighter_id, name, source) VALUES ('sherdog:300', 'Carl Cole', 'sherdog')")
-    conn.execute("INSERT INTO fights (fight_id, event_id, method, source) VALUES "
-                 "('sherdog:901:100-300', 'sherdog:901', 'No Contest (Overturned)', 'sherdog')")
-    conn.executemany("INSERT INTO fight_participants VALUES ('sherdog:901:100-300', ?, ?, 'NC')",
-                     [("a" * 16, 0), ("sherdog:300", 1)])
+    write(conn, [_bout(901, "2019-05-05", ("Carl Cole", "300"), ("Alan Able", "100"), method="No Contest")])
+    fight = ids.find(conn, "fight", "sherdog", "901:100-300")
     write(conn, [_bout(901, "2019-05-05", ("Carl Cole", "300"), ("Alan Able", "100"))])
-    assert conn.execute("SELECT method, weight_class FROM fights WHERE fight_id = 'sherdog:901:100-300'"
-                        ).fetchone() == ("TKO (Punches)", "Lightweight")
-    assert sorted(conn.execute("SELECT fighter_id, result FROM fight_participants "
-                               "WHERE fight_id = 'sherdog:901:100-300'")) == [("a" * 16, "L"), ("sherdog:300", "W")]
+    assert conn.execute("SELECT method, weight_class FROM fights WHERE fight_id = ?", (fight,)).fetchone() == (
+        "TKO (Punches)", "Lightweight")
+    assert ids.find(conn, "fight", "sherdog", "901:100-300") == fight  # same id after a reload
+    assert conn.execute("SELECT count(*) FROM fights").fetchone() == (2,)
 
 
 def test_crowded_card_needs_names():
@@ -81,22 +88,24 @@ def test_crowded_card_needs_names():
     rows = [_bout(900, "2020-01-02", ("Alan Able", "100"), ("Ben Baker", "200")),
             _bout(900, "2020-01-02", ("Alan Able", "100"), ("Zed Zane", "500"))]  # a tournament night
     counts = write(conn, rows)
-    assert counts["bouts UFC Stats has"] == 1 and counts["new fights"] == 1
-    assert conn.execute("SELECT fighter_id FROM fighter_aliases WHERE source_id = '500'").fetchone() == (
-        "sherdog:500",)
+    assert counts["fights a promotion's site has"] == 1 and counts["new fights"] == 1
+    assert ids.find(conn, "fighter", "sherdog", "500") == 3
 
 
-def test_card_follows_its_event():
-    from canon_db.sources.sherdog.load import drop_empty_events, move_event
+def test_events_found_to_be_one_merge():
     conn = _db()
     write(conn, [_bout(901, "2019-05-05", ("Carl Cole", "300"), ("Alan Able", "100"))])
-    move_event(conn, "sherdog:901", "e1")
-    assert conn.execute("SELECT event_id FROM event_cards").fetchall() == [("e1",)]
+    event = ids.find(conn, "event", "sherdog", "901")
+    st = State(conn)
+    st.event_is("901", 1)  # a fight shows Sherdog event 901 is UFC 1
+    cards.write(conn, st, [])
+    assert ids.find(conn, "event", "sherdog", "901") == 1
+    assert conn.execute("SELECT event_id FROM event_cards").fetchall() == [(1,)]
+    assert conn.execute("SELECT kind, old_id, new_id FROM merged_ids").fetchall() == [("event", event, 1)]
     write(conn, [_bout(905, "2019-06-06", ("Carl Cole", "300"), ("Dan Dent", "400"))])
-    conn.execute("DELETE FROM fight_participants WHERE fight_id LIKE 'sherdog:905:%'")
-    conn.execute("DELETE FROM fights WHERE event_id = 'sherdog:905'")
-    drop_empty_events(conn)
-    assert conn.execute("SELECT event_id FROM event_cards").fetchall() == [("e1",)]
+    ids.delete_fight(conn, ids.find(conn, "fight", "sherdog", "905:300-400"))
+    ids.drop_empty(conn)
+    assert conn.execute("SELECT event_id FROM event_cards").fetchall() == [(1,)]
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
 
 
@@ -106,12 +115,13 @@ def test_bout_types():
     write(conn, [_bout(901, "2019-05-05", ("Carl Cole", "300"), ("Alan Able", "100")),
                  _bout(902, "2019-06-06", ("Carl Cole", "300"), ("Dan Dent", "400"))])
     default_pro(conn)  # card fights stay unchecked
-    assert conn.execute("SELECT count(*) FROM fights WHERE bout_type IS NULL").fetchone() == (1 + 2,)  # f1 too
+    assert conn.execute("SELECT count(*) FROM fights WHERE bout_type IS NULL").fetchone() == (1 + 2,)  # UFC 1 too
     page = dict(fights=[dict(event_id="901", opponent_id="100")],
                 exhibition=[dict(event_id="902", opponent_id="400")], amateur=[])
-    assert mark_bout_types(conn, {"300": page}) == {"sherdog:901:100-300", "sherdog:902:300-400"}
-    assert dict(conn.execute("SELECT fight_id, bout_type FROM fights WHERE source = 'sherdog'")) == {
-        "sherdog:901:100-300": "pro", "sherdog:902:300-400": "exhibition"}
+    assert mark_bout_types(conn, {"300": page}) == {"901:100-300", "902:300-400"}
+    assert dict(conn.execute("SELECT a.source_id, f.bout_type FROM fights f JOIN fight_aliases a USING (fight_id) "
+                             "WHERE a.source = 'sherdog' AND f.fight_id <> 1")) == {
+        "901:100-300": "pro", "902:300-400": "exhibition"}
 
 
 def test_bout_against_oneself_is_skipped():
@@ -128,22 +138,23 @@ def test_non_pro_fights_are_dropped():
     write(conn, [_bout(901, "2019-05-05", ("Carl Cole", "300"), ("Alan Able", "100")),
                  _bout(902, "2019-06-06", ("Carl Cole", "300"), ("Dan Dent", "400")),
                  _bout(903, "2019-07-07", ("Carl Cole", "300"), ("Eve East", "500"))])
-    conn.execute("INSERT INTO event_aliases VALUES ('sherdog:902', 'sofascore', '77')")
-    conn.execute("INSERT INTO round_stats (fight_id, fighter_id, round, source) "
-                 "VALUES ('sherdog:902:300-400', 'sherdog:400', 1, 'sofascore')")
+    amateur = ids.find(conn, "fight", "sherdog", "902:300-400")
+    dan = ids.find(conn, "fighter", "sherdog", "400")
+    conn.execute("INSERT INTO event_aliases VALUES (?, 'sofascore', '77')", (ids.find(conn, "event", "sherdog", "902"),))
+    conn.execute("INSERT INTO round_stats (fight_id, fighter_id, round, source) VALUES (?, ?, 1, 'sofascore')",
+                 (amateur, dan))
     page = dict(fights=[dict(event_id="901", opponent_id="100")],
                 exhibition=[dict(event_id="903", opponent_id="500")],
                 amateur=[dict(event_id="902", opponent_id="400")])
     mark_bout_types(conn, {"300": page})
+    conn.execute("UPDATE fights SET bout_type = 'exhibition' WHERE fight_id = 1")  # kept: UFC Stats has it
     assert drop_non_pro(conn) == 2
-    assert conn.execute("SELECT fight_id FROM fights WHERE source = 'sherdog'").fetchall() == [
-        ("sherdog:901:100-300",)]
+    assert {r[0] for r in conn.execute("SELECT source_id FROM fight_aliases")} == {"f1", "901:100-300"}
     # Their events and the fighters who had nothing else go with them; Carl Cole stays.
-    assert conn.execute("SELECT event_id FROM events WHERE source = 'sherdog'").fetchall() == [("sherdog:901",)]
-    assert conn.execute("SELECT fighter_id FROM fighters WHERE source = 'sherdog'").fetchall() == [
-        ("sherdog:300",)]
+    assert {r[0] for r in conn.execute("SELECT source_id FROM event_aliases")} == {"e1", "901"}
+    assert ids.find(conn, "fighter", "sherdog", "300") and not ids.find(conn, "fighter", "sherdog", "400")
+    assert conn.execute("SELECT count(*) FROM fighters").fetchone() == (3,)
     assert conn.execute("SELECT count(*) FROM round_stats").fetchone() == (0,)
-    assert conn.execute("SELECT count(*) FROM event_aliases WHERE source = 'sofascore'").fetchone() == (0,)
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
 
 

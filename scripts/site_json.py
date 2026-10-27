@@ -112,9 +112,10 @@ SUMS = {  # leaderboard column -> column of the stats table
 }
 STATS = ["kd", "sl", "sa", "tsl", "tsa", "tl", "ta", "suba", "ctrl", "arm", "leg", "grd"]
 FIGHT_COLS = ["weight_class", "title_fight", "scheduled_rounds", "method", "end_round", "end_time", "time_format",
-              "referee", "details", "overturned", "no_contest", "bout_type", "source"]
-TABLES = ["events", "fight_participants", "fighters", "fighter_aliases", "event_aliases", "event_cards",
-          "promotions", "round_stats", "smartcage_round_stats", "judge_scores", "odds"]
+              "referee", "details", "overturned", "no_contest", "bout_type"]
+TABLES = ["events", "fight_participants", "fighters", "fighter_aliases", "event_aliases", "fight_aliases",
+          "event_cards", "promotions", "round_stats", "smartcage_round_stats", "judge_scores", "odds"]
+LINKED = ("ufcstats", "sherdog", "pfl")  # sources the pages link to, by their ids
 
 
 def norm(s: str | None) -> str:
@@ -227,11 +228,11 @@ SCHEMA = Path(__file__).resolve().parent.parent / "canon_db" / "schema.sql"
 QUERY_TABLES = ["fighters", "events", "fights", "fight_participants", "round_stats", "smartcage_round_stats",
                 "sofascore_round_stats", "judge_scores", "odds", "promotions", "event_cards"]
 BOUTS_COLUMNS = [  # the page's bouts view: each fight with its event and both fighters
-    ("fight_id", "TEXT", ""), ("event_id", "TEXT", ""), ("date", "TEXT", "YYYY-MM-DD"),
+    ("fight_id", "INTEGER", ""), ("event_id", "INTEGER", ""), ("date", "TEXT", "YYYY-MM-DD"),
     ("event", "TEXT", "the event's name"), ("promotion", "TEXT", ""),
     ("division", "TEXT", "division(weight_class)"),
-    ("a_id", "TEXT", "one fighter (a/b order means nothing)"), ("a_name", "TEXT", ""),
-    ("a_res", "TEXT", "W, L, D or NC"), ("b_id", "TEXT", "the other fighter"), ("b_name", "TEXT", ""),
+    ("a_id", "INTEGER", "one fighter (a/b order means nothing)"), ("a_name", "TEXT", ""),
+    ("a_res", "TEXT", "W, L, D or NC"), ("b_id", "INTEGER", "the other fighter"), ("b_name", "TEXT", ""),
     ("b_res", "TEXT", ""), ("...", "", "and every column of fights"),
 ]
 QUERY_RULES = f"""You are writing one SQL query for Fight Canon, an open database of pro MMA fights (amateur
@@ -249,8 +250,10 @@ How the data works:
   'TKO (Punches)', 'Submission (Armbar)', 'Decision (Split)' from Sherdog). Match with ILIKE:
   '%KO%' for knockouts, '%Submission%', '%Decision%'.
 - division(weight_class) gives the division: one of {", ".join(DIVISIONS)}, or Other.
-- Find fighters by name with ILIKE (names are as the sources spell them); a fighter's UFC record
-  is in fighters.wins/losses/draws/no_contests (NULL for fighters UFC Stats doesn't have).
+- Find fighters by name with ILIKE (names are as the sources spell them); a fighter's pro record
+  as UFC Stats shows it is in fighters.wins/losses/draws/no_contests (NULL for fighters it doesn't have).
+- Ids are Fight Canon's own numbers. For UFC Stats' fights, use promotion = 'UFC' (events), or
+  fight_id IN (SELECT fight_id FROM fight_aliases WHERE source = 'ufcstats') for every fight UFC Stats has.
 - Stats per round are in round_stats, one row per fighter per round. Its source column says who
   counted ('ufcstats' is the most complete); sources count differently, so rank or compare within
   one source. Accuracy is landed / attempted over rows where attempted IS NOT NULL.
@@ -297,19 +300,19 @@ def query_help(con, w: "Writer") -> None:
     w("query.json", {"rules": QUERY_RULES, "tables": schema_tables()})
 
 
-def key(id_: str) -> str:
-    """A file name for an id (ids have colons: sherdog:123)."""
-    return id_.replace(":", "~")
+def key(id_) -> str:
+    """A file name for an id."""
+    return str(id_)
 
 
 def hexname(prefix: str) -> str:
     return prefix.encode().hex()
 
 
-def shard(id_: str) -> str:
-    """Which fx/ file a fight is in: the low byte of its FNV-1a hash (app.js does the same)."""
+def shard(id_) -> str:
+    """Which fx/ file a fight is in: the low byte of its id's FNV-1a hash (app.js does the same)."""
     h = 0x811C9DC5
-    for b in id_.encode():
+    for b in str(id_).encode():
         h = ((h ^ b) * 0x01000193) & 0xFFFFFFFF
     return f"{h & 0xFF:02x}"
 
@@ -371,17 +374,17 @@ def fighters(con, w: Writer) -> None:
         for fid, r in sides.items():
             opp = next((o for o in sides.values() if o[1] != fid), None)
             stats[fid].append([fight, *r[2:], opp[6] if opp else None, opp[5] if opp else None])
-    sherdog = defaultdict(list)
-    for fid, sid in rows(con, "SELECT fighter_id, source_id FROM fighter_aliases WHERE source = 'sherdog' "
-                              "ORDER BY fighter_id, source_id")[1]:
-        sherdog[fid].append(sid)
+    aliases = defaultdict(lambda: defaultdict(list))
+    for fid, src, sid in rows(con, f"SELECT DISTINCT fighter_id, source, source_id FROM fighter_aliases "
+                                   f"WHERE source IN ({sql_list(LINKED)}) ORDER BY fighter_id, source, source_id")[1]:
+        aliases[fid][src].append(sid)
     cols, people = rows(con, """SELECT fighter_id, name, nickname, dob, height_in, reach_in, weight_lbs, stance,
                                        nationality, wins, losses, draws, no_contests FROM fighters ORDER BY fighter_id""")
     for r in people:
         fid = r[0]
         w(f"f/{key(fid)}.json", {
             "fighter": dict(zip(cols, r)),
-            "sherdog": sherdog.get(fid, []),
+            "aliases": aliases.get(fid, {}),
             "fights": {"cols": FIGHT_HIST + ["result", "opp_id", "opp"], "rows": hist.get(fid, [])},
             "stats": {"cols": ["fight_id", "source", "kd", "sl", "sa", "sla", "tl", "ta", "tla", "sub", "ctrl",
                                "opp_sl", "opp_sa"], "rows": stats.get(fid, [])},
@@ -402,7 +405,7 @@ def events(con, w: Writer) -> None:
     odds; fx/<xx>.json: which event each fight is on, for links to a fight alone."""
     fcols, fights = grouped(con, """SELECT event_id, fight_id, card, division, has_stats, a_id, a_name, a_res,
         b_id, b_name, b_res, weight_class, title_fight, scheduled_rounds, method, end_round, end_time, time_format,
-        referee, details, overturned, no_contest, source FROM site_fights ORDER BY event_id, card""")
+        referee, details, overturned, no_contest FROM site_fights ORDER BY event_id, card""")
     rcols, rounds = grouped(con, "SELECT * FROM round_stats ORDER BY fight_id, round, fighter_id")
     ccols, cage = grouped(con, "SELECT * FROM smartcage_round_stats ORDER BY fight_id, round, fighter_id")
     scols, scores = grouped(con, "SELECT fight_id, fighter_id, round, judge, score, deduction FROM judge_scores "
@@ -410,19 +413,20 @@ def events(con, w: Writer) -> None:
     ocols, odds = grouped(con, "SELECT fight_id, fighter_id, open, close, close_low, close_high FROM odds "
                                "WHERE book = 'all' ORDER BY fight_id, fighter_id, source")
     aliases = defaultdict(lambda: defaultdict(list))
-    for eid, src, sid in rows(con, "SELECT event_id, source, source_id FROM event_aliases "
-                                   "WHERE source IN ('sherdog', 'pfl') ORDER BY event_id, source, source_id")[1]:
+    for eid, src, sid in rows(con, f"SELECT event_id, source, source_id FROM event_aliases "
+                                   f"WHERE source IN ({sql_list(LINKED)}) ORDER BY event_id, source, source_id")[1]:
         aliases[eid][src].append(sid)
+    ufc_fights = dict(rows(con, "SELECT fight_id, source_id FROM fight_aliases WHERE source = 'ufcstats'")[1])
     src_at = rcols.index("source")
     shards = defaultdict(dict)
-    cols, evs = rows(con, """SELECT e.event_id, e.name, e.date, e.location, e.promotion, e.source, p.coverage,
+    cols, evs = rows(con, """SELECT e.event_id, e.name, e.date, e.location, e.promotion, p.coverage,
                                     k.complete card_complete
                              FROM events e LEFT JOIN promotions p USING (promotion)
                              LEFT JOIN event_cards k USING (event_id) ORDER BY e.event_id""")
     for r in evs:
         eid = r[0]
         card = fights.get(eid, [])
-        stats, cards, lines = {}, {}, {}
+        stats, cards, lines, ufc = {}, {}, {}, {}
         for f in card:
             fight = f[0]
             if fight in rounds:
@@ -433,9 +437,11 @@ def events(con, w: Writer) -> None:
                 cards[fight] = scores[fight]
             if fight in odds:
                 lines[fight] = odds[fight]
+            if fight in ufc_fights:
+                ufc[fight] = ufc_fights[fight]
             shards[shard(fight)][fight] = eid
         w(f"e/{key(eid)}.json", {
-            "event": dict(zip(cols, r)), "aliases": aliases.get(eid, {}),
+            "event": dict(zip(cols, r)), "aliases": aliases.get(eid, {}), "ufcstats": ufc,
             "fights": {"cols": fcols, "rows": card},
             "stats": stats,
             "scores": {"cols": scols, "fights": cards},

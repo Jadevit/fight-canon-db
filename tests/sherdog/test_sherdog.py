@@ -1,8 +1,8 @@
 import sqlite3
 from pathlib import Path
 
-from canon_db import db
-from canon_db.sources.sherdog.load import Labels, State, follow, merge, write
+from canon_db import db, ids
+from canon_db.sources.sherdog.load import Labels, State, follow, write
 from canon_db.sources.sherdog.pages import parse_event, parse_fighter, parse_sitemap
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -45,15 +45,18 @@ def test_parse_sitemap():
 
 
 def _db():
+    """Alan Able (1) and Ben Baker (2), who fought at UFC 1: all UFC Stats rows."""
     conn = sqlite3.connect(":memory:")
     conn.executescript(db.SCHEMA.read_text())
     db.sync_promotions(conn)
-    conn.executemany("INSERT INTO fighters (fighter_id, name) VALUES (?,?)",
-                     [("a" * 16, "Alan Able"), ("b" * 16, "Ben Baker")])
-    conn.execute("INSERT INTO events (event_id, name, date) VALUES ('e1', 'UFC 1', '2020-01-02')")
-    conn.execute("INSERT INTO fights (fight_id, event_id) VALUES ('f1', 'e1')")
-    conn.executemany("INSERT INTO fight_participants VALUES ('f1', ?, ?, ?)",
-                     [("a" * 16, 0, "W"), ("b" * 16, 1, "L")])
+    conn.executemany("INSERT INTO fighters (fighter_id, name) VALUES (?,?)", [(1, "Alan Able"), (2, "Ben Baker")])
+    conn.executemany("INSERT INTO fighter_aliases VALUES (?, 'ufcstats', ?, ?)",
+                     [(1, "a" * 16, "Alan Able"), (2, "b" * 16, "Ben Baker")])
+    conn.execute("INSERT INTO events (event_id, name, date) VALUES (1, 'UFC 1', '2020-01-02')")
+    conn.execute("INSERT INTO event_aliases VALUES (1, 'ufcstats', 'e1')")
+    conn.execute("INSERT INTO fights (fight_id, event_id) VALUES (1, 1)")
+    conn.execute("INSERT INTO fight_aliases VALUES (1, 'ufcstats', 'f1')")
+    conn.executemany("INSERT INTO fight_participants VALUES (1, ?, ?, ?)", [(1, 0, "W"), (2, 1, "L")])
     return conn
 
 
@@ -65,74 +68,85 @@ def _fight(opp, opp_id, ev_id, day, result="W"):
 def test_link_through_shared_fight_then_merge():
     conn = _db()
     st = State(conn)
-    st.link("a" * 16, "100", "seed")
+    st.link(1, "100", "seed")
     page = dict(name="Alan Able", fights=[
         _fight("Ben Baker", "200", "900", "2020-01-01"),       # the UFC fight, a day off
         _fight("Carl Cole", "300", "901", "2019-05-05")])      # regional, unknown to UFC Stats
-    assert follow(st, "a" * 16, page) == ["b" * 16]
-    write(conn, st, {"a" * 16: page})
-    assert conn.execute("SELECT fighter_id FROM fighter_aliases WHERE source_id = '200'").fetchone() == ("b" * 16,)
-    assert conn.execute("SELECT event_id FROM event_aliases WHERE source_id = '900'").fetchone() == ("e1",)
-    assert conn.execute("SELECT fight_id, source FROM fights WHERE source = 'sherdog'").fetchall() == [
-        ("sherdog:901:100-300", "sherdog")]
-    assert conn.execute("SELECT name FROM fighters WHERE fighter_id = 'sherdog:300'").fetchone() == ("Carl Cole",)
+    assert follow(st, 1, page) == [2]
+    write(conn, st, {1: page})
+    assert ids.find(conn, "fighter", "sherdog", "200") == 2
+    assert ids.find(conn, "event", "sherdog", "900") == 1
+    assert ids.find(conn, "fight", "sherdog", "900:100-200") == 1   # the UFC fight gets Sherdog's alias
+    regional = ids.find(conn, "fight", "sherdog", "901:100-300")
+    carl = ids.find(conn, "fighter", "sherdog", "300")
+    assert regional == 2 and carl == 3 and conn.execute("SELECT name FROM fighters WHERE fighter_id = 3").fetchone() == (
+        "Carl Cole",)
+    assert conn.execute("SELECT method, bout_type FROM fights WHERE fight_id = 1").fetchone() == ("TKO (Punches)", "pro")
 
-    # Carl Cole turns up on UFC Stats, fighting Ben Baker: his rows move to the new id.
-    conn.execute("INSERT INTO fighters (fighter_id, name) VALUES (?, 'Carl Cole')", ("c" * 16,))
-    conn.execute("INSERT INTO events (event_id, name, date) VALUES ('e2', 'UFC 2', '2021-01-01')")
-    conn.execute("INSERT INTO fights (fight_id, event_id) VALUES ('f2', 'e2')")
-    conn.executemany("INSERT INTO fight_participants VALUES ('f2', ?, ?, 'W')", [("b" * 16, 0), ("c" * 16, 1)])
+    # Carl Cole turns up on UFC Stats (a new row, 4), fighting Ben Baker: the two are one, the
+    # older id stays, and Carl gets the UFC Stats alias.
+    conn.execute("INSERT INTO fighters (fighter_id, name) VALUES (4, 'Carl Cole')")
+    conn.execute("INSERT INTO fighter_aliases VALUES (4, 'ufcstats', ?, 'Carl Cole')", ("c" * 16,))
+    conn.execute("INSERT INTO events (event_id, name, date) VALUES (5, 'UFC 2', '2021-01-01')")
+    conn.execute("INSERT INTO fights (fight_id, event_id) VALUES (5, 5)")
+    conn.execute("INSERT INTO fight_aliases VALUES (5, 'ufcstats', 'f2')")
+    conn.executemany("INSERT INTO fight_participants VALUES (5, ?, ?, 'W')", [(2, 0), (4, 1)])
     st = State(conn)
-    follow(st, "b" * 16, dict(name="Ben Baker", fights=[_fight("Carl Cole", "300", "902", "2021-01-01")]))
+    follow(st, 2, dict(name="Ben Baker", fights=[_fight("Carl Cole", "300", "902", "2021-01-01")]))
     write(conn, st, {})
-    assert conn.execute("SELECT new_id FROM fighter_redirects WHERE old_id = 'sherdog:300'").fetchone() == ("c" * 16,)
-    assert conn.execute("SELECT fighter_id FROM fight_participants WHERE fight_id = 'sherdog:901:100-300' "
-                        "AND fighter_id <> ?", ("a" * 16,)).fetchone() == ("c" * 16,)
-    assert conn.execute("SELECT 1 FROM fighters WHERE fighter_id = 'sherdog:300'").fetchone() is None
+    assert conn.execute("SELECT kind, old_id, new_id FROM merged_ids").fetchall() == [("fighter", 4, 3)]
+    assert ids.find(conn, "fighter", "ufcstats", "c" * 16) == 3
+    assert conn.execute("SELECT fighter_id FROM fight_participants WHERE fight_id = 5 AND corner = 1").fetchone() == (3,)
+    assert conn.execute("SELECT 1 FROM fighters WHERE fighter_id = 4").fetchone() is None
 
 
 def test_name_mismatch_needs_two_pages():
     conn = _db()
-    conn.execute("INSERT INTO fighters (fighter_id, name) VALUES (?, 'Dan Dent')", ("d" * 16,))
-    conn.execute("INSERT INTO events (event_id, name, date) VALUES ('e3', 'UFC 3', '2022-01-01')")
-    conn.execute("INSERT INTO fights (fight_id, event_id) VALUES ('f3', 'e3')")
-    conn.executemany("INSERT INTO fight_participants VALUES ('f3', ?, ?, 'W')", [("d" * 16, 0), ("b" * 16, 1)])
+    conn.execute("INSERT INTO fighters (fighter_id, name) VALUES (4, 'Dan Dent')")
+    conn.execute("INSERT INTO events (event_id, name, date) VALUES (3, 'UFC 3', '2022-01-01')")
+    conn.execute("INSERT INTO fights (fight_id, event_id) VALUES (3, 3)")
+    conn.executemany("INSERT INTO fight_participants VALUES (3, ?, ?, 'W')", [(4, 0), (2, 1)])
     st = State(conn)
-    st.link("a" * 16, "100", "seed")
-    st.link("d" * 16, "400", "seed")
+    st.link(1, "100", "seed")
+    st.link(4, "400", "seed")
     # Sherdog knows Ben Baker by his real name: one page isn't enough, a second one is.
-    assert follow(st, "a" * 16, dict(name="", fights=[_fight("Robert Smith", "200", "900", "2020-01-02")])) == []
-    assert st.match("a" * 16, _fight("Robert Smith", "200", "900", "2020-01-02"))  # still the same fight
-    assert follow(st, "d" * 16, dict(name="", fights=[_fight("Robert Smith", "200", "903", "2022-01-01")])) == ["b" * 16]
+    assert follow(st, 1, dict(name="", fights=[_fight("Robert Smith", "200", "900", "2020-01-02")])) == []
+    assert st.match(1, _fight("Robert Smith", "200", "900", "2020-01-02"))  # still the same fight
+    assert follow(st, 4, dict(name="", fights=[_fight("Robert Smith", "200", "903", "2022-01-01")])) == [2]
 
 
 def test_tournament_night_needs_names():
     conn = _db()
     st = State(conn)
-    st.link("a" * 16, "100", "seed")
+    st.link(1, "100", "seed")
     page = dict(name="", fights=[_fight("Ben Baker", "200", "900", "2020-01-02"),
                                  _fight("Zed Zane", "500", "900", "2020-01-02")])
-    assert follow(st, "a" * 16, page) == ["b" * 16]          # the fight UFC Stats has
-    assert "500" not in st.fid                                # the one it doesn't isn't forced onto it
-    write(conn, st, {"a" * 16: page})
-    assert conn.execute("SELECT count(*) FROM fights WHERE source = 'sherdog'").fetchone() == (1,)
+    assert follow(st, 1, page) == [2]          # the fight UFC Stats has
+    assert "500" not in st.fid                 # the one it doesn't isn't forced onto it
+    write(conn, st, {1: page})
+    assert conn.execute("SELECT count(*) FROM fights").fetchone() == (2,)
+    assert ids.find(conn, "fight", "sherdog", "900:100-500") == 2
 
 
 def test_duplicate_sherdog_profile():
     conn = _db()
     st = State(conn)
-    st.link("b" * 16, "200", "seed")
-    assert st.link("b" * 16, "201", "second profile") is False  # extra id, nothing new to read
-    assert st.fid["201"] == "b" * 16 and st.sd["b" * 16] == "200"
-    st.link("a" * 16, "100", "seed")
-    assert st.link("a" * 16, "201", "clash") is False and st.conflicts
+    st.link(2, "200", "seed")
+    assert st.link(2, "201", "second profile") is False  # extra id, nothing new to read
+    assert st.fid["201"] == 2 and st.sd[2] == "200"
+    st.link(1, "100", "seed")
+    assert st.link(1, "201", "clash") is False and st.conflicts  # both have UFC Stats ids
 
 
-def test_merge_keeps_one_row_per_fight():
+def test_merge_keeps_older_id_and_official_values():
     conn = _db()
-    conn.execute("INSERT INTO fighters (fighter_id, name, source) VALUES ('sherdog:1', 'Ben Baker', 'sherdog')")
-    merge(conn, "sherdog:1", "b" * 16)
-    assert conn.execute("SELECT new_id FROM fighter_redirects").fetchall() == [("b" * 16,)]
+    conn.execute("INSERT INTO fighters (fighter_id, name, nationality) VALUES (3, 'Ben Baker Jr', 'England')")
+    conn.execute("INSERT INTO fighter_aliases VALUES (3, 'sherdog', '200', 'Ben Baker Jr')")
+    assert ids.merge(conn, "fighter", 3, 2) == 2
+    assert conn.execute("SELECT name, nationality FROM fighters WHERE fighter_id = 2").fetchone() == (
+        "Ben Baker", "England")  # UFC Stats' name, Sherdog's nationality
+    assert conn.execute("SELECT fighter_id FROM fighter_aliases WHERE source = 'sherdog'").fetchall() == [(2,)]
+    assert conn.execute("SELECT kind, old_id, new_id FROM merged_ids").fetchall() == [("fighter", 3, 2)]
 
 
 def test_parse_card():

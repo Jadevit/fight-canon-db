@@ -1,15 +1,16 @@
 -- Schema of data/canon.db.
 --
--- Fighters, events and fights from UFC Stats keep their UFC Stats IDs (the 16-character hex
--- slug in each page URL). Anything UFC Stats doesn't have comes from Sherdog with an id like
--- `sherdog:<number>` (fights: `sherdog:<event>:<fighter>-<fighter>`) and `source = 'sherdog'`.
--- Other sources (PFL, Oktagon, BestFightOdds, scorecards) attach rows to those fights and
--- say so in their own `source` column. Stats that were not recorded are NULL, never 0.
+-- Fighters, events and fights have Fight Canon ids: numbers given once, when a row is first
+-- seen, never changed or reused. Every source (UFC Stats, Sherdog, PFL, Oktagon, Sofascore,
+-- BestFightOdds, ...) is only aliases, its ids for our rows in fighter_aliases, event_aliases
+-- and fight_aliases, plus the data it adds. Where sources disagree, the promotions' own sites
+-- (UFC Stats, PFL, Oktagon) are taken over Sherdog, which fills what they leave blank.
+-- Stats are kept by who counted them (`source`). Stats that were not recorded are NULL, never 0.
 
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE fighters (
-    fighter_id   TEXT PRIMARY KEY,
+    fighter_id   INTEGER PRIMARY KEY AUTOINCREMENT,
     name         TEXT NOT NULL,
     nickname     TEXT,
     dob          TEXT,                      -- YYYY-MM-DD
@@ -21,19 +22,19 @@ CREATE TABLE fighters (
     losses       INTEGER,
     draws        INTEGER,
     no_contests  INTEGER,
-    nationality  TEXT,                      -- from Sherdog (sherdog: fighters only)
-    sex          TEXT,                      -- 'M' or 'F', where a source says so (UFC Stats'
+    nationality  TEXT,                      -- from Sherdog
+    sex          TEXT                       -- 'M' or 'F', where a source says so (UFC Stats'
                                             -- divisions, Oktagon's bouts); NULL: not known
-    source       TEXT NOT NULL DEFAULT 'ufcstats'
 );
 
--- Every spelling of a fighter's name seen in a source, and their id there. A fighter's
--- Sherdog id is linked only through a fight both sources list (same date, one fighter
--- already linked); names just have to agree.
+-- A fighter's id in a source, with every spelling of their name seen there. A fighter is
+-- linked to a source's id only through a fight both list (date within a day, a fighter
+-- already linked); names just have to agree. A fighter can have several ids in one source
+-- (Sherdog's duplicate profiles).
 CREATE TABLE fighter_aliases (
-    fighter_id   TEXT NOT NULL REFERENCES fighters(fighter_id),
+    fighter_id   INTEGER NOT NULL REFERENCES fighters(fighter_id),
     source       TEXT NOT NULL,
-    source_id    TEXT,                      -- the fighter's id in that source
+    source_id    TEXT NOT NULL,             -- the fighter's id in that source
     name         TEXT NOT NULL,
     PRIMARY KEY (source, source_id, name)
 );
@@ -56,35 +57,38 @@ CREATE TABLE promotion_aliases (
     PRIMARY KEY (source, source_id)
 );
 
--- Fighters merged into another id: a fighter first seen on Sherdog (`sherdog:<id>`) who
--- later turns up on UFC Stats moves to their UFC Stats id.
-CREATE TABLE fighter_redirects (
-    old_id       TEXT PRIMARY KEY,
-    new_id       TEXT NOT NULL REFERENCES fighters(fighter_id)
+-- Rows found to be one: the fighter, event or fight `old_id` was merged into `new_id` (the
+-- older of the two keeps its id).
+CREATE TABLE merged_ids (
+    kind         TEXT NOT NULL,             -- 'fighter', 'event' or 'fight'
+    old_id       INTEGER NOT NULL,
+    new_id       INTEGER NOT NULL,
+    PRIMARY KEY (kind, old_id)
 );
 
 CREATE TABLE events (
-    event_id     TEXT PRIMARY KEY,
+    event_id     INTEGER PRIMARY KEY AUTOINCREMENT,
     name         TEXT NOT NULL,
     date         TEXT,                      -- YYYY-MM-DD
     location     TEXT,
-    promotion    TEXT NOT NULL DEFAULT 'UFC' REFERENCES promotions(promotion),
-    source       TEXT NOT NULL DEFAULT 'ufcstats'
+    promotion    TEXT NOT NULL DEFAULT 'UFC' REFERENCES promotions(promotion)
 );
 
--- An event's id in another source (e.g. its Sherdog event number).
+-- An event's id in a source (its UFC Stats id, Sherdog event number, PFL page, ...). An
+-- event can have several in one source (Sherdog lists some tournaments as two events).
 CREATE TABLE event_aliases (
-    event_id     TEXT NOT NULL REFERENCES events(event_id),
+    event_id     INTEGER NOT NULL REFERENCES events(event_id),
     source       TEXT NOT NULL,
     source_id    TEXT NOT NULL,
     PRIMARY KEY (source, source_id)
 );
 
 -- Events whose whole card was read from a source's card listing. Their fights are in the
--- database because they were on the card, not because of anyone's later career; Sherdog
--- fights on other events were found through a fighter's page.
+-- database because they were on the card, not because of anyone's later career; other
+-- events hold the fights reached through fighters' pages (Sherdog) or a source that tracks
+-- only some fighters (UFC Stats' other promotions).
 CREATE TABLE event_cards (
-    event_id     TEXT PRIMARY KEY REFERENCES events(event_id),
+    event_id     INTEGER PRIMARY KEY REFERENCES events(event_id),
     source       TEXT NOT NULL,             -- whose card: 'sherdog'
     via          TEXT NOT NULL,             -- 'event_page', or 'kaggle:<dataset> v<N>'
     complete     INTEGER NOT NULL,          -- 1: every bout the source lists was written (amateur
@@ -104,12 +108,13 @@ CREATE TABLE event_pages (
 );
 
 CREATE TABLE fights (
-    fight_id         TEXT PRIMARY KEY,
-    event_id         TEXT NOT NULL REFERENCES events(event_id),
+    fight_id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id         INTEGER NOT NULL REFERENCES events(event_id),
     weight_class     TEXT,                  -- bout title as listed
     title_fight      INTEGER NOT NULL DEFAULT 0,
     scheduled_rounds INTEGER,
-    method           TEXT,
+    method           TEXT,                  -- as the source writes it: UFC Stats 'KO/TKO' (the
+                                            -- detail in `details`), Sherdog 'TKO (Punches)'
     end_round        INTEGER,
     end_time         TEXT,                  -- m:ss
     time_format      TEXT,
@@ -117,21 +122,30 @@ CREATE TABLE fights (
     details          TEXT,                  -- finish detail or judges' scores
     overturned       INTEGER NOT NULL DEFAULT 0,
     no_contest       INTEGER NOT NULL DEFAULT 0,
-    bout_type        TEXT,                  -- Sherdog fights: 'pro' once a fighter's Sherdog page
-                                            -- lists it as pro (amateur and exhibition bouts are
-                                            -- deleted); NULL: unchecked, and UFC Stats fights
-    source           TEXT NOT NULL DEFAULT 'ufcstats'
+    bout_type        TEXT                   -- what the fighters' Sherdog pages list it as: 'pro',
+                                            -- 'exhibition' or 'amateur' (non-pro fights no
+                                            -- promotion's site has are deleted); NULL: not checked
+);
+
+-- A fight's id in a source: UFC Stats' fight id; Sherdog has none, so its alias is
+-- '<event>:<fighter>-<fighter>' (Sherdog ids, lower first).
+CREATE TABLE fight_aliases (
+    fight_id     INTEGER NOT NULL REFERENCES fights(fight_id),
+    source       TEXT NOT NULL,
+    source_id    TEXT NOT NULL,
+    PRIMARY KEY (source, source_id)
 );
 
 -- Two rows per fight.
 CREATE TABLE fight_participants (
-    fight_id     TEXT NOT NULL REFERENCES fights(fight_id),
-    fighter_id   TEXT NOT NULL REFERENCES fighters(fighter_id),
+    fight_id     INTEGER NOT NULL REFERENCES fights(fight_id),
+    fighter_id   INTEGER NOT NULL REFERENCES fighters(fighter_id),
     corner       INTEGER NOT NULL,          -- 0 or 1, in the order UFC Stats lists them:
                                             -- 0 = red from 2010-03-21 on; before that the
                                             -- winner is usually listed first, so corner
                                             -- isn't red/blue and gives away the result.
-                                            -- In Sherdog fights it's by fighter id: no meaning
+                                            -- In fights UFC Stats doesn't have it's by fighter
+                                            -- id: no meaning
     result       TEXT,                      -- W, L, D, NC
     PRIMARY KEY (fight_id, corner)
 );
@@ -146,8 +160,8 @@ CREATE TABLE fight_participants (
 -- Different crews score fights, so the same column isn't guaranteed the same judgment
 -- across sources. A fight's rows all come from one source.
 CREATE TABLE round_stats (
-    fight_id       TEXT NOT NULL REFERENCES fights(fight_id),
-    fighter_id     TEXT NOT NULL REFERENCES fighters(fighter_id),
+    fight_id       INTEGER NOT NULL REFERENCES fights(fight_id),
+    fighter_id     INTEGER NOT NULL REFERENCES fighters(fighter_id),
     round          INTEGER NOT NULL,
     knockdowns     INTEGER,
     sig_str_land   INTEGER,
@@ -179,8 +193,8 @@ CREATE TABLE round_stats (
 -- set from round_stats: strikes are split by arm / leg / ground (all strikes, not only
 -- significant ones), and there is ground and standing time instead of control time.
 CREATE TABLE smartcage_round_stats (
-    fight_id           TEXT NOT NULL REFERENCES fights(fight_id),
-    fighter_id         TEXT NOT NULL REFERENCES fighters(fighter_id),
+    fight_id           INTEGER NOT NULL REFERENCES fights(fight_id),
+    fighter_id         INTEGER NOT NULL REFERENCES fighters(fighter_id),
     round              INTEGER NOT NULL,
     knockdowns         INTEGER,
     total_str_land     INTEGER,
@@ -209,8 +223,8 @@ CREATE TABLE smartcage_round_stats (
 -- (round_stats.ctrl_sec is their sum). Time in a position seems to run on the real clock,
 -- stoppages included: in about half of 5-minute rounds the three add up to more than 300.
 CREATE TABLE sofascore_round_stats (
-    fight_id          TEXT NOT NULL REFERENCES fights(fight_id),
-    fighter_id        TEXT NOT NULL REFERENCES fighters(fighter_id),
+    fight_id          INTEGER NOT NULL REFERENCES fights(fight_id),
+    fighter_id        INTEGER NOT NULL REFERENCES fighters(fighter_id),
     round             INTEGER NOT NULL,
     sig_distance_land INTEGER,
     sig_clinch_land   INTEGER,
@@ -228,8 +242,8 @@ CREATE TABLE sofascore_round_stats (
 -- Per-judge, per-round scores from official UFC scorecards (2020-08 to 2024-11 so far).
 -- Rounds after a finish aren't scored, so a finish has rows only for completed rounds.
 CREATE TABLE judge_scores (
-    fight_id     TEXT NOT NULL REFERENCES fights(fight_id),
-    fighter_id   TEXT NOT NULL REFERENCES fighters(fighter_id),
+    fight_id     INTEGER NOT NULL REFERENCES fights(fight_id),
+    fighter_id   INTEGER NOT NULL REFERENCES fighters(fighter_id),
     round        INTEGER NOT NULL,
     judge        TEXT NOT NULL,
     score        INTEGER,                   -- after point deductions, as on the card
@@ -242,8 +256,8 @@ CREATE TABLE judge_scores (
 -- `source` is where the data came from; `book` is who set the line, or 'all' for a
 -- summary across books. Both fighters of a fight always get a row.
 CREATE TABLE odds (
-    fight_id     TEXT NOT NULL REFERENCES fights(fight_id),
-    fighter_id   TEXT NOT NULL REFERENCES fighters(fighter_id),
+    fight_id     INTEGER NOT NULL REFERENCES fights(fight_id),
+    fighter_id   INTEGER NOT NULL REFERENCES fighters(fighter_id),
     source       TEXT NOT NULL,
     book         TEXT NOT NULL,
     open         INTEGER,
@@ -257,3 +271,6 @@ CREATE INDEX idx_fights_event          ON fights(event_id);
 CREATE INDEX idx_participants_fighter  ON fight_participants(fighter_id);
 CREATE INDEX idx_round_stats_fighter   ON round_stats(fighter_id);
 CREATE INDEX idx_round_stats_fight     ON round_stats(fight_id);
+CREATE INDEX idx_fighter_aliases       ON fighter_aliases(fighter_id);
+CREATE INDEX idx_event_aliases         ON event_aliases(event_id);
+CREATE INDEX idx_fight_aliases         ON fight_aliases(fight_id);

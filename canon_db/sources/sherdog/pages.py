@@ -56,7 +56,7 @@ def parse_fights(table: str) -> list[dict]:
             event_id=ev.group(1) if ev else None,
             event=text(ev.group(2)) if ev else "",
             date=parse_date(text(sub.group(1))) if sub else None,
-            title='itemprop="award"' in tds[2],
+            title=None,  # fighter pages don't mark title fights (event pages do)
             method=text(method.group(1)) if method else "",
             referee=text(ref.group(1)) if ref else "",
             round=text(tds[4]),

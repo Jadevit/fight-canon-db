@@ -73,9 +73,11 @@ def test_migrate_adds_columns_and_keeps_rows(tmp_path):
     old = sqlite3.connect(path)
     schema = (db.ROOT / "canon_db" / "schema.sql").read_text()
     old.executescript(schema.replace("    no_contests  INTEGER,\n", ""))  # an older schema
-    old.execute("INSERT INTO fighters (fighter_id, name) VALUES ('a', 'A')")
+    old.executemany("INSERT INTO fighters (fighter_id, name) VALUES (?, ?)", [(1, "A"), (2, "B")])
+    old.execute("DELETE FROM fighters WHERE fighter_id = 2")  # the newest id, gone: never given again
     old.commit()
     old.close()
     assert db.migrate(path)["fighters"] == 1
     conn = sqlite3.connect(path)
     assert conn.execute("SELECT name, no_contests FROM fighters").fetchone() == ("A", None)
+    assert conn.execute("INSERT INTO fighters (name) VALUES ('C')").lastrowid == 3

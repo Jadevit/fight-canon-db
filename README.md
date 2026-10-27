@@ -27,9 +27,13 @@ each month; to keep another one for good, add its tag to
 
 ## Tables
 
-Everything UFC Stats has keeps its UFC Stats ID. Other fights come from Sherdog
-(`source = 'sherdog'`: results, weight class, no stats); fighters and events UFC Stats doesn't
-know get IDs like `sherdog:12345`. Filter `fights.source = 'ufcstats'` for UFC Stats fights only.
+Fighters, events and fights have Fight Canon IDs: numbers given once and never changed. Every
+source's own id for them is in `fighter_aliases`, `event_aliases` and `fight_aliases`
+(`source`, `source_id`), so a UFC fight has a UFC Stats alias, a Sherdog alias, and so on. For
+UFC Stats' fights, filter
+`fight_id IN (SELECT fight_id FROM fight_aliases WHERE source = 'ufcstats')`. Where sources
+disagree, the promotions' own sites (UFC Stats, PFL, Oktagon) are taken over Sherdog, which
+fills in what they leave blank.
 
 | Table                | One row per                      | Keys                              |
 | -------------------- | -------------------------------- | --------------------------------- |
@@ -43,8 +47,9 @@ know get IDs like `sherdog:12345`. Filter `fights.source = 'ufcstats'` for UFC S
 | `sofascore_round_stats` | fighter per round (Sofascore's extras) | `fight_id`, `fighter_id`, `round` |
 | `fighters`           | fighter (bio + pro record)       | `fighter_id`                      |
 | `fighter_aliases`    | fighter's name and id per source | `fighter_id`                      |
-| `fighter_redirects`  | old id of a merged fighter       | `old_id` → `new_id`               |
-| `event_aliases`      | event's id in another source     | `event_id`                        |
+| `merged_ids`         | fighter, event or fight merged into another | `kind`, `old_id` → `new_id` |
+| `event_aliases`      | event's id per source            | `event_id`                        |
+| `fight_aliases`      | fight's id per source            | `fight_id`                        |
 | `event_cards`        | event whose whole card was read  | `event_id`                        |
 | `judge_scores`       | judge's score per round          | `fight_id`, `fighter_id`          |
 | `odds`               | fighter's betting line per fight | `fight_id`, `fighter_id`          |
@@ -59,8 +64,6 @@ knockdowns, takedowns, submission attempts and control time. Its strikes by posi
 in each position are in `sofascore_round_stats`. A fight's stats come from one source. Different
 crews score fights, so filter on it when the numbers have to be comparable. PFL's earlier events (2018 to 2025-11) have a different set of
 stats (strikes by arm / leg / ground, ground and standing time), kept in `smartcage_round_stats`.
-PFL, Oktagon and Sofascore stats attach to the Sherdog fight, so those fights have
-`fights.source = 'sherdog'`.
 
 `fighters.sex` is `M` or `F` where a source says so (UFC Stats' divisions, Oktagon's bouts), and
 NULL otherwise.
@@ -71,21 +74,22 @@ scores come from official UFC scorecards and cover UFC fights from 2020-08 to 20
 
 `fight_participants.corner` is red (0) / blue (1) only from 2010-03-21 on. Before that
 UFC Stats usually lists the winner first, so don't use corner as a feature for older fights.
-In Sherdog fights corner means nothing. Sherdog events are labelled by their Sherdog
-organization: the label we already use if its events overlap ours, else its full name.
+In fights UFC Stats doesn't have, corner means nothing. Events no promotion's site has are
+labelled by their Sherdog organization: the label we already use if its events overlap ours,
+else its full name.
 
-Sherdog fights get in two ways. Every event in Sherdog's event sitemaps has its card read
-whole, and those events are in `event_cards` (nearly all of them). Other Sherdog fights come
-from the pages of fighters linked to UFC Stats, so they are there because of who fought in
-them: filter on `event_cards` when that matters. Only pro MMA fights
-are kept. Event pages don't say whether a bout was pro, so card fights are checked on the
-fighters' Sherdog pages and amateur and exhibition bouts are removed; `fights.bout_type` is
-`pro` once checked, and NULL for UFC Stats fights and for card fights not yet checked.
+Fights get in two ways. Every event in Sherdog's event sitemaps has its card read whole, and
+those events are in `event_cards` (nearly all of them). Other fights come from the pages of
+fighters who fought on a promotion's own cards, or from the fighters UFC Stats tracks on other
+promotions' cards, so they are there because of who fought in them: filter on `event_cards`
+when that matters. Only pro MMA fights are kept. Event pages don't say whether a bout was pro,
+so card fights are checked on the fighters' Sherdog pages and amateur and exhibition bouts no
+promotion's site has are removed; `fights.bout_type` is what those pages list it as, and NULL
+until checked.
 
-A fighter's Sherdog page is linked only through a fight both sites list (same date, the other
-fighter already linked), never by name alone. If a `sherdog:` fighter later shows up on UFC
-Stats, their rows move to the UFC Stats ID and `fighter_redirects` records the old one.
-`sherdog:` fighters' bios (DOB, height, weight, nationality) come from Sherdog.
+A fighter is linked to a source's id only through a fight both list (same date, the other
+fighter already linked), never by name alone. When two rows turn out to be one fighter, event
+or fight, the older ID is kept and `merged_ids` records the other.
 
 To filter by promotion, join through `events`:
 

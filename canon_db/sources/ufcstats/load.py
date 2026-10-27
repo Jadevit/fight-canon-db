@@ -1,4 +1,4 @@
-"""UFC Stats loader: pick events -> fetch pages -> parse -> replace them in the DB.
+"""UFC Stats loader: pick events -> fetch pages -> parse -> write them to the DB.
 
 Each run:
   1. fetches the UFC Stats events list;
@@ -7,12 +7,14 @@ Each run:
      after fight night). Upcoming events are skipped;
   3. downloads those events' event, fight and fighter pages to data/raw/ufcstats/
      (kept for debugging and --offline re-runs; never committed);
-  4. replaces each of those events wholesale in the database (its event row,
-     fights, participants and round stats) and upserts the fighters' bios.
+  4. writes each of those events (its event row, fights, participants and round stats)
+     and the fighters' bios.
 
-An event is only replaced if every one of its fight pages downloaded, so a flaky
-run can never delete data. Fighter IDs come straight from each fight page's two
-fighter links; no name matching is involved anywhere.
+An event is only written if every one of its fight pages downloaded, so a flaky run can
+never delete data. UFC Stats' ids are aliases (`ufcstats`) of our rows. A bout whose fight
+has no UFC Stats alias yet is placed on one of ours if both fighters are known and fought
+within a day of it, or one is and the other's name agrees (that links the other); else it's
+a new fight. UFC Stats is a promotion's own site: its values replace other sources'.
 """
 
 from __future__ import annotations
@@ -21,16 +23,24 @@ import argparse
 import logging
 import re
 import sqlite3
+from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
 
-from canon_db.sources.ufcstats import fields as F
+from canon_db import ids
 from canon_db.http import save
+from canon_db.matching import Bouts
+from canon_db.sources.ufcstats import fields as F
 from canon_db.sources.ufcstats.client import BASE, EVENTS_LIST_URL, Fetcher
 from canon_db.sources.ufcstats.pages import (parse_event, parse_events_list, parse_fight,
                                              parse_fighter)
 
+NAME = "ufcstats"
 URLS = {"events": "event-details", "fights": "fight-details", "fighters": "fighter-details"}
+ROUND_COLS = ("knockdowns", "sig_str_land", "sig_str_att", "total_str_land", "total_str_att", "td_land",
+              "td_att", "sub_att", "reversals", "ctrl_sec", "head_land", "head_att", "body_land", "body_att",
+              "leg_land", "leg_att", "dist_land", "dist_att", "clinch_land", "clinch_att", "ground_land",
+              "ground_att")
 
 log = logging.getLogger("ufcstats")
 
@@ -59,12 +69,12 @@ def _scheduled_rounds(time_format: str) -> int | None:
     return F.parse_int(time_format.split("Rnd")[0]) if "Rnd" in time_format else None
 
 
-def _round_row(fight_id: str, rnd: int, fighter_id: str, c: dict) -> tuple:
+def _round_row(rnd: int, c: dict) -> dict:
     (sig, tot, td, head, body, leg, dist, cl, gr) = [F.parse_of(c.get(k)) for k in (
         "sig", "total", "td", "head", "body", "leg", "distance", "clinch", "ground")]
-    return (fight_id, fighter_id, rnd, F.parse_int(c.get("kd")), *sig, *tot, *td,
-            F.parse_int(c.get("sub")), F.parse_int(c.get("rev")), F.parse_ctrl(c.get("ctrl")),
-            *head, *body, *leg, *dist, *cl, *gr)
+    vals = (F.parse_int(c.get("kd")), *sig, *tot, *td, F.parse_int(c.get("sub")), F.parse_int(c.get("rev")),
+            F.parse_ctrl(c.get("ctrl")), *head, *body, *leg, *dist, *cl, *gr)
+    return dict(round=rnd, **dict(zip(ROUND_COLS, vals)))
 
 
 # Series labelled by how their event names start, ahead of the rules in promotion().
@@ -82,7 +92,7 @@ PROMOTION_OVERRIDES: dict[str, str] = {
 }
 
 
-# Values UFC Stats has wrong, by fight ID: {parse_fight() key: corrected value}.
+# Values UFC Stats has wrong, by UFC Stats fight id: {parse_fight() key: corrected value}.
 FIGHT_FIXES: dict[str, dict[str, str]] = {
     "5a91827fe8c1dc26": {"time_format": "3 Rnd (5-5-5)"},  # listed as 10-5-5
 }
@@ -107,16 +117,16 @@ def promotion(event_name: str) -> str:
     return PROMOTION_OVERRIDES.get(head, head)
 
 
-def load_event(pages: Pages, eid: str, promo: str | None = None) -> dict | None:
-    """All rows for one event, or None if any of its pages is missing. `promo` defaults
-    to the promotion inferred from the event name."""
+def load_event(pages: Pages, eid: str) -> dict | None:
+    """One event's rows, by UFC Stats ids, or None if any of its pages is missing:
+    {event: {id, name, date, location}, fights: [{id, values, sides: [{id, name, result}],
+    rounds: {fighter id: [row]}}]}."""
     html = pages.get("events", eid)
     if html is None:
         return None
     ev = parse_event(html)
-    out = dict(event=(eid, ev["name"], F.parse_dob(ev["date"]), ev["location"] or None,
-                      promo or promotion(ev["name"])),
-               fights=[], participants=[], rounds=[], fight_names={})
+    out = dict(event=dict(id=eid, name=ev["name"], date=F.parse_dob(ev["date"]), location=ev["location"] or None),
+               fights=[])
     for fid in ev["fight_ids"]:
         html = pages.get("fights", fid)
         if html is None:
@@ -129,74 +139,131 @@ def load_event(pages: Pages, eid: str, promo: str | None = None) -> dict | None:
         f.update(FIGHT_FIXES.get(fid, {}))
         bout, method, details = f["bout"], f["method"], f["details"]
         nc = F.is_no_contest(method) or statuses == ["NC", "NC"]
-        out["fights"].append((
-            fid, eid, bout or None, int("title" in bout.lower()),
-            _scheduled_rounds(f["time_format"]), method or None, F.parse_int(f["round"]),
-            f["time"] or None, f["time_format"] or None, f["referee"] or None,
-            details or None, int(F.is_overturned(method, details, nc)), int(nc)))
-        for corner, p in enumerate(f["fighters"]):
-            out["participants"].append((fid, p["fighter_id"], corner, p["status"] or None))
-            out["fight_names"].setdefault(p["fighter_id"], set()).add(p["name"])
+        rounds: dict[str, list] = {}
         for (rnd, fighter_id), cells in sorted(f["rounds"].items()):
-            out["rounds"].append(_round_row(fid, rnd, fighter_id, cells))
+            rounds.setdefault(fighter_id, []).append(_round_row(rnd, cells))
+        out["fights"].append(dict(
+            id=fid, rounds=rounds,
+            values=dict(weight_class=bout or None, title_fight=int("title" in bout.lower()),
+                        scheduled_rounds=_scheduled_rounds(f["time_format"]), method=method or None,
+                        end_round=F.parse_int(f["round"]), end_time=f["time"] or None,
+                        time_format=f["time_format"] or None, referee=f["referee"] or None,
+                        details=details or None, overturned=int(F.is_overturned(method, details, nc)),
+                        no_contest=int(nc)),
+            sides=[dict(id=p["fighter_id"], name=p["name"], result=p["status"] or None) for p in f["fighters"]]))
     return out
 
 
 # --- writing -------------------------------------------------------------------------
 
-def apply_event(conn: sqlite3.Connection, ev: dict) -> None:
-    """Replace one event's rows wholesale (also drops bouts since removed from the card)."""
-    eid = ev["event"][0]
-    fight_ids = [f[0] for f in ev["fights"]]
-    stale = [r[0] for r in conn.execute(
-        "SELECT fight_id FROM fights WHERE event_id = ? AND source = 'ufcstats'", (eid,))]
-    for fid in set(stale) | set(fight_ids):
-        for table in ("round_stats", "fight_participants", "fights"):
-            conn.execute(f"DELETE FROM {table} WHERE fight_id = ?", (fid,))
-    others = conn.execute("SELECT 1 FROM fights WHERE event_id = ?", (eid,)).fetchone()
-    if not ev["fights"] and not others:  # fights from other sources keep their event
-        conn.execute("DELETE FROM events WHERE event_id = ?", (eid,))
-        return
-    conn.execute("INSERT OR REPLACE INTO events (event_id, name, date, location, promotion) "
-                 "VALUES (?,?,?,?,?)", ev["event"])
-    conn.executemany(
-        "INSERT INTO fights (fight_id, event_id, weight_class, title_fight, scheduled_rounds, "
-        "method, end_round, end_time, time_format, referee, details, overturned, no_contest) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", ev["fights"])
-    conn.executemany("INSERT INTO fight_participants (fight_id, fighter_id, corner, result) "
-                     "VALUES (?,?,?,?)", ev["participants"])
-    conn.executemany(
-        "INSERT INTO round_stats (fight_id, fighter_id, round, knockdowns, sig_str_land, "
-        "sig_str_att, total_str_land, total_str_att, td_land, td_att, sub_att, reversals, "
-        "ctrl_sec, head_land, head_att, body_land, body_att, leg_land, leg_att, dist_land, "
-        "dist_att, clinch_land, clinch_att, ground_land, ground_att) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", ev["rounds"])
+class Writer:
+    """Writes UFC Stats events onto our rows (see the module docstring)."""
+
+    def __init__(self, conn: sqlite3.Connection):
+        self.conn, self.bouts = conn, Bouts(conn)
+        self.fighters = ids.aliases(conn, "fighter", NAME)  # UFC Stats id -> ours
+        self.counts = Counter()
+
+    def fighter(self, side: dict) -> int:
+        fid = self.fighters.get(side["id"])
+        if fid is None:
+            fid = self.fighters[side["id"]] = ids.add(self.conn, "fighter", {"name": side["name"]})
+            self.counts["new fighters"] += 1
+        ids.alias(self.conn, "fighter", fid, NAME, side["id"], side["name"])
+        return fid
+
+    def place(self, f: dict, day: str | None) -> int | None:
+        """Our fight for this bout, or None (a new one). Links an unknown fighter through it."""
+        fight = ids.find(self.conn, "fight", NAME, f["id"])
+        if fight is not None:
+            return fight
+        a, b = (self.fighters.get(s["id"]) for s in f["sides"])
+        if a and b:
+            m = self.bouts.pair(a, b, day)
+        elif a or b:
+            known, other = (a, f["sides"][1]) if a else (b, f["sides"][0])
+            m = self.bouts.named(known, day, other["name"])
+            if m and m[3] in set(self.fighters.values()):
+                m = None  # the opponent there has another UFC Stats id: not this fighter
+            if m:
+                self.fighters[other["id"]] = m[3]
+                self.counts["fighters linked through a fight"] += 1
+        else:
+            m = None
+        if m:
+            self.counts["fights other sources had"] += 1
+        return m[1] if m else None
+
+    def event(self, ev: dict, promo: str | None) -> int:
+        """Write one event; returns our id for it."""
+        conn, e = self.conn, ev["event"]
+        placed = [(f, self.place(f, e["date"])) for f in ev["fights"]]
+        eid = ids.find(conn, "event", NAME, e["id"])
+        for _, fight in placed:  # an event of ours holding one of these fights is this event
+            if fight is None:
+                continue
+            other = conn.execute("SELECT event_id FROM fights WHERE fight_id = ?", (fight,)).fetchone()[0]
+            if NAME in ids.sources(conn, "event", other):
+                continue  # another UFC Stats event: the fight moves, the events stay apart
+            eid = other if eid is None else ids.merge(conn, "event", eid, other)
+        if eid is None:
+            if not ev["fights"]:
+                return None
+            eid = ids.add(conn, "event", {"name": e["name"], "promotion": promo or promotion(e["name"])})
+            self.counts["new events"] += 1
+        elif promo:
+            conn.execute("UPDATE events SET promotion = ? WHERE event_id = ?", (promo, eid))
+        ids.alias(conn, "event", eid, NAME, e["id"])
+        ids.write(conn, "event", eid, NAME, {k: e[k] for k in ("name", "date", "location")})
+        mine = set()
+        for f, fight in placed:
+            sides = [self.fighter(s) for s in f["sides"]]
+            if fight is None:
+                fight = ids.add(conn, "fight", {"event_id": eid, **f["values"]})
+                self.bouts.add(fight, eid, e["date"], *sides)
+                self.counts["new fights"] += 1
+            else:
+                ids.write(conn, "fight", fight, NAME, {"event_id": eid, **f["values"]})
+            ids.alias(conn, "fight", fight, NAME, f["id"])
+            mine.add(fight)
+            conn.execute("DELETE FROM fight_participants WHERE fight_id = ?", (fight,))
+            conn.executemany("INSERT INTO fight_participants (fight_id, fighter_id, corner, result) VALUES (?,?,?,?)",
+                             [(fight, fid, corner, s["result"]) for corner, (fid, s) in enumerate(zip(sides, f["sides"]))])
+            rows = [(fight, fid, r["round"], *(r.get(c) for c in ROUND_COLS))
+                    for fid, s in zip(sides, f["sides"]) for r in f["rounds"].get(s["id"], [])]
+            if rows:  # a fight's stats come from one source, and UFC Stats' are the fullest
+                for t in ("round_stats", "smartcage_round_stats", "sofascore_round_stats"):
+                    conn.execute(f"DELETE FROM {t} WHERE fight_id = ?", (fight,))
+                conn.executemany(f"INSERT INTO round_stats (fight_id, fighter_id, round, {', '.join(ROUND_COLS)}) "
+                                 f"VALUES ({', '.join('?' * (len(ROUND_COLS) + 3))})", rows)
+        # Bouts UFC Stats no longer lists on this event.
+        for (fight,) in conn.execute("SELECT fight_id FROM fights f WHERE event_id = ? AND EXISTS (SELECT 1 FROM "
+                                     "fight_aliases a WHERE a.fight_id = f.fight_id AND a.source = ?)",
+                                     (eid, NAME)).fetchall():
+            if fight not in mine:
+                ids.drop_claim(conn, fight, NAME)
+                self.counts["bouts gone from the card"] += 1
+        if not conn.execute("SELECT 1 FROM fights WHERE event_id = ?", (eid,)).fetchone():
+            for t in ("event_cards", "event_aliases", "events"):  # nothing left on it
+                conn.execute(f"DELETE FROM {t} WHERE event_id = ?", (eid,))
+        return eid
 
 
-def apply_fighter(conn: sqlite3.Connection, fighter_id: str, html: str | None,
-                  fight_names: set[str]) -> None:
-    """Upsert a fighter's bio from their page; without a page, only ensure the row exists."""
+def apply_fighter(conn: sqlite3.Connection, fid: int, html: str | None, ufc_id: str, fight_names: set[str]) -> None:
+    """Write a fighter's bio from their page (UFC Stats' values replace other sources')."""
+    names = set(fight_names)
     if html:
         b = parse_fighter(html)
-        name = b["name"] or sorted(fight_names)[0]
-        conn.execute(
-            "INSERT INTO fighters (fighter_id, name, nickname, dob, height_in, reach_in, "
-            "weight_lbs, stance, wins, losses, draws, no_contests) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(fighter_id) DO UPDATE "
-            "SET name=excluded.name, nickname=excluded.nickname, dob=excluded.dob, "
-            "height_in=excluded.height_in, reach_in=excluded.reach_in, "
-            "weight_lbs=excluded.weight_lbs, stance=excluded.stance, wins=excluded.wins, "
-            "losses=excluded.losses, draws=excluded.draws, no_contests=excluded.no_contests",
-            (fighter_id, name, b["nickname"] or None, F.parse_dob(b["dob"]),
-             F.parse_height_in(b["height"]), F.parse_reach_in(b["reach"]),
-             F.parse_weight_lbs(b["weight"]), b["stance"] or None, *F.parse_record(b["record"])))
-        fight_names = fight_names | {name}
-    else:
-        conn.execute("INSERT OR IGNORE INTO fighters (fighter_id, name) VALUES (?,?)",
-                     (fighter_id, sorted(fight_names)[0]))
-    conn.executemany("INSERT OR IGNORE INTO fighter_aliases (fighter_id, source, source_id, "
-                     "name) VALUES (?,?,?,?)",
-                     [(fighter_id, "ufcstats", fighter_id, n) for n in sorted(fight_names)])
+        if b["name"]:
+            names.add(b["name"])
+        wins, losses, draws, ncs = F.parse_record(b["record"])
+        ids.write(conn, "fighter", fid, NAME, dict(
+            name=b["name"] or None, nickname=b["nickname"] or None, dob=F.parse_dob(b["dob"]),
+            height_in=F.parse_height_in(b["height"]), reach_in=F.parse_reach_in(b["reach"]),
+            weight_lbs=F.parse_weight_lbs(b["weight"]), stance=b["stance"] or None,
+            wins=wins, losses=losses, draws=draws, no_contests=ncs))
+    for n in sorted(names):
+        ids.alias(conn, "fighter", fid, NAME, ufc_id, n)
 
 
 # --- loading a batch of events ------------------------------------------------------
@@ -207,27 +274,31 @@ def load_events(conn: sqlite3.Connection, pages: Pages, targets: list[str],
 
     Promotion: events on UFC Stats' events list are UFC; an event already in the database
     keeps its label; anything else is inferred from its name (see promotion())."""
-    existing = dict(conn.execute("SELECT event_id, promotion FROM events"))
     loaded, skipped, fight_names = [], [], {}
     for i, eid in enumerate(targets, 1):
-        ev = load_event(pages, eid, "UFC" if eid in listed else existing.get(eid))
+        ev = load_event(pages, eid)
         if ev is None:
             skipped.append(eid)
             continue
         loaded.append(ev)
-        for fid, names in ev["fight_names"].items():
-            fight_names.setdefault(fid, set()).update(names)
+        for f in ev["fights"]:
+            for s in f["sides"]:
+                fight_names.setdefault(s["id"], set()).add(s["name"])
         if i % 50 == 0:
             log.info("Events: %d/%d", i, len(targets))
-    fighter_pages = {fid: pages.get("fighters", fid, prefer_disk=reuse_fighters)
-                     for fid in sorted(fight_names)}
+    fighter_pages = {fid: pages.get("fighters", fid, prefer_disk=reuse_fighters) for fid in sorted(fight_names)}
     with conn:
+        w = Writer(conn)
         for ev in loaded:
-            apply_event(conn, ev)
-        for fid, names in fight_names.items():
-            apply_fighter(conn, fid, fighter_pages[fid], names)
-    log.info("Loaded %d events (%d fights, %d fighters); %d skipped for missing pages.",
-             len(loaded), sum(len(ev["fights"]) for ev in loaded), len(fight_names), len(skipped))
+            w.event(ev, "UFC" if ev["event"]["id"] in listed else None)
+        for ufc_id, names in fight_names.items():
+            if ufc_id in w.fighters:
+                apply_fighter(conn, w.fighters[ufc_id], fighter_pages[ufc_id], ufc_id, names)
+        w.counts["duplicate fights merged"] = ids.merge_duplicates(conn)
+        ids.drop_empty(conn)
+    log.info("Loaded %d events (%d fights, %d fighters); %d skipped for missing pages. %s",
+             len(loaded), sum(len(ev["fights"]) for ev in loaded), len(fight_names), len(skipped),
+             ", ".join(f"{k} {v}" for k, v in w.counts.items()) if loaded else "")
     return loaded, skipped
 
 
@@ -239,11 +310,10 @@ def discover(conn: sqlite3.Connection, pages: Pages) -> None:
     fighters' pages are then scanned too, until no new events turn up. Pages already on
     disk are reused.
     """
-    known = {r[0] for r in conn.execute("SELECT fight_id FROM fights")}
+    known = set(ids.aliases(conn, "fight", NAME))
     scanned: set[str] = set()
     for sweep in range(1, 20):
-        todo = sorted({r[0] for r in conn.execute(
-            "SELECT fighter_id FROM fighters WHERE source = 'ufcstats'")} - scanned)
+        todo = sorted(set(ids.aliases(conn, "fighter", NAME)) - scanned)
         log.info("Discovery sweep %d: scanning %d fighter pages.", sweep, len(todo))
         unknown: set[str] = set()
         for i, fid in enumerate(todo, 1):
@@ -264,11 +334,11 @@ def discover(conn: sqlite3.Connection, pages: Pages) -> None:
             break
         # fighter pages were fetched moments ago by this sweep's scan: reuse them
         loaded, _ = load_events(conn, pages, sorted(events), reuse_fighters=True)
-        for ev in sorted(loaded, key=lambda e: e["event"][2] or ""):
-            eid, name, day, _, promo = ev["event"]
-            log.info("  + %s  %-12s %s  (%d fights)", day, promo, name, len(ev["fights"]))
+        for ev in sorted(loaded, key=lambda e: e["event"]["date"] or ""):
+            e = ev["event"]
+            log.info("  + %s  %s  (%d fights)", e["date"], e["name"], len(ev["fights"]))
     counts = conn.execute("SELECT promotion, COUNT(*), MIN(date), MAX(date) FROM events "
-                          "GROUP BY promotion ORDER BY COUNT(*) DESC").fetchall()
+                          "GROUP BY promotion ORDER BY COUNT(*) DESC LIMIT 40").fetchall()
     log.info("Events by promotion (check these labels; fix any in PROMOTION_OVERRIDES):")
     for promo, n, first, last in counts:
         log.info("  %-20s %5d events  %s to %s", promo, n, first, last)
@@ -280,7 +350,7 @@ def add_arguments(p: argparse.ArgumentParser) -> None:
     p.add_argument("--recent-days", type=int, default=21,
                    help="always reload events from the last N days (default: 21)")
     p.add_argument("--events", nargs="*", default=[], metavar="EVENT_ID",
-                   help="also load these events (even ones missing from the events list)")
+                   help="also load these events (UFC Stats ids; even ones missing from the events list)")
     p.add_argument("--all", action="store_true",
                    help="reload every completed event (~15k pages, ~4-5 h)")
     p.add_argument("--discover", action="store_true",
@@ -295,7 +365,7 @@ def fill_sex(conn: sqlite3.Connection) -> None:
     """Set fighters.sex where UFC Stats' bout titles say it: 'F' for anyone in a women's
     bout, 'M' for anyone else in a named division (catch weight and open weight don't say)."""
     bouts = ("SELECT p.fighter_id FROM fight_participants p JOIN fights f USING (fight_id) "
-             "WHERE f.source = 'ufcstats' AND f.weight_class LIKE ")
+             "JOIN fight_aliases a ON a.fight_id = f.fight_id AND a.source = 'ufcstats' WHERE f.weight_class LIKE ")
     with conn:
         conn.execute(f"UPDATE fighters SET sex = 'F' WHERE sex IS NULL AND fighter_id IN ({bouts} '%Women%')")
         conn.execute(f"UPDATE fighters SET sex = 'M' WHERE sex IS NULL AND fighter_id IN ({bouts} '%weight%' "
@@ -319,7 +389,7 @@ def update(conn: sqlite3.Connection, args: argparse.Namespace, raw: Path) -> Non
         cutoff = (date.today() - timedelta(days=args.recent_days)).isoformat()
         completed = [(e["event_id"], F.parse_dob(e["date"])) for e in parse_events_list(listing)]
         completed = [(eid, d) for eid, d in completed if d and d <= today]
-        have = {r[0] for r in conn.execute("SELECT event_id FROM events")}
+        have = set(ids.aliases(conn, "event", NAME))
         targets = [eid for eid, d in completed
                    if args.all or eid not in have or d >= cutoff or eid in args.events]
         # Explicitly requested events load even if the events list omits them.

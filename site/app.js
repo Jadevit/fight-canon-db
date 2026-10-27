@@ -40,12 +40,11 @@ function api(path) {
 const meta = () => api("meta.json");
 // {cols, rows} to objects.
 const objs = (t) => (t ? t.rows.map((r) => Object.fromEntries(t.cols.map((c, i) => [c, r[i]]))) : []);
-const fileKey = (id) => id.replaceAll(":", "~");
 const hex = (s) => [...new TextEncoder().encode(s)].map((b) => b.toString(16).padStart(2, "0")).join("");
-// Which fx/ file a fight is in: the low byte of its FNV-1a hash (site_json.py does the same).
+// Which fx/ file a fight is in: the low byte of its id's FNV-1a hash (site_json.py does the same).
 function shard(id) {
   let h = 0x811c9dc5;
-  for (const b of new TextEncoder().encode(id)) h = Math.imul(h ^ b, 0x01000193) >>> 0;
+  for (const b of new TextEncoder().encode(String(id))) h = Math.imul(h ^ b, 0x01000193) >>> 0;
   return (h & 0xff).toString(16).padStart(2, "0");
 }
 
@@ -146,8 +145,24 @@ const plural = (n, one, many = one + "s") => `${num(n)} ${n === 1 ? one : many}`
 const american = (v) => (v == null ? null : v > 0 ? `+${v}` : String(v));
 const dot = (...parts) => parts.filter(Boolean).join(" · ");
 
-const fighterLink = (id, name, cls = "") => `<a href="/fighter/${esc(id)}"${cls ? ` class="${cls}"` : ""}>${esc(name)}</a>`;
-const eventLink = (id, name) => `<a href="/event/${esc(id)}">${esc(name)}</a>`;
+// A page's address: its id, then its name for people (only the number is read).
+const slug = (s) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+  .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+const pagePath = (kind, id, name) => `/${kind}/${id}${slug(name) ? `-${slug(name)}` : ""}`;
+const fighterHref = (id, name) => esc(pagePath("fighter", id, name));
+const eventHref = (id, name) => esc(pagePath("event", id, name));
+const fighterLink = (id, name, cls = "") => `<a href="${fighterHref(id, name)}"${cls ? ` class="${cls}"` : ""}>${esc(name)}</a>`;
+const eventLink = (id, name) => `<a href="${eventHref(id, name)}">${esc(name)}</a>`;
+// The page's one address for search engines, and the address bar's (an old or misspelled name
+// in a link is put right), unless another page was opened meanwhile.
+function canonical(path) {
+  const page = (p) => p.match(/^\/[^/]*(?:\/\d+)?/)[0];
+  if (page(location.pathname) !== page(path)) return;
+  let link = document.querySelector('link[rel="canonical"]');
+  if (!link) document.head.append(link = Object.assign(document.createElement("link"), { rel: "canonical" }));
+  link.href = location.origin + path;
+  if (location.pathname !== path) history.replaceState(null, "", path + location.search);
+}
 const ext = (url, label) => `<a href="${esc(url)}" target="_blank" rel="noopener">${label}</a>`;
 const badge = (text) => `<span class="badge">${esc(text)}</span>`;
 const res = (r) => r ? `<span class="res res-${esc(r)}" title="${{ W: "Win", L: "Loss", D: "Draw", NC: "No contest" }[r] || ""}">${esc(r)}</span>`
@@ -179,9 +194,7 @@ function winKind(method) {
   return "other";
 }
 
-// Links to the pages a row came from. Only UFC Stats ids (16 hex characters) exist on UFC
-// Stats; everything else is on Sherdog, under the id in ours or in the aliases tables.
-const isUfcStats = (id) => /^[0-9a-f]{16}$/.test(id);
+// Links to the pages a row came from, by the sources' own ids (the aliases tables).
 const SOURCE_NAMES = { ufcstats: "UFC Stats", pfl: "PFL", oktagon: "Oktagon", sofascore: "Sofascore", sherdog: "Sherdog", smartcage: "PFL SmartCage" };
 // What a stats source leaves out, said under its stats.
 const STATS_NOTES = {
@@ -189,11 +202,10 @@ const STATS_NOTES = {
   sofascore: "A third party's count, not the promotion's. Total strikes are counted thrown, not landed.",
   smartcage: "PFL's older system counts all strikes by arm, leg and ground, not significant strikes.",
 };
-// `aliases`: the event file's {sherdog: [ids], pfl: [ids]}.
-function eventSources(id, aliases) {
-  const links = isUfcStats(id) ? [ext(`http://ufcstats.com/event-details/${id}`, "UFC Stats")] : [];
-  const sherdog = id.startsWith("sherdog:") ? [id.slice(8)] : aliases.sherdog || [];
-  sherdog.forEach((s) => links.push(ext(`https://www.sherdog.com/events/x-${s}`, "Sherdog")));
+// `aliases`: the event file's {ufcstats: [ids], sherdog: [ids], pfl: [ids]}.
+function eventSources(aliases) {
+  const links = (aliases.ufcstats || []).map((s) => ext(`http://ufcstats.com/event-details/${s}`, "UFC Stats"));
+  (aliases.sherdog || []).forEach((s) => links.push(ext(`https://www.sherdog.com/events/x-${s}`, "Sherdog")));
   (aliases.pfl || []).forEach((s) => links.push(ext(`https://pflmma.com/event/${s}`, "PFL")));
   return links;
 }
@@ -320,13 +332,13 @@ async function eventList(s, year, promo) {
 }
 
 const fighterRow = (r) => `
-  <a class="row" href="/fighter/${esc(r.fighter_id)}">
+  <a class="row" href="${fighterHref(r.fighter_id, r.name)}">
     <div class="main"><div class="title">${esc(r.name)}</div>
       ${r.nickname ? `<div class="sub">“${esc(r.nickname)}”</div>` : ""}</div>
     <div class="end"><b class="num">${proRecord(r, r)}</b>${plural(r.n, "fight")}</div>
   </a>`;
 const eventRow = (e) => `
-  <a class="row" href="/event/${esc(e.event_id)}">
+  <a class="row" href="${eventHref(e.event_id, e.name)}">
     <div class="main"><div class="title">${esc(e.name)}</div>
       <div class="sub">${esc(dot(longDate(e.date), e.promotion, e.location))}</div></div>
     <div class="end">${plural(e.n, "fight")}</div>
@@ -375,7 +387,7 @@ function redraw(el, html) {
 }
 const landed = (l, a) => (l == null ? (a == null ? "—" : `${a} thr.`) : `${l}${a != null ? ` <small>/${a}</small>` : ""}`);
 
-const eventFile = (eid) => api(`e/${fileKey(eid)}.json`);
+const eventFile = (eid) => api(`e/${eid}.json`);
 const fightLink = (fid, eid) => `/fight/${esc(fid)}?e=${encodeURIComponent(eid)}`;
 
 // A fight's round stats from its event's file: round_stats' columns, or PFL's older SmartCage
@@ -463,9 +475,9 @@ menuBtn.onclick = () => {
   const draw = (mine, people, events) => {
     if (mine !== n) return;
     box.innerHTML = (people.length ? `<span class="label">Fighters</span>` + people.map((r) =>
-        `<a href="/fighter/${esc(r.fighter_id)}">${esc(r.name)}<small>${proRecord(r, r)}</small></a>`).join("") : "") +
+        `<a href="${fighterHref(r.fighter_id, r.name)}">${esc(r.name)}<small>${proRecord(r, r)}</small></a>`).join("") : "") +
       (events.length ? `<span class="label">Events</span>` + events.map((e) =>
-        `<a href="/event/${esc(e.event_id)}">${esc(e.name)}<small>${esc(e.date)}</small></a>`).join("") : "") +
+        `<a href="${eventHref(e.event_id, e.name)}">${esc(e.name)}<small>${esc(e.date)}</small></a>`).join("") : "") +
       (people.length || events.length ? "" : `<p>Nothing found.</p>`);
     links = [...box.querySelectorAll("a")];
     active = -1;
@@ -505,7 +517,9 @@ let page = 0;  // the page being shown; a view drops its result if another page 
 async function route() {
   const path = location.pathname;
   window.dispatchEvent(new Event("route"));
-  const [name = "", id = ""] = path.split("/").filter(Boolean);
+  const [name = "", part = ""] = path.split("/").filter(Boolean);
+  const numbered = ["fighter", "event", "fight"].includes(name);
+  const id = numbered ? Number((decodeURIComponent(part).match(/^(\d+)(?:-|$)/) || [, 0])[1]) : decodeURIComponent(part);
   const views = { "": landing, fighters, fighter, events, event, fight, leaders, query, sql: query };
   const view = views[name] || landing;
   const mine = ++page;
@@ -519,7 +533,9 @@ async function route() {
   if (view !== landing) app.innerHTML = loading();
   window.scrollTo(0, 0);
   try {
-    await view(decodeURIComponent(id), show);
+    canonical(path);  // a fighter, event or fight page puts its name in once it has it
+    if (numbered && !id) show(nothing("Page not found."));
+    else await view(id, show);
   } catch (e) {
     show(`<p class="error">Couldn't load this page: ${esc(e.message)}</p>`);
   }
@@ -582,7 +598,7 @@ async function landing(_, show) {
   const vals = { fights: num(c.fights), fighters: num(c.fighters), promotions: num(c.promotions), first: c.first_date.slice(0, 4) };
   document.querySelectorAll("#tiles b[data-k]").forEach((b) => (b.textContent = vals[b.dataset.k]));
   const slot = document.getElementById("latest-event");
-  if (slot) slot.innerHTML = e ? `<a class="card" href="/event/${esc(e.event_id)}">
+  if (slot) slot.innerHTML = e ? `<a class="card" href="${eventHref(e.event_id, e.name)}">
       <span class="badge">${esc(e.promotion)}</span><h3>${esc(e.name)}</h3>
       <p>${esc(dot(longDate(e.date), e.location, plural(e.n, "fight")))}</p></a>` : "";
 }
@@ -618,7 +634,7 @@ async function fighter(id, show) {
   // Their file: the fighter, their fights newest first, and per fight their stat totals and
   // their opponent's (strike defense). Some sources count only what landed, so accuracy uses
   // the rounds that have attempts (sla, tla).
-  const d = await api(`f/${fileKey(id)}.json`);
+  const d = await api(`f/${id}.json`);
   if (!d) { show(nothing("Fighter not found.")); return; }
   const f = d.fighter, fights = objs(d.fights), own = objs(d.stats);
 
@@ -638,8 +654,9 @@ async function fighter(id, show) {
     f.stance && esc(f.stance),
     f.nationality && esc(f.nationality),
   ].filter(Boolean);
-  const links = (isUfcStats(id) ? [ext(`http://ufcstats.com/fighter-details/${id}`, "UFC Stats")] : [])
-    .concat(d.sherdog.map((s) => ext(`https://www.sherdog.com/fighter/x-${s}`, "Sherdog")));
+  const links = (d.aliases.ufcstats || []).map((s) => ext(`http://ufcstats.com/fighter-details/${s}`, "UFC Stats"))
+    .concat((d.aliases.sherdog || []).map((s) => ext(`https://www.sherdog.com/fighter/x-${s}`, "Sherdog")));
+  canonical(pagePath("fighter", id, f.name));
 
   const total = r.w + r.l + r.d || 1;
   const recordBlock = `
@@ -809,9 +826,10 @@ async function events(_, show) {
 async function event(id, show) {
   const d = await eventFile(id);
   if (!d) { show(nothing("Event not found.")); return; }
-  const e = d.event, fights = objs(d.fights), links = eventSources(id, d.aliases);
+  const e = d.event, fights = objs(d.fights), links = eventSources(d.aliases);
+  canonical(pagePath("event", id, e.name));
   // The whole card is here if UFC Stats covers the promotion's cards or the card was read whole.
-  const whole = (e.coverage === "full" && e.source === "ufcstats") || e.card_complete === 1;
+  const whole = (e.coverage === "full" && d.aliases.ufcstats) || e.card_complete === 1;
   // The winner's side goes left (gold); with no winner, the first fighter listed.
   const left = (x) => (x.b_res === "W" ? "b" : "a");
   const bouts = fights.map((x) => {
@@ -874,8 +892,9 @@ async function fight(id, show) {
   const sides = [{ id: x.a_id, name: x.a_name, res: x.a_res }, { id: x.b_id, name: x.b_name, res: x.b_res }];
   if (x.b_res === "W") sides.reverse();
   const [L, R] = sides;
-  const links = isUfcStats(id) ? [ext(`http://ufcstats.com/fight-details/${id}`, "UFC Stats")] : [];
-  eventSources(eid, d.aliases).filter((l) => !l.includes("ufcstats.com")).forEach((l) => links.push(l));
+  const links = d.ufcstats?.[id] ? [ext(`http://ufcstats.com/fight-details/${d.ufcstats[id]}`, "UFC Stats")] : [];
+  eventSources(d.aliases).filter((l) => !l.includes("ufcstats.com")).forEach((l) => links.push(l));
+  canonical(`/fight/${id}`);
   const outcome = L.res === "W" ? `${esc(L.name)} wins` : L.res === "D" ? "Draw" : L.res === "NC" ? "No contest" : "";
   const nameCls = (s) => (s.res === "W" ? "won" : "lost");
 
@@ -909,9 +928,9 @@ async function fight(id, show) {
       <section>
         <p class="muted">${eventLink(x.event_id, x.event)} · ${esc(longDate(x.date))}</p>
         <div class="versus" style="margin-top:16px">
-          <div class="side">${L.id ? `<a class="name ${nameCls(L)}" href="/fighter/${esc(L.id)}">${esc(L.name)}</a>` : ""}</div>
+          <div class="side">${L.id ? `<a class="name ${nameCls(L)}" href="${fighterHref(L.id, L.name)}">${esc(L.name)}</a>` : ""}</div>
           <div class="vs">VS</div>
-          <div class="side">${R.id ? `<a class="name ${nameCls(R)}" href="/fighter/${esc(R.id)}">${esc(R.name)}</a>` : ""}</div>
+          <div class="side">${R.id ? `<a class="name ${nameCls(R)}" href="${fighterHref(R.id, R.name)}">${esc(R.name)}</a>` : ""}</div>
         </div>
         <div class="outcome">
           ${outcome ? `<b>${outcome}</b><br>` : ""}
@@ -1061,7 +1080,7 @@ async function leaders(_, show) {
     if (rows === undefined) return;
     const shown = (v) => s.fmt === "pct" ? Math.round(v * 1000) / 10 + "%" : s.fmt === "time" ? hmm(v) : num(v);
     document.getElementById("results").innerHTML = (rows.length ? `<div class="list">${rows.map((r, i) => `
-        <a class="row${i ? "" : " first"}" href="/fighter/${esc(r.fighter_id)}">
+        <a class="row${i ? "" : " first"}" href="${fighterHref(r.fighter_id, r.name)}">
           <span class="rank">${i + 1}</span>
           <div class="main"><div class="title">${esc(r.name)}</div>
             <div class="sub">${plural(r.n, "fight")}${results ? "" : " counted"}</div></div>

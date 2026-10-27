@@ -68,22 +68,22 @@ def _db():
     conn = sqlite3.connect(":memory:")
     conn.executescript(db.SCHEMA.read_text())
     db.sync_promotions(conn)
-    conn.executemany("INSERT INTO fighters (fighter_id, name, source) VALUES (?,?,'sherdog')",
-                     [("sherdog:100", "Alan Able"), ("sherdog:200", "Ben Baker"),
-                      ("sherdog:300", "Carl Cole"), ("sherdog:400", "Dan Dale")])
+    conn.executemany("INSERT INTO fighters (fighter_id, name) VALUES (?,?)",
+                     [(1, "Alan Able"), (2, "Ben Baker"),
+                      (3, "Carl Cole"), (4, "Dan Dale")])
     conn.executemany("INSERT INTO fighter_aliases VALUES (?, 'sherdog', ?, ?)",
-                     [("sherdog:100", "100", "Alan Able"), ("sherdog:200", "200", "Ben Baker"),
-                      ("sherdog:300", "300", "Carl Cole"), ("sherdog:400", "400", "Dan Dale")])
-    conn.execute("INSERT INTO events (event_id, name, date, source) VALUES ('sherdog:9', 'Oktagon 1', '2020-01-02', 'sherdog')")
-    for fight, pair in (("sherdog:9:100-200", ("sherdog:200", "sherdog:100")), ("sherdog:9:300-400", ("sherdog:300", "sherdog:400"))):
-        conn.execute("INSERT INTO fights (fight_id, event_id, source) VALUES (?, 'sherdog:9', 'sherdog')", (fight,))
+                     [(1, "100", "Alan Able"), (2, "200", "Ben Baker"),
+                      (3, "300", "Carl Cole"), (4, "400", "Dan Dale")])
+    conn.execute("INSERT INTO events (event_id, name, date) VALUES (9, 'Oktagon 1', '2020-01-02')")
+    for fight, pair in ((1, (2, 1)), (2, (3, 4))):
+        conn.execute("INSERT INTO fights (fight_id, event_id) VALUES (?, 9)", (fight,))
         conn.executemany("INSERT INTO fight_participants VALUES (?, ?, ?, ?)",
                          [(fight, pair[0], 0, "W"), (fight, pair[1], 1, "L")])
     # Oktagon's own stats on the first fight; official stats on the second.
     conn.execute("INSERT INTO round_stats (fight_id, fighter_id, round, sig_str_land, source) "
-                 "VALUES ('sherdog:9:100-200', 'sherdog:100', 1, 4, 'oktagon')")
+                 "VALUES (1, 1, 1, 4, 'oktagon')")
     conn.execute("INSERT INTO round_stats (fight_id, fighter_id, round, sig_str_land, source) "
-                 "VALUES ('sherdog:9:300-400', 'sherdog:300', 1, 9, 'ufcstats')")
+                 "VALUES (2, 3, 1, 9, 'ufcstats')")
     return conn
 
 
@@ -109,14 +109,14 @@ def test_load(tmp_path):
     # Home is Alan Able whatever the corner order; Oktagon's row is gone, the official one stays.
     assert conn.execute("SELECT fight_id, fighter_id, sig_str_land, total_str_att, total_str_land, ctrl_sec, source "
                         "FROM round_stats ORDER BY fight_id, fighter_id").fetchall() == [
-        ("sherdog:9:100-200", "sherdog:100", 7, 20, None, 15, "sofascore"),
-        ("sherdog:9:100-200", "sherdog:200", 3, 15, None, 0, "sofascore"),
-        ("sherdog:9:300-400", "sherdog:300", 9, None, None, None, "ufcstats")]
+        (1, 1, 7, 20, None, 15, "sofascore"),
+        (1, 2, 3, 15, None, 0, "sofascore"),
+        (2, 3, 9, None, None, None, "ufcstats")]
     assert conn.execute("SELECT count(*) FROM sofascore_round_stats").fetchone() == (2,)
     assert conn.execute("SELECT event_id FROM event_aliases WHERE source = 'sofascore' AND source_id = '500'").fetchone() == (
-        "sherdog:9",)
+        9,)
     assert conn.execute("SELECT fighter_id FROM fighter_aliases WHERE source = 'sofascore' AND source_id = '1'").fetchone() == (
-        "sherdog:100",)
+        1,)
     load(conn, tmp_path)  # loading again replaces, doesn't duplicate
     assert conn.execute("SELECT count(*) FROM round_stats WHERE source = 'sofascore'").fetchone() == (2,)
 

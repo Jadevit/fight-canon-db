@@ -51,14 +51,14 @@ def _db():
     conn = sqlite3.connect(":memory:")
     conn.executescript(db.SCHEMA.read_text())
     db.sync_promotions(conn)
-    conn.executemany("INSERT INTO fighters (fighter_id, name, dob, source) VALUES (?,?,?,'sherdog')",
-                     [("sherdog:100", "Alan Able", None), ("sherdog:200", "Ben Baker", "1985-05-05")])
+    conn.executemany("INSERT INTO fighters (fighter_id, name, dob) VALUES (?,?,?)",
+                     [(1, "Alan Able", None), (2, "Ben Baker", "1985-05-05")])
     conn.executemany("INSERT INTO fighter_aliases VALUES (?, 'sherdog', ?, ?)",
-                     [("sherdog:100", "100", "Alan Able"), ("sherdog:200", "200", "Ben Baker")])
-    conn.execute("INSERT INTO events (event_id, name, date, source) VALUES ('sherdog:9', 'Oktagon 1', '2020-01-03', 'sherdog')")
-    conn.execute("INSERT INTO fights (fight_id, event_id, source) VALUES ('sherdog:9:100-200', 'sherdog:9', 'sherdog')")
-    conn.executemany("INSERT INTO fight_participants VALUES ('sherdog:9:100-200', ?, ?, ?)",
-                     [("sherdog:100", 0, "W"), ("sherdog:200", 1, "L")])
+                     [(1, "100", "Alan Able"), (2, "200", "Ben Baker")])
+    conn.execute("INSERT INTO events (event_id, name, date) VALUES (9, 'Oktagon 1', '2020-01-03')")
+    conn.execute("INSERT INTO fights (fight_id, event_id) VALUES (1, 9)")
+    conn.executemany("INSERT INTO fight_participants VALUES (1, ?, ?, ?)",
+                     [(1, 0, "W"), (2, 1, "L")])
     return conn
 
 
@@ -80,12 +80,12 @@ def test_load(tmp_path):
     assert counts["fights with stats"] == 1 and not counts["bouts not matched"]
     assert conn.execute("SELECT fighter_id, round, sig_str_land, total_str_land, sig_str_att, knockdowns, source "
                         "FROM round_stats WHERE round = 1 ORDER BY fighter_id").fetchall() == [
-        ("sherdog:100", 1, 2, 3, None, None, "oktagon"), ("sherdog:200", 1, 1, 1, None, None, "oktagon")]
+        (1, 1, 2, 3, None, None, "oktagon"), (2, 1, 1, 1, None, None, "oktagon")]
     assert conn.execute("SELECT event_id FROM event_aliases WHERE source = 'oktagon' AND source_id = '5'").fetchone() == (
-        "sherdog:9",)
+        9,)
     # A missing birth date is filled, one we have is kept; both get the bout's sex.
     assert conn.execute("SELECT fighter_id, dob, sex FROM fighters ORDER BY fighter_id").fetchall() == [
-        ("sherdog:100", "1990-01-01", "M"), ("sherdog:200", "1985-05-05", "M")]
+        (1, "1990-01-01", "M"), (2, "1985-05-05", "M")]
     load(conn, tmp_path)  # loading again replaces, doesn't duplicate
     assert conn.execute("SELECT count(*) FROM round_stats").fetchone() == (4,)
 
@@ -101,12 +101,13 @@ def test_fill_sex_from_ufcstats_divisions():
     conn = sqlite3.connect(":memory:")
     conn.executescript(db.SCHEMA.read_text())
     db.sync_promotions(conn)
-    conn.execute("INSERT INTO events (event_id, name, date) VALUES ('e', 'UFC 1', '2020-01-01')")
-    conn.executemany("INSERT INTO fighters (fighter_id, name) VALUES (?, ?)", [(x, x) for x in "abcdef"])
-    for fid, wc, pair in (("f1", "Women's Strawweight Bout", "ab"), ("f2", "Lightweight Bout", "cd"),
-                          ("f3", "Catch Weight Bout", "ef"), ("f4", "Bantamweight Bout", "ac")):
-        conn.execute("INSERT INTO fights (fight_id, event_id, weight_class) VALUES (?, 'e', ?)", (fid, wc))
+    conn.execute("INSERT INTO events (event_id, name, date) VALUES (1, 'UFC 1', '2020-01-01')")
+    conn.executemany("INSERT INTO fighters (fighter_id, name) VALUES (?, ?)", [(i, x) for i, x in enumerate("abcdef", 1)])
+    for fid, wc, pair in ((1, "Women's Strawweight Bout", (1, 2)), (2, "Lightweight Bout", (3, 4)),
+                          (3, "Catch Weight Bout", (5, 6)), (4, "Bantamweight Bout", (1, 3))):
+        conn.execute("INSERT INTO fights (fight_id, event_id, weight_class) VALUES (?, 1, ?)", (fid, wc))
+        conn.execute("INSERT INTO fight_aliases VALUES (?, 'ufcstats', ?)", (fid, f"f{fid}"))
         conn.executemany("INSERT INTO fight_participants VALUES (?, ?, ?, 'W')", [(fid, p, i) for i, p in enumerate(pair)])
     fill_sex(conn)
     # A women's bout decides first; catch weight says nothing.
-    assert dict(conn.execute("SELECT fighter_id, sex FROM fighters")) == dict(a="F", b="F", c="M", d="M", e=None, f=None)
+    assert dict(conn.execute("SELECT name, sex FROM fighters")) == dict(a="F", b="F", c="M", d="M", e=None, f=None)

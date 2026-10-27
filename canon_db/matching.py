@@ -68,6 +68,59 @@ class Matcher:
         return scored[0][1], scored[0][2]
 
 
+def days_apart(a: str, b: str) -> int:
+    return abs((date.fromisoformat(a) - date.fromisoformat(b)).days)
+
+
+class Bouts:
+    """Every fight by fighter, to place a source's bout on our fight: within a day of it, with
+    one fighter known and the opponent's name agreeing, or both fighters known. A source that
+    links fighters through these (Sherdog, UFC Stats) never links by name alone."""
+
+    def __init__(self, conn: sqlite3.Connection):
+        self.names: dict[int, list[str]] = {}
+        for fid, name in conn.execute("SELECT fighter_id, name FROM fighters UNION ALL "
+                                      "SELECT fighter_id, name FROM fighter_aliases"):
+            self.names.setdefault(fid, []).append(name)
+        self.fights: dict[int, list[tuple]] = {}  # fighter -> [(date, fight_id, event_id, opponent)]
+        for fight, eid, day, a, b in conn.execute("""
+                SELECT f.fight_id, f.event_id, e.date, p.fighter_id, o.fighter_id
+                FROM fights f JOIN events e USING (event_id)
+                JOIN fight_participants p ON p.fight_id = f.fight_id
+                JOIN fight_participants o ON o.fight_id = f.fight_id AND o.corner <> p.corner
+                WHERE e.date IS NOT NULL"""):
+            self.fights.setdefault(a, []).append((day, fight, eid, b))
+
+    def add(self, fight: int, event: int, day: str | None, a: int, b: int) -> None:
+        """A fight written since: findable from now on."""
+        if day:
+            self.fights.setdefault(a, []).append((day, fight, event, b))
+            self.fights.setdefault(b, []).append((day, fight, event, a))
+
+    def on(self, fid: int, day: str | None, opponent: str, crowded: bool = False) -> tuple | None:
+        """Fighter `fid`'s fight within a day of `day`: (date, fight_id, event_id, opponent),
+        or None. Their only one is it, unless they have several (or `crowded`: the source lists
+        several for them that day, a tournament); then the opponent's name decides."""
+        if not day:
+            return None
+        cands = [c for c in self.fights.get(fid, []) if days_apart(c[0], day) <= 1]
+        if len(cands) > 1 or crowded:
+            cands = [c for c in cands if name_ok(opponent, self.names.get(c[3], []))]
+        return cands[0] if len(cands) == 1 else None
+
+    def named(self, fid: int, day: str | None, opponent: str, crowded: bool = False) -> tuple | None:
+        """on(), when the opponent's names also agree."""
+        m = self.on(fid, day, opponent, crowded)
+        return m if m and name_ok(opponent, self.names.get(m[3], [])) else None
+
+    def pair(self, a: int, b: int, day: str | None) -> tuple | None:
+        """The one fight between these two within a day of `day`."""
+        if not day:
+            return None
+        cands = [c for c in self.fights.get(a, []) if c[3] == b and days_apart(c[0], day) <= 1]
+        return cands[0] if len(cands) == 1 else None
+
+
 def name_ok(name: str, names: list[str]) -> bool:
     """Two spellings plausibly of one person: close overall, or sharing a surname-length word."""
     words = {w for w in norm(name).split() if len(w) >= 3}

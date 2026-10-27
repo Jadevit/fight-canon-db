@@ -24,7 +24,7 @@ from pathlib import Path
 
 import numpy as np
 
-from canon_db import db
+from canon_db import db, ids
 from canon_db.db import DEFAULT_DB
 from canon_db.sources.ufcscorecards import reader
 from canon_db.sources.ufcscorecards.match import Matcher, check, norm, sim
@@ -167,7 +167,9 @@ def load(results, conn):
     by_fight, skipped = {}, Counter()
     for line in open(results):
         rec = json.loads(line)
-        if rec["status"] != "passed":
+        if isinstance(rec.get("fight_id"), str):  # read before our ids: a UFC Stats fight id
+            rec["fight_id"] = ids.find(conn, "fight", "ufcstats", rec["fight_id"])
+        if rec["status"] != "passed" or rec.get("fight_id") is None:
             skipped[rec["status"]] += 1
             continue
         rows = card_rows(rec, conn, judges)

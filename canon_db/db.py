@@ -25,9 +25,9 @@ RAW = ROOT / "data" / "raw"
 SCHEMA = Path(__file__).resolve().parent / "schema.sql"
 PROMOTIONS = Path(__file__).resolve().parent / "promotions.csv"
 
-TABLES = ("promotions", "promotion_aliases", "fighters", "fighter_aliases", "fighter_redirects", "events",
-          "event_aliases", "event_cards", "event_pages", "fights", "fight_participants", "round_stats",
-          "smartcage_round_stats", "sofascore_round_stats", "judge_scores", "odds")
+TABLES = ("promotions", "promotion_aliases", "fighters", "fighter_aliases", "merged_ids", "events",
+          "event_aliases", "event_cards", "event_pages", "fights", "fight_aliases", "fight_participants",
+          "round_stats", "smartcage_round_stats", "sofascore_round_stats", "judge_scores", "odds")
 
 
 def digest(conn: sqlite3.Connection) -> str:
@@ -137,6 +137,12 @@ def migrate(db: Path) -> dict[str, int]:
             if n_new != n_old:
                 raise RuntimeError(f"{t}: {n_old} rows before, {n_new} after")
             counts[t] = n_new
+        # Ids are never reused: keep each table's counter, even past the rows left.
+        if conn.execute("SELECT 1 FROM old.sqlite_master WHERE name = 'sqlite_sequence'").fetchone():
+            for name, seq in conn.execute("SELECT name, seq FROM old.sqlite_sequence").fetchall():
+                if not conn.execute("UPDATE main.sqlite_sequence SET seq = max(seq, ?) WHERE name = ?",
+                                    (seq, name)).rowcount:
+                    conn.execute("INSERT INTO main.sqlite_sequence (name, seq) VALUES (?, ?)", (name, seq))
     sync_promotions(conn)
     counts["promotions"] = conn.execute("SELECT COUNT(*) FROM promotions").fetchone()[0]
     problems = conn.execute("PRAGMA main.foreign_key_check").fetchall()

@@ -69,14 +69,14 @@ def _db():
     conn = sqlite3.connect(":memory:")
     conn.executescript(db.SCHEMA.read_text())
     db.sync_promotions(conn)
-    conn.executemany("INSERT INTO fighters (fighter_id, name, source) VALUES (?,?,'sherdog')",
-                     [("sherdog:100", "Alan Able"), ("sherdog:200", "Ben Baker")])
+    conn.executemany("INSERT INTO fighters (fighter_id, name) VALUES (?,?)",
+                     [(1, "Alan Able"), (2, "Ben Baker")])
     conn.executemany("INSERT INTO fighter_aliases VALUES (?, 'sherdog', ?, ?)",
-                     [("sherdog:100", "100", "Alan Able"), ("sherdog:200", "200", "Ben Baker")])
-    conn.execute("INSERT INTO events (event_id, name, date, source) VALUES ('sherdog:9', 'PFL 1', '2020-01-03', 'sherdog')")
-    conn.execute("INSERT INTO fights (fight_id, event_id, source) VALUES ('sherdog:9:100-200', 'sherdog:9', 'sherdog')")
-    conn.executemany("INSERT INTO fight_participants VALUES ('sherdog:9:100-200', ?, ?, ?)",
-                     [("sherdog:100", 0, "W"), ("sherdog:200", 1, "L")])
+                     [(1, "100", "Alan Able"), (2, "200", "Ben Baker")])
+    conn.execute("INSERT INTO events (event_id, name, date) VALUES (9, 'PFL 1', '2020-01-03')")
+    conn.execute("INSERT INTO fights (fight_id, event_id) VALUES (1, 9)")
+    conn.executemany("INSERT INTO fight_participants VALUES (1, ?, ?, ?)",
+                     [(1, 0, "W"), (2, 1, "L")])
     return conn
 
 
@@ -93,12 +93,12 @@ def test_load_v2_into_round_stats(tmp_path):
     assert counts["fights with stats"] == 1 and not counts["bouts not matched"]
     assert conn.execute("SELECT fight_id, fighter_id, round, sig_str_land, ctrl_sec, reversals, source "
                         "FROM round_stats ORDER BY fighter_id").fetchall() == [
-        ("sherdog:9:100-200", "sherdog:100", 1, 10, 65, None, "pfl"),
-        ("sherdog:9:100-200", "sherdog:200", 1, 3, 65, None, "pfl")]
+        (1, 1, 1, 10, 65, None, "pfl"),
+        (1, 2, 1, 3, 65, None, "pfl")]
     assert conn.execute("SELECT event_id FROM event_aliases WHERE source = 'pfl' AND source_id = 'pfl-x'"
-                        ).fetchone() == ("sherdog:9",)
+                        ).fetchone() == (9,)
     assert conn.execute("SELECT fighter_id FROM fighter_aliases WHERE source = 'pfl' AND source_id = '1'"
-                        ).fetchone() == ("sherdog:100",)
+                        ).fetchone() == (1,)
     load(conn, tmp_path)  # loading again replaces, doesn't duplicate
     assert conn.execute("SELECT count(*) FROM round_stats").fetchone() == (2,)
 
@@ -109,4 +109,4 @@ def test_load_v1_into_smartcage(tmp_path):
     load(conn, tmp_path)
     assert conn.execute("SELECT count(*) FROM round_stats").fetchone() == (0,)
     assert conn.execute("SELECT fighter_id, round, total_str_att, power_land FROM smartcage_round_stats "
-                        "ORDER BY fighter_id").fetchall() == [("sherdog:100", 1, 40, None), ("sherdog:200", 1, 20, None)]
+                        "ORDER BY fighter_id").fetchall() == [(1, 1, 40, None), (2, 1, 20, None)]
