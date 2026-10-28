@@ -1,29 +1,29 @@
 {
-  "updated_at": "2026-10-27T19:19:02+00:00",
+  "updated_at": "2026-10-28T16:55:23+00:00",
   "coverage": {
     "first_event_date": "1963-12-02",
-    "last_event_date": "2026-10-25",
-    "last_event": "Grachan - Grachan 86",
-    "last_event_id": 61496
+    "last_event_date": "2026-10-27",
+    "last_event": "Inka 62 - Sudamerica En Lo Mas Alto",
+    "last_event_id": 61550
   },
   "rows": {
-    "promotions": 12368,
-    "promotion_aliases": 12337,
-    "fighters": 180387,
-    "fighter_aliases": 196587,
-    "merged_ids": 0,
-    "events": 61513,
-    "event_aliases": 63673,
-    "event_cards": 61507,
-    "event_pages": 75491,
-    "non_pro_bouts": 664,
-    "fights": 372659,
-    "fight_aliases": 384186,
-    "fight_participants": 745318,
+    "promotions": 12370,
+    "promotion_aliases": 12339,
+    "fighters": 180402,
+    "fighter_aliases": 196605,
+    "merged_ids": 1,
+    "events": 61522,
+    "event_aliases": 63682,
+    "event_cards": 61516,
+    "event_pages": 75500,
+    "non_pro_bouts": 727,
+    "fights": 372700,
+    "fight_aliases": 384228,
+    "fight_participants": 745400,
     "round_stats": 71992,
     "smartcage_round_stats": 3548,
     "sofascore_round_stats": 19130,
     "judge_scores": 24450,
-    "odds": 23518
+    "odds": 23522
   }
 }
