@@ -53,6 +53,34 @@ def test_updating_leaves_file_untouched_when_content_unchanged(tmp_path):
     assert not (tmp_path / "x.db.tmp").exists()
 
 
+def test_updating_refuses_a_big_fall(tmp_path):
+    path = tmp_path / "x.db"
+    conn = sqlite3.connect(path)
+    conn.executescript(db.SCHEMA.read_text())
+    db.sync_promotions(conn)
+    conn.execute("INSERT INTO events (event_id, name, date) VALUES (1, 'E 1', '2020-01-01')")
+    conn.executemany("INSERT INTO fighters (fighter_id, name) VALUES (?, ?)", [(i, f"F {i}") for i in range(1, 1001)])
+    conn.executemany("INSERT INTO fighter_aliases VALUES (?, 'bestfightodds', ?, ?)", [(i, str(i), f"F {i}") for i in range(1, 301)])
+    conn.commit()
+    conn.close()
+    before = path.read_bytes()
+    with db.updating(path) as (conn, _):  # a few gone: fine
+        with conn:
+            conn.execute("DELETE FROM fighters WHERE fighter_id > 990")
+    try:
+        with db.updating(path) as (conn, _):  # one source's rows gone: a parser that broke
+            with conn:
+                conn.execute("DELETE FROM fighter_aliases WHERE fighter_id > 150")
+        raise AssertionError("published")
+    except RuntimeError as e:
+        assert "fighter_aliases bestfightodds: 300 -> 150" in str(e)
+    assert path.read_bytes() != before and not (tmp_path / "x.db.tmp").exists()
+    with db.updating(path, allow_drop=True) as (conn, result):
+        with conn:
+            conn.execute("DELETE FROM fighter_aliases WHERE fighter_id > 150")
+    assert result.changed
+
+
 def test_updating_discards_work_on_error(tmp_path):
     path = tmp_path / "x.db"
     _tiny_db(path)

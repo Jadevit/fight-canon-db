@@ -9,7 +9,8 @@
 
 All sources run against one working copy of the database, which replaces
 data/canon.db (and data/summary.json) only if its content changed. If any source
-fails, nothing is published. Under GitHub Actions, `changed=true|false` is written
+fails, or a table or source lost more rows than an update should (db.drops; pass
+`update --allow-drop` when that's intended), nothing is published. Under GitHub Actions, `changed=true|false` is written
 to $GITHUB_OUTPUT.
 """
 
@@ -33,6 +34,8 @@ def main() -> None:
                     help="where fetched pages are saved, one folder per source")
     commands = ap.add_subparsers(dest="command", required=True)
     update = commands.add_parser("update", help="update the database from its sources")
+    update.add_argument("--allow-drop", action="store_true",
+                        help="publish even if a table or source lost more rows than an update should")
     per_source = update.add_subparsers(dest="source")
     for name, source in SOURCES.items():
         source.add_arguments(per_source.add_parser(name, help=source.__doc__))
@@ -58,7 +61,7 @@ def main() -> None:
             run[name] = p.parse_args([])
 
     try:
-        with db.updating(args.db) as (conn, result):
+        with db.updating(args.db, args.allow_drop) as (conn, result):
             for name, source_args in run.items():
                 raw = args.raw / name
                 raw.mkdir(parents=True, exist_ok=True)

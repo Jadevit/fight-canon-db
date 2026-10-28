@@ -71,16 +71,37 @@ def sync_promotions(conn: sqlite3.Connection) -> None:
         conn.executemany("INSERT INTO promotions VALUES (?,?,?)", rows.values())
 
 
+DROP_SHARE, DROP_ROWS = 0.02, 100  # a fall bigger than both stops a publish (see drops())
+BY_SOURCE = ("fighter_aliases", "event_aliases", "fight_aliases", "round_stats", "odds")
+
+
+def counts(conn: sqlite3.Connection) -> dict[str, int]:
+    """Rows per table, and per source in the tables that say whose a row is."""
+    have = {n for (n,) in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+    out = {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in TABLES if t in have}
+    for t in (t for t in BY_SOURCE if t in have):
+        out.update({f"{t} {s}": n for s, n in conn.execute(f"SELECT source, COUNT(*) FROM {t} GROUP BY 1")})
+    return out
+
+
+def drops(before: dict[str, int], after: dict[str, int]) -> list[str]:
+    """What fell by more than DROP_SHARE and DROP_ROWS: a source whose pages changed and now
+    parse to nothing, or a bug deleting rows, rather than the day's few merges and deletions."""
+    return [f"{k}: {n:,} -> {after.get(k, 0):,}" for k, n in before.items()
+            if n - after.get(k, 0) > max(DROP_ROWS, DROP_SHARE * n)]
+
+
 class Update:
     """Result of an `updating()` block; `changed` is set when the block exits."""
     changed: bool = False
 
 
 @contextmanager
-def updating(db: Path):
+def updating(db: Path, allow_drop: bool = False):
     """Yield (connection to a working copy, Update). On a clean exit, publish the copy
     over `db` (plus summary.json) only if its content changed; otherwise discard it.
-    On an exception, discard it and leave `db` untouched."""
+    On an exception, discard it and leave `db` untouched. Rows falling by more than drops()
+    allows raise RuntimeError instead of publishing, unless `allow_drop`."""
     if not db.exists():
         raise FileNotFoundError(f"No database at {db}. Get the latest one with: "
                                 "gh release download --pattern canon.db --dir data")
@@ -89,9 +110,14 @@ def updating(db: Path):
     conn = sqlite3.connect(work)
     result = Update()
     try:
-        before = digest(conn)
+        before, rows = digest(conn), counts(conn)
         yield conn, result
         result.changed = digest(conn) != before
+        if result.changed and (fell := drops(rows, counts(conn))):
+            if not allow_drop:
+                raise RuntimeError("rows fell more than an update should (run with --allow-drop if "
+                                   "that's intended): " + "; ".join(fell))
+            logging.getLogger("canon_db").warning("Rows fell (allowed): %s", "; ".join(fell))
         if result.changed:
             conn.execute("VACUUM")
             s = summary(conn)

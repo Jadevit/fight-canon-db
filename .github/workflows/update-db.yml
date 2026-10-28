@@ -16,6 +16,10 @@ on:
         description: Reload every UFC Stats event (~15k pages, ~4-5 h)
         type: boolean
         default: false
+      allow_drop:
+        description: Publish even if a table or source loses more rows than an update should
+        type: boolean
+        default: false
 
 concurrency:
   group: update-db
@@ -51,11 +55,12 @@ jobs:
         env:
           EVENTS: ${{ inputs.events }}
           ALL: ${{ inputs.all && '--all' || '' }}
+          DROP: ${{ inputs.allow_drop && '--allow-drop' || '' }}
         run: |
           if [ -n "$ALL$EVENTS" ]; then
-            python -m canon_db update ufcstats $ALL ${EVENTS:+--events $EVENTS}
+            python -m canon_db update $DROP ufcstats $ALL ${EVENTS:+--events $EVENTS}
           else
-            python -m canon_db update
+            python -m canon_db update $DROP
           fi
 
       - name: Publish database
