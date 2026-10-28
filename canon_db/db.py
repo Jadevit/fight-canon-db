@@ -124,7 +124,7 @@ def updating(db: Path, allow_drop: bool = False):
             conn.close()
             work.replace(db)
             (db.parent / "summary.json").write_text(json.dumps(s, indent=2) + "\n",
-                                                    encoding="utf-8")
+                                                    encoding="utf-8", newline="\n")
     finally:
         conn.close()
         work.unlink(missing_ok=True)
