@@ -1,29 +1,29 @@
 {
-  "updated_at": "2026-10-28T18:28:35+00:00",
+  "updated_at": "2026-10-29T17:04:17+00:00",
   "coverage": {
     "first_event_date": "1963-12-02",
-    "last_event_date": "2026-10-27",
-    "last_event": "Inka 62 - Sudamerica En Lo Mas Alto",
-    "last_event_id": 61550
+    "last_event_date": "2026-10-28",
+    "last_event": "Alash Pride 134 - Abdurakhmanov vs. Grachev",
+    "last_event_id": 61564
   },
   "rows": {
-    "promotions": 12370,
-    "promotion_aliases": 12339,
-    "fighters": 180402,
-    "fighter_aliases": 196605,
+    "promotions": 12377,
+    "promotion_aliases": 12346,
+    "fighters": 180426,
+    "fighter_aliases": 196642,
     "merged_ids": 1,
-    "events": 61522,
-    "event_aliases": 63682,
-    "event_cards": 61516,
-    "event_pages": 75500,
-    "non_pro_bouts": 727,
-    "fights": 372700,
-    "fight_aliases": 384228,
-    "fight_participants": 745400,
+    "events": 61527,
+    "event_aliases": 63687,
+    "event_cards": 61521,
+    "event_pages": 75548,
+    "non_pro_bouts": 784,
+    "fights": 372732,
+    "fight_aliases": 384260,
+    "fight_participants": 745464,
     "round_stats": 71992,
     "smartcage_round_stats": 3548,
     "sofascore_round_stats": 19130,
     "judge_scores": 24450,
-    "odds": 23522
+    "odds": 23568
   }
 }
