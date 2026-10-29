@@ -45,6 +45,8 @@ SEARCH_EXACT = 300
 CACHE = "public, max-age=300, s-maxage=86400"
 PURGE_BATCH = 30  # URLs per purge request (the free plan's limit)
 PURGE_ALL = 3000  # more changed files than this: clear the whole cache in one request instead
+MATCHUP_DAYS, MATCHUP_COUNT = 7, 30  # the Fighters page's recent matchups
+RANDOM_FILES, RANDOM_MIN = 100, 5  # its random fighter: files of ids, fighters with this many fights
 
 # The divisions a bout title can name, the first that matches wins. Keep in step with
 # division() in site/app.js (made from this list, in meta.json).
@@ -452,6 +454,26 @@ def events(con, w: Writer) -> None:
         w(f"fx/{name}.json", dict(sorted(m.items())))
 
 
+def fighters_page(con, w: Writer) -> None:
+    """fighters.json: recent matchups (fighter pairs from the last MATCHUP_DAYS of fights, the
+    pairs whose fighters both have the most fights first; nothing about the fight itself) and
+    how many random-pick files there are. fr/<k>.json: the ids of fighters with RANDOM_MIN
+    fights or more whose id ends in k (mod RANDOM_FILES), so a new fighter changes one file."""
+    cols, pairs = rows(con, f"""
+        WITH recent AS (SELECT * FROM site_fights WHERE a_id IS NOT NULL AND b_id IS NOT NULL
+                        AND date::DATE > (SELECT max(date)::DATE FROM site_fights) - INTERVAL {MATCHUP_DAYS} DAY)
+        SELECT a.*, b.* FROM recent x JOIN site_cards a ON a.fighter_id = x.a_id JOIN site_cards b ON b.fighter_id = x.b_id
+        ORDER BY least(a.n, b.n) DESC, greatest(a.n, b.n) DESC, x.date DESC, x.fight_id LIMIT {MATCHUP_COUNT}""")
+    half = len(cols) // 2
+    w("fighters.json", {"cols": cols[:half], "matchups": [[r[:half], r[half:]] for r in pairs],
+                        "random": RANDOM_FILES})
+    pool = defaultdict(list)
+    for (fid,) in rows(con, f"SELECT fighter_id FROM site_cards WHERE n >= {RANDOM_MIN} ORDER BY fighter_id")[1]:
+        pool[fid % RANDOM_FILES].append(fid)
+    for k in range(RANDOM_FILES):
+        w(f"fr/{k}.json", pool.get(k, []))
+
+
 def event_lists(con, w: Writer) -> None:
     """events/y/<year>.json, events/p/<promotion's name in hex>.json (listed ones)."""
     cols = "event_id, name, date, location, promotion, n"
@@ -550,7 +572,6 @@ def meta(con, w: Writer, splits: dict) -> None:
         "divisions": table(con, "SELECT code, division FROM site_divisions ORDER BY code"),
         "boards": BOARDS,
         "sums": SUMS, "stats_cols": STATS,  # stats boards: column -> its stats table's column
-        "top_fighters": table(con, "SELECT * FROM site_cards ORDER BY n DESC, name, fighter_id LIMIT 50"),
         "splits": splits,
     })
 
@@ -560,7 +581,7 @@ def build(src: Path, out: Path) -> Writer:
     con = load(src)
     try:
         meta(con, w, search(con, w))
-        for step in (query_help, leaders, event_lists, events, fighters):
+        for step in (query_help, leaders, fighters_page, event_lists, events, fighters):
             step(con, w)
     finally:
         con.close()

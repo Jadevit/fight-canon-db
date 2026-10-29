@@ -133,6 +133,30 @@ input[type="search"]::-webkit-search-cancel-button { filter: grayscale(1); }
 button.chip { padding: 0 14px; cursor: pointer; }
 button.chip::after { display: none; }
 button.chip[aria-pressed="true"] { border-color: var(--gold); color: var(--gold); }
+a.chip.link { padding: 0 14px; color: var(--text); max-width: 100%; }
+a.chip.link::after { display: none; }
+a.chip.link:hover { text-decoration: none; border-color: var(--text-faint); }
+
+/* The Fighters page: one centered column, the search in the upper third. */
+.fighters-home { max-width: 640px; margin: 0 auto; padding-top: 14vh; }
+.fighters-home .kicker { display: block; text-align: center; margin-bottom: 14px; }
+.fighters-home #q { height: 44px; font-size: 16px; padding: 0 14px; }
+.fighters-home #q:focus { box-shadow: 0 0 0 1px var(--gold); }
+.fighters-home #results { margin-top: 32px; }
+.random-link {
+  display: flex; align-items: center; gap: 7px; margin: 14px auto 0; padding: 4px 6px;
+  background: none; border: 0; color: var(--text-muted); font-size: 14px; cursor: pointer;
+}
+.random-link:hover { color: var(--gold); }
+
+/* Recently fought: a row per pair, two equal columns on every screen, names left-aligned. */
+.pair-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; padding: 12px 0; }
+.pair-row + .pair-row { border-top: 1px solid var(--border); }
+.pair-row .cell { min-width: 0; }
+.pair-row a { display: block; color: var(--text); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pair-row a:hover { color: var(--gold); text-decoration: none; }
+.pair-row .rec { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+.pair-row .rec .w { color: var(--gold); }
 
 .badge {
   display: inline-block; border: 1px solid var(--border-strong); border-radius: 5px; padding: 1px 7px;

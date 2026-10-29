@@ -68,6 +68,8 @@ def test_site_json(tmp_path, monkeypatch):
     monkeypatch.setattr(site_json, "SEARCH_CAP", 1)  # split every prefix with two matches
     monkeypatch.setattr(site_json, "SEARCH_TOP", 1)
     monkeypatch.setattr(site_json, "SEARCH_EXACT", 1)
+    monkeypatch.setattr(site_json, "RANDOM_MIN", 2)  # everyone has 2 fights
+    monkeypatch.setattr(site_json, "RANDOM_FILES", 2)
     site_json.build(tmp_path / "canon.db", tmp_path / "json")
     root = tmp_path / "json" / "v1"
     read = lambda p: json.loads((root / p).read_text(encoding="utf-8"))  # noqa: E731
@@ -112,7 +114,11 @@ def test_site_json(tmp_path, monkeypatch):
     assert m["stats"]["events"] == 2 and m["boards"]["results"]["stats"]["wins"]["label"] == "Wins"
     assert m["sums"]["round_stats"]["sl"] == "sig_str_land" and "kd" in m["stats_cols"]
     assert m["boards"]["ufcstats"]["source"] == ["round_stats", "ufcstats"] and m["boards"]["results"]["source"] is None
-    assert [r[0] for r in m["top_fighters"]["rows"]] == [2, 3, 1]  # 2 fights each: by name
+    # The Fighters page: the last week's pairs (only UFC 2's fight), and random-pick files by id.
+    page = read("fighters.json")
+    assert [[s[page["cols"].index("fighter_id")] for s in m] for m in page["matchups"]] == [[1, 3]]
+    assert page["random"] == 2 and read("fr/0.json") == [2] and read("fr/1.json") == [1, 3]
+    assert "top_fighters" not in m
     assert {"uf", "ufc"} <= set(m["splits"]["se"]) and "jo" not in m["splits"]["sf"]  # the split search files
     # Leaderboards' opening views: every division (0) and each one.
     assert [r[:4] for r in read("l/results/wins.json")["0"]] == [[1, "José Aldo", 2, 2], [2, "Ben Baker", 2, 1],

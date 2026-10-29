@@ -603,24 +603,68 @@ async function landing(_, show) {
       <p>${esc(dot(longDate(e.date), e.location, plural(e.n, "fight")))}</p></a>` : "";
 }
 
+// Fighters opened lately, newest first, kept in this browser only ({id, name}).
+const RECENT_KEY = "recent-fighters", RECENT_MAX = 8;
+function recentFighters() {
+  try { return JSON.parse(localStorage.getItem(RECENT_KEY)) || []; } catch { return []; }
+}
+function rememberFighter(id, name) {
+  try {
+    const list = [{ id, name }, ...recentFighters().filter((r) => r.id !== id)].slice(0, RECENT_MAX);
+    localStorage.setItem(RECENT_KEY, JSON.stringify(list));
+  } catch { /* storage blocked: nothing to remember */ }
+}
+
+// Recently fought: a row per pair who fought each other, each fighter's name and record
+// (wins in gold), nothing about the fight. Record as proRecord: their UFC Stats page, else here.
+function recordWins(r) {
+  const [w, l, d, nc] = r.wins != null ? [r.wins, r.losses, r.draws, r.no_contests] : [r.w, r.l, r.d, r.nc];
+  return `<span class="w">${w || 0}</span>-${l || 0}-${d || 0}${nc ? ` (${nc} NC)` : ""}`;
+}
+const pairCell = (r) => `<div class="cell"><a href="${fighterHref(r.fighter_id, r.name)}">${esc(r.name)}</a>
+  <div class="rec num">${recordWins(r)}</div></div>`;
+const pairRow = ([a, b]) => `<div class="pair-row">${pairCell(a)}${pairCell(b)}</div>`;
+const DIE = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="3.5"/><circle cx="8.5" cy="8.5" r="1.1" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1.1" fill="currentColor"/><circle cx="12" cy="12" r="1.1" fill="currentColor"/></svg>`;
+
+async function randomFighter() {
+  const page = await api("fighters.json");
+  const ids = page && (await api(`fr/${Math.floor(Math.random() * page.random)}.json`));
+  if (ids && ids.length) go(`/fighter/${ids[Math.floor(Math.random() * ids.length)]}`);
+}
+
 async function fighters(_, show) {
   const p = params();
   if (!show(`
-    <div class="page-head"><h1>Fighters</h1>
-      <input type="search" id="q" placeholder="Search by name" value="${esc(p.get("q") || "")}" autofocus></div>
-    <div id="results">${loading()}</div>`)) return;
+    <div class="fighters-home">
+      <span class="kicker">FIGHTERS</span>
+      <input type="search" id="q" placeholder="Search fighters" value="${esc(p.get("q") || "")}" autofocus>
+      <button class="random-link" id="random">${DIE}Random fighter</button>
+      <div id="results">${loading()}</div>
+    </div>`)) return;
   const input = document.getElementById("q");
+  document.getElementById("random").onclick = randomFighter;
+  meta().then((m) => { input.placeholder = `Search ${num(m.stats.fighters)} fighters`; }).catch(() => {});
   let n = 0;  // only the latest search draws: an older one can finish last
+  const browse = async (mine) => {
+    const page = await api("fighters.json");
+    if (mine !== n) return;
+    const recent = recentFighters();
+    const pairs = page ? page.matchups.map((m) => m.map((r) => Object.fromEntries(page.cols.map((c, i) => [c, r[i]])))) : [];
+    document.getElementById("results").innerHTML = `<div class="stack">
+      ${recent.length ? `<section class="section"><span class="label">Recently viewed</span>
+        <div class="chips">${recent.map((r) => `<a class="chip link" href="${fighterHref(r.id, r.name)}">${esc(r.name)}</a>`).join("")}</div></section>` : ""}
+      ${pairs.length ? `<section class="section"><span class="label">Recently fought</span>
+        <div class="pairs">${pairs.map(pairRow).join("")}</div></section>` : ""}</div>`;
+  };
   const render = async () => {
     const term = input.value.trim(), mine = ++n;
     setParams(new URLSearchParams(term ? { q: term } : {}));
+    if (!term) return browse(mine);
     const draw = (rows) => {
       if (mine !== n) return;
       document.getElementById("results").innerHTML = rows === null ? nothing("Type at least two letters of a name.")
-        : (term ? "" : `<span class="label" style="display:block;margin-bottom:10px">Most fights in the database</span>`) +
-          (rows.length ? `<div class="list">${rows.map(fighterRow).join("")}</div>` : nothing());
+        : rows.length ? `<div class="list">${rows.map(fighterRow).join("")}</div>` : nothing();
     };
-    if (!term) return draw(objs((await meta()).top_fighters));
     const s = searchWords(term);
     draw(s ? await searchFighters(s, 50, draw) : null);
   };
@@ -657,6 +701,7 @@ async function fighter(id, show) {
   const links = (d.aliases.ufcstats || []).map((s) => ext(`http://ufcstats.com/fighter-details/${s}`, "UFC Stats"))
     .concat((d.aliases.sherdog || []).map((s) => ext(`https://www.sherdog.com/fighter/x-${s}`, "Sherdog")));
   canonical(pagePath("fighter", id, f.name));
+  rememberFighter(id, f.name);
 
   const total = r.w + r.l + r.d || 1;
   const recordBlock = `
