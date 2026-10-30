@@ -1,29 +1,29 @@
 {
-  "updated_at": "2026-10-29T17:04:17+00:00",
+  "updated_at": "2026-10-30T16:56:20+00:00",
   "coverage": {
     "first_event_date": "1963-12-02",
-    "last_event_date": "2026-10-28",
-    "last_event": "Alash Pride 134 - Abdurakhmanov vs. Grachev",
-    "last_event_id": 61564
+    "last_event_date": "2026-10-30",
+    "last_event": "ACA 209 - Frolov vs. Odilov",
+    "last_event_id": 61570
   },
   "rows": {
-    "promotions": 12377,
-    "promotion_aliases": 12346,
-    "fighters": 180426,
-    "fighter_aliases": 196642,
+    "promotions": 12383,
+    "promotion_aliases": 12352,
+    "fighters": 180433,
+    "fighter_aliases": 196703,
     "merged_ids": 1,
-    "events": 61527,
-    "event_aliases": 63687,
-    "event_cards": 61521,
-    "event_pages": 75548,
-    "non_pro_bouts": 784,
-    "fights": 372732,
-    "fight_aliases": 384260,
-    "fight_participants": 745464,
+    "events": 61533,
+    "event_aliases": 63693,
+    "event_cards": 61527,
+    "event_pages": 75566,
+    "non_pro_bouts": 796,
+    "fights": 372767,
+    "fight_aliases": 384295,
+    "fight_participants": 745534,
     "round_stats": 71992,
     "smartcage_round_stats": 3548,
     "sofascore_round_stats": 19130,
     "judge_scores": 24450,
-    "odds": 23568
+    "odds": 23682
   }
 }
