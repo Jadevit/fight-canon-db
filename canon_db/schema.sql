@@ -167,7 +167,8 @@ CREATE TABLE fight_participants (
 -- strikes landed and by target, total strikes thrown but not landed, knockdowns, takedowns,
 -- submission attempts and control; the rest is NULL, the split by position included).
 -- Different crews score fights, so the same column isn't guaranteed the same judgment
--- across sources. A fight's rows all come from one source.
+-- across sources. A fight with UFC Stats' or PFL's has only those; one of Oktagon's can
+-- also have Sofascore's (two sets of rows, told apart by source: filter on it).
 CREATE TABLE round_stats (
     fight_id       INTEGER NOT NULL REFERENCES fights(fight_id),
     fighter_id     INTEGER NOT NULL REFERENCES fighters(fighter_id),
@@ -195,7 +196,7 @@ CREATE TABLE round_stats (
     ground_land    INTEGER,
     ground_att     INTEGER,
     source         TEXT NOT NULL DEFAULT 'ufcstats',
-    PRIMARY KEY (fight_id, fighter_id, round)
+    PRIMARY KEY (fight_id, fighter_id, round, source)
 );
 
 -- PFL's older SmartCage stats (2018 to 2025-11), one row per fighter per round. A different

@@ -5,8 +5,8 @@ Oktagon logs every strike, takedown and submission attempt of a fight. Those log
 disk (data/raw/oktagon/matches/); the database takes their per-round totals, in round_stats
 with `source = 'oktagon'`. Only what the log reliably has is filled: strikes landed (all,
 significant, and significant by target), takedowns landed, submission attempts. Attempts,
-knockdowns, control time and position are NULL. Sofascore counts more (attempts, control),
-so a fight it has gets its stats instead (sofascore/load.py), and this loader skips it.
+knockdowns, control time and position are NULL. Sofascore counts more (attempts, control);
+on a fight it has, its stats sit beside these (sofascore/load.py).
 
 A bout is matched to our fight like a PFL bout (see pfl/load.py): date within a day and
 both names, then the one unclaimed fight on the linked event that has one of its fighters.
@@ -31,6 +31,7 @@ from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
 
+from canon_db.ids import OFFICIAL
 from canon_db.http import Fetcher
 from canon_db.matching import Matcher, leftover
 from canon_db.sources.oktagon.fetch import fetch_cards, fetch_tournament, tournaments
@@ -59,7 +60,9 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
     counts = Counter()
     matcher = Matcher(conn)
     event_of = dict(conn.execute("SELECT fight_id, event_id FROM fights"))
-    has_stats = {r[0] for r in conn.execute("SELECT DISTINCT fight_id FROM round_stats WHERE source <> ?", (NAME,))}
+    others = sorted(OFFICIAL - {NAME})  # another promotion's own count wins; Sofascore's sits beside ours
+    has_stats = {r[0] for r in conn.execute(f"SELECT DISTINCT fight_id FROM round_stats WHERE source IN "
+                                            f"({', '.join('?' * len(others))})", others)}
     names: dict[str, list[str]] = {}
     for fid, name in conn.execute("SELECT fighter_id, name FROM fighters UNION SELECT fighter_id, name "
                                   "FROM fighter_aliases"):

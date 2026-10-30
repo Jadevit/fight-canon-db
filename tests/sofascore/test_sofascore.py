@@ -105,10 +105,11 @@ def test_load(tmp_path):
     _raw(tmp_path)
     counts = load(conn, tmp_path)
     assert counts["fights with stats"] == 1 and counts["bouts with official stats"] == 1
-    assert counts["oktagon rows replaced"] == 1
-    # Home is Alan Able whatever the corner order; Oktagon's row is gone, the official one stays.
+    # Home is Alan Able whatever the corner order; Oktagon's row stays beside Sofascore's, and
+    # the fight with UFC Stats' gets none.
     assert conn.execute("SELECT fight_id, fighter_id, sig_str_land, total_str_att, total_str_land, ctrl_sec, source "
-                        "FROM round_stats ORDER BY fight_id, fighter_id").fetchall() == [
+                        "FROM round_stats ORDER BY fight_id, source, fighter_id").fetchall() == [
+        (1, 1, 4, None, None, None, "oktagon"),
         (1, 1, 7, 20, None, 15, "sofascore"),
         (1, 2, 3, 15, None, 0, "sofascore"),
         (2, 3, 9, None, None, None, "ufcstats")]

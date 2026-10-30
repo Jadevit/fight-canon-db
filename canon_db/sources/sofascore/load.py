@@ -2,9 +2,9 @@
 attached to fights the database already has (their cards come from Sherdog).
 
 Sofascore's counts are its own, so they never mix with another source's within a fight. A
-fight with official stats (UFC Stats, PFL) is left alone. Oktagon's own stats count only
-what landed, so on Oktagon fights Sofascore's replace them; Oktagon's stay on fights
-Sofascore doesn't have.
+fight with UFC Stats' or PFL's stats is left alone. Oktagon's own stats count only what
+landed, so on Oktagon fights Sofascore's are kept beside them (both in round_stats, told
+apart by source).
 
 round_stats rows get `source = 'sofascore'` and the columns in pages.ROUND plus ctrl_sec
 (clinch and ground control); the rest are NULL (total_str_land among them: Sofascore gives
@@ -54,7 +54,7 @@ PROMOTIONS = {
     20269: "ONE Fighting Championship",
     19905: "Rizin",
 }
-REPLACES = "oktagon"  # the one source whose stats Sofascore's replace
+BESIDE = "oktagon"  # the one official source whose stats Sofascore's sit beside
 
 log = logging.getLogger(NAME)
 
@@ -72,7 +72,7 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
     matcher = Matcher(conn)
     event_of = dict(conn.execute("SELECT fight_id, event_id FROM fights"))
     official = {r[0] for r in conn.execute("SELECT DISTINCT fight_id FROM round_stats WHERE source NOT IN (?, ?)",
-                                           (NAME, REPLACES))}
+                                           (NAME, BESIDE))}
     names: dict[str, list[str]] = {}
     for fid, name in conn.execute("SELECT fighter_id, name FROM fighters UNION SELECT fighter_id, name "
                                   "FROM fighter_aliases"):
@@ -163,8 +163,6 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
         for fid in touched | gone:
             conn.execute("DELETE FROM round_stats WHERE fight_id = ? AND source = ?", (fid, NAME))
             conn.execute("DELETE FROM sofascore_round_stats WHERE fight_id = ?", (fid,))
-        replaced = sum(conn.execute("DELETE FROM round_stats WHERE fight_id = ? AND source = ?",
-                                    (fid, REPLACES)).rowcount for fid in fights)
         conn.executemany(
             f"INSERT OR REPLACE INTO round_stats (fight_id, fighter_id, round, {', '.join(ROUND_COLS)}, source) "
             f"VALUES ({', '.join('?' * (len(ROUND_COLS) + 4))})", rows)
@@ -172,7 +170,7 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
             f"INSERT OR REPLACE INTO sofascore_round_stats (fight_id, fighter_id, round, {', '.join(EXTRA_COLS)}, "
             f"source) VALUES ({', '.join('?' * (len(EXTRA_COLS) + 4))})", extra)
     counts.update({"events linked": len(event_alias), "fights with stats": len(fights),
-                   "round_stats rows": len(rows), f"{REPLACES} rows replaced": replaced})
+                   "round_stats rows": len(rows)})
     return counts
 
 

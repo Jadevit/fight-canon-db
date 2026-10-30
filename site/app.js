@@ -209,6 +209,22 @@ function eventSources(aliases) {
   (aliases.pfl || []).forEach((s) => links.push(ext(`https://pflmma.com/event/${s}`, "PFL")));
   return links;
 }
+// Stats sources in the order they're shown (the promotions' own first), and the switch between
+// them: "Counted by" and the source, a button per source when more than one counted.
+const STATS_ORDER = ["ufcstats", "pfl", "smartcage", "oktagon", "sofascore"];
+const byOrder = (a, b) => STATS_ORDER.indexOf(a) - STATS_ORDER.indexOf(b);
+const srcName = (s) => SOURCE_NAMES[s] || s;
+function counted(sources, current) {
+  if (sources.length < 2) return `<span class="counted">Counted by <b>${esc(srcName(sources[0]))}</b></span>`;
+  return `<span class="counted"><span class="by">Counted by</span><span class="seg" role="group" aria-label="Counted by">${
+    sources.map((s) => `<button data-src="${esc(s)}" aria-pressed="${s === current}">${esc(srcName(s))}</button>`).join("")}</span></span>`;
+}
+function onCounted(root, pick) {
+  root.querySelectorAll(".counted .seg button").forEach((b) => (b.onclick = () => {
+    root.querySelectorAll(".counted .seg button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    pick(b.dataset.src);
+  }));
+}
 const sourceLine = (links) => links.length ? `<p class="note">Source: ${links.join(" · ")}</p>` : "";
 
 function debounce(fn, ms = 150) {
@@ -390,16 +406,17 @@ const landed = (l, a) => (l == null ? (a == null ? "—" : `${a} thr.`) : `${l}$
 const eventFile = (eid) => api(`e/${eid}.json`);
 const fightLink = (fid, eid) => `/fight/${esc(fid)}?e=${encodeURIComponent(eid)}`;
 
-// A fight's round stats from its event's file: round_stats' columns, or PFL's older SmartCage
-// set (its own columns).
+// A fight's round stats from its event's file, one set per source that counted it, the
+// promotion's own first: round_stats' columns, or PFL's older SmartCage set (its own columns).
 function roundStats(ev, fid) {
-  const st = ev?.stats[fid];
-  return st ? { rows: objs(st), source: st.source, cage: st.cage } : null;
+  const sets = ev?.stats[fid];
+  return sets ? [sets].flat().map((st) => ({ rows: objs(st), source: st.source, cage: st.cage })) : [];
 }
 
 // "At a glance": strikes per round, control per round, then knockdowns and takedowns.
-async function glance(fid, eid, left, names) {
-  const st = roundStats(await eventFile(eid), fid);
+async function glance(fid, eid, left, names, src) {
+  const sets = roundStats(await eventFile(eid), fid);
+  const st = sets.find((x) => x.source === src) || sets[0];
   if (!st) return `<div class="glance"><p class="muted">No round stats for this fight.</p></div>`;
   const right = [...new Set(st.rows.map((r) => r.fighter_id))].find((i) => i !== left);
   const rounds = [...new Set(st.rows.map((r) => r.round))];
@@ -411,7 +428,7 @@ async function glance(fid, eid, left, names) {
   const kd = [sum(left, "knockdowns"), sum(right, "knockdowns")], td = [sum(left, "td_land"), sum(right, "td_land")];
   const row = (label, [a, b], fmt) => mirrorRow(label, [a, null], [b, null], fmt);
   return `<div class="glance">
-    <div class="glance-head"><span class="label">At a glance</span>${badge(SOURCE_NAMES[st.source] || st.source)}</div>
+    <div class="glance-head"><span class="label">At a glance</span>${counted(sets.map((x) => x.source), st.source)}</div>
     <div class="who"><span class="gold">${esc(names[left] || "")}</span><span class="muted">${esc(names[right] || "")}</span></div>
     <div class="mirror">
       ${strikes.map((p, i) => row(`${st.cage ? "Strikes" : "Sig. Strikes"}, Round ${rounds[i]}`, p)).join("")}
@@ -419,7 +436,7 @@ async function glance(fid, eid, left, names) {
       ${row("Knockdowns", kd)}
       ${row("Takedowns", td)}
     </div>
-    <a class="go" href="${fightLink(fid, eid)}">Full fight page →</a>
+    <a class="go" href="${fightLink(fid, eid)}${st === sets[0] ? "" : `&src=${encodeURIComponent(st.source)}`}">Full fight page →</a>
   </div>`;
 }
 
@@ -431,8 +448,12 @@ function expandable(container, names) {
       d.dataset.loaded = "1";
       const slot = d.querySelector(".slot");
       slot.innerHTML = loading();
+      const draw = async (src) => {
+        slot.innerHTML = await glance(d.dataset.fight, d.dataset.event, Number(d.dataset.left), names(d), src);
+        onCounted(slot, draw);
+      };
       try {
-        slot.innerHTML = await glance(d.dataset.fight, d.dataset.event, d.dataset.left, names(d));
+        await draw();
       } catch (e) {
         slot.innerHTML = `<p class="error">${esc(e.message)}</p>`;
       }
@@ -729,11 +750,11 @@ async function fighter(id, show) {
       ${winsHere !== r.w ? `<p class="note">From the ${plural(winsHere, "win")} in the database.</p>` : ""}
     </section>` : "";
 
-  // Career stats per source (they count differently), the source with the most fights first.
+  // Career stats per source (they count differently), the promotions' own first.
   const bySource = {};
   const fightOf = Object.fromEntries(fights.map((x) => [x.fight_id, x]));
   for (const row of own) (bySource[row.source] ||= []).push(row);
-  const sources = Object.keys(bySource).sort((a, b) => bySource[b].length - bySource[a].length);
+  const sources = Object.keys(bySource).sort(byOrder);
   const statsFor = (src) => {
     const rows = bySource[src];
     const t = {}, seen = {};
@@ -763,9 +784,7 @@ async function fighter(id, show) {
   };
   const statsBlock = sources.length ? `
     <section class="section">
-      <div class="block-head"><span class="label">Stats</span>${sources.length === 1 ? badge(SOURCE_NAMES[sources[0]] || sources[0]) : ""}</div>
-      ${sources.length > 1 ? `<div class="chips" id="src" style="margin-bottom:10px">${sources.map((s, i) =>
-        `<button class="chip" data-src="${esc(s)}" aria-pressed="${i === 0}">${esc(SOURCE_NAMES[s] || s)}</button>`).join("")}</div>` : ""}
+      <div class="block-head" id="src"><span class="label">Stats</span>${counted(sources, sources[0])}</div>
       <div id="stats">${statsFor(sources[0])}</div>
     </section>` : "";
 
@@ -795,10 +814,8 @@ async function fighter(id, show) {
       </section>
     </div>`)) return;
   expandable(app, (d) => ({ [id]: f.name, [d.dataset.opp]: d.dataset.oppName }));
-  document.querySelectorAll("#src .chip").forEach((b) => (b.onclick = () => {
-    document.querySelectorAll("#src .chip").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
-    document.getElementById("stats").innerHTML = statsFor(b.dataset.src);
-  }));
+  const head = document.getElementById("src");
+  if (head) onCounted(head, (src) => (document.getElementById("stats").innerHTML = statsFor(src)));
 }
 
 const EVENTS_SHOWN = 300;  // a page of the list; "Show more" adds the next
@@ -930,7 +947,8 @@ async function fight(id, show) {
   const x = d && objs(d.fights).find((f) => f.fight_id === id);
   if (!x) { show(nothing("Fight not found.")); return; }
   Object.assign(x, { event_id: eid, event: d.event.name, date: d.event.date });
-  const st = roundStats(d, id);
+  const sets = roundStats(d, id);
+  let st = sets.find((x) => x.source === params().get("src")) || sets[0];
   const scores = objs({ cols: d.scores.cols, rows: d.scores.fights[id] || [] });
   const odds = objs({ cols: d.odds.cols, rows: d.odds.fights[id] || [] });
   // The winner goes left, in gold; with no winner, the first fighter listed.
@@ -958,6 +976,14 @@ async function fight(id, show) {
       }).join("")}
       <div class="line total"><span>Total</span><span>${tot(L.id)} – ${tot(R.id)}</span></div></div>`;
   };
+  // Round by round, for the source picked: its rounds as chips, the bars, and what it leaves out.
+  const roundsBlock = () => `
+    <div class="block-head"><span class="label">Round by round</span>${counted(sets.map((x) => x.source), st.source)}</div>
+    <div class="chips" id="rounds" style="margin-bottom:14px">${["t", ...new Set(st.rows.map((r) => r.round))].map((n, i) =>
+      `<button class="chip" data-r="${n}" aria-pressed="${i === 0}">${n === "t" ? "Totals" : `Round ${n}`}</button>`).join("")}</div>
+    <div class="who"><span class="gold">${esc(L.name || "")}</span><span class="muted">${esc(R.name || "")}</span></div>
+    <div class="mirror" id="bars"></div>
+    ${STATS_NOTES[st.source] ? `<p class="note">${esc(STATS_NOTES[st.source])}</p>` : ""}`;
   const line = (fid) => odds.find((o) => o.fighter_id === fid);
   const oddsTile = (s) => {
     const o = line(s.id);
@@ -984,14 +1010,8 @@ async function fight(id, show) {
           ${x.details ? `<div class="note">${esc(x.details)}</div>` : ""}
         </div>
       </section>
-      ${st ? `<section class="section">
-        <div class="block-head"><span class="label">Round by round</span>${badge(SOURCE_NAMES[st.source] || st.source)}</div>
-        <div class="chips" id="rounds" style="margin-bottom:14px">${["t", ...new Set(st.rows.map((r) => r.round))].map((n, i) =>
-          `<button class="chip" data-r="${n}" aria-pressed="${i === 0}">${n === "t" ? "Totals" : `Round ${n}`}</button>`).join("")}</div>
-        <div class="who"><span class="gold">${esc(L.name || "")}</span><span class="muted">${esc(R.name || "")}</span></div>
-        <div class="mirror" id="bars"></div>
-        ${STATS_NOTES[st.source] ? `<p class="note">${esc(STATS_NOTES[st.source])}</p>` : ""}
-      </section>` : `<p class="muted">No round-by-round stats recorded for this fight.</p>`}
+      ${st ? `<section class="section" id="rbr">${roundsBlock()}</section>`
+        : `<p class="muted">No round-by-round stats recorded for this fight.</p>`}
       ${judges.length ? `<section class="section"><div class="block-head"><span class="label">Judges' scorecards</span>${badge("UFC")}</div>
         <div class="scorecards">${judges.map(card).join("")}</div></section>` : ""}
       ${odds.length ? `<section class="section"><div class="block-head"><span class="label">Closing odds</span>${badge("BestFightOdds")}</div>
@@ -1025,11 +1045,23 @@ async function fight(id, show) {
         has ? [landed(a[l], a[att]), landed(b[l], b[att])] : null, l);
     }).join(""));
   };
-  document.querySelectorAll("#rounds .chip").forEach((btn) => (btn.onclick = () => {
-    document.querySelectorAll("#rounds .chip").forEach((c) => c.setAttribute("aria-pressed", String(c === btn)));
-    render(btn.dataset.r);
-  }));
-  render("t");
+  // The source goes in the link (?src=) only when it isn't the first.
+  const wire = () => {
+    document.querySelectorAll("#rounds .chip").forEach((btn) => (btn.onclick = () => {
+      document.querySelectorAll("#rounds .chip").forEach((c) => c.setAttribute("aria-pressed", String(c === btn)));
+      render(btn.dataset.r);
+    }));
+    onCounted(document.getElementById("rbr"), (src) => {
+      st = sets.find((x) => x.source === src);
+      const p = params();
+      if (st === sets[0]) p.delete("src"); else p.set("src", src);
+      setParams(p);
+      document.getElementById("rbr").innerHTML = roundsBlock();
+      wire();
+    });
+    render("t");
+  };
+  wire();
 }
 
 // Leaderboards, one board per source of numbers: results come from every fight, and each

@@ -20,8 +20,10 @@ KINDS = {"fighter": ("fighters", "fighter_id", "fighter_aliases"),
          "event": ("events", "event_id", "event_aliases"),
          "fight": ("fights", "fight_id", "fight_aliases")}
 
-# Tables with a fight's rows from one source each, best first (a fight keeps one source's).
-STATS_RANK = ("ufcstats", "pfl", "sofascore", "oktagon")
+# Sources of round stats, best first.
+FULL_STATS = ("ufcstats", "pfl")  # official counts with every column; a fight with one has no other
+STATS_RANK = (*FULL_STATS, "sofascore", "oktagon")
+STATS_TABLES = ("round_stats", "smartcage_round_stats", "sofascore_round_stats")
 FIGHT_ROWS = ("round_stats", "smartcage_round_stats", "sofascore_round_stats", "judge_scores", "odds")
 FIGHTER_ROWS = ("fight_participants", *FIGHT_ROWS)
 
@@ -120,11 +122,17 @@ def merge(conn: sqlite3.Connection, kind: str, a: int, b: int) -> int:
             conn.execute("DELETE FROM fight_participants WHERE fight_id = ?", (keep,))
             conn.execute("UPDATE fight_participants SET fight_id = ? WHERE fight_id = ?", (keep, drop))
         conn.execute("DELETE FROM fight_participants WHERE fight_id = ?", (drop,))
-        # Round stats: only the better source's (a fight's come from one source).
-        loser = drop if best_stats(conn, keep) <= best_stats(conn, drop) else keep
-        if best_stats(conn, keep) < len(STATS_RANK) and best_stats(conn, drop) < len(STATS_RANK):
-            for t in ("round_stats", "smartcage_round_stats", "sofascore_round_stats"):
+        # Round stats: a full official count (UFC Stats, PFL) stands alone, so with one only the
+        # better side's are kept; else both sides' sources are, the kept fight's where both have one.
+        ranks = best_stats(conn, keep), best_stats(conn, drop)
+        if min(ranks) < len(FULL_STATS) and max(ranks) < len(STATS_RANK):
+            loser = drop if ranks[0] <= ranks[1] else keep
+            for t in STATS_TABLES:
                 conn.execute(f"DELETE FROM {t} WHERE fight_id = ?", (loser,))
+        else:
+            for t in STATS_TABLES:
+                conn.execute(f"DELETE FROM {t} WHERE fight_id = ? AND source IN "
+                             f"(SELECT source FROM {t} WHERE fight_id = ?)", (drop, keep))
         for t in FIGHT_ROWS:
             conn.execute(f"UPDATE OR IGNORE {t} SET fight_id = ? WHERE fight_id = ?", (keep, drop))
             conn.execute(f"DELETE FROM {t} WHERE fight_id = ?", (drop,))

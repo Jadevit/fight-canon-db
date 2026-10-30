@@ -163,6 +163,17 @@ a.chip.link:hover { text-decoration: none; border-color: var(--text-faint); }
   font-size: 11px; color: var(--text-faint); white-space: nowrap; letter-spacing: .02em;
 }
 
+/* Who counted a fight's stats: the source, or a switch when more than one did. */
+.counted { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+.counted b { color: var(--text); font-weight: 500; }
+.seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 999px; padding: 2px; }
+.seg button {
+  border: 1px solid transparent; border-radius: 999px; background: none; padding: 3px 10px;
+  font: 500 12px var(--sans); color: var(--text-muted); cursor: pointer;
+}
+.seg button:hover { color: var(--text); }
+.seg button[aria-pressed="true"] { border-color: var(--gold); color: var(--gold); }
+
 /* --- lists ----------------------------------------------------------------------- */
 
 .list { border-top: 1px solid var(--border); }

@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-30T16:56:20+00:00",
+  "updated_at": "2026-10-30T17:43:50+00:00",
   "coverage": {
     "first_event_date": "1963-12-02",
     "last_event_date": "2026-10-30",
@@ -20,7 +20,7 @@
     "fights": 372767,
     "fight_aliases": 384295,
     "fight_participants": 745534,
-    "round_stats": 71992,
+    "round_stats": 75882,
     "smartcage_round_stats": 3548,
     "sofascore_round_stats": 19130,
     "judge_scores": 24450,

@@ -21,7 +21,7 @@ ORDER = {  # each table's row order: the ranges queries on it usually read
     "events": "date, event_id",
     "fights": "event_id, fight_id",
     "fight_participants": "fight_id, corner",
-    "round_stats": "fight_id, fighter_id, round",
+    "round_stats": "fight_id, fighter_id, round, source",
     "smartcage_round_stats": "fight_id, fighter_id, round",
     "sofascore_round_stats": "fight_id, fighter_id, round",
     "judge_scores": "fight_id, judge, round",

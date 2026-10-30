@@ -118,6 +118,8 @@ FIGHT_COLS = ["weight_class", "title_fight", "scheduled_rounds", "method", "end_
               "referee", "details", "overturned", "no_contest", "bout_type"]
 TABLES = ["events", "fight_participants", "fighters", "fighter_aliases", "event_aliases", "fight_aliases",
           "event_cards", "promotions", "round_stats", "smartcage_round_stats", "judge_scores", "odds"]
+# Stats sources in the order a fight's are shown: the promotions' own first.
+STATS_ORDER = ["ufcstats", "pfl", "smartcage", "oktagon", "sofascore"]
 LINKED = ("ufcstats", "sherdog", "pfl")  # sources the pages link to, by their ids
 
 
@@ -259,7 +261,8 @@ How the data works:
   fight_id IN (SELECT fight_id FROM fight_aliases WHERE source = 'ufcstats') for every fight UFC Stats has.
 - Stats per round are in round_stats, one row per fighter per round. Its source column says who
   counted ('ufcstats' is the most complete); sources count differently, so rank or compare within
-  one source. Accuracy is landed / attempted over rows where attempted IS NOT NULL.
+  one source. A fight can have rows from two sources (Oktagon's and Sofascore's): filter on
+  source. Accuracy is landed / attempted over rows where attempted IS NOT NULL.
 - Promotion names are as stored ('UFC', 'Bellator MMA', 'PFL', 'ONE FC', ...); events.promotion.
 
 How to answer:
@@ -351,15 +354,15 @@ class Writer:
 
 FIGHT_HIST = ["date", "event_id", "event", "promotion", "fight_id", "division", "has_stats", "method", "end_round",
               "end_time", "time_format", "title_fight"]
-STAT_SUMS = """SELECT fight_id, fighter_id, any_value(source) source, SUM(knockdowns) kd, SUM(sig_str_land) sl,
+STAT_SUMS = """SELECT fight_id, fighter_id, source, SUM(knockdowns) kd, SUM(sig_str_land) sl,
     SUM(sig_str_att) sa, SUM(CASE WHEN sig_str_att IS NOT NULL THEN sig_str_land END) sla, SUM(td_land) tl,
     SUM(td_att) ta, SUM(CASE WHEN td_att IS NOT NULL THEN td_land END) tla, SUM(sub_att) sub, SUM(ctrl_sec) ctrl
-    FROM round_stats GROUP BY fight_id, fighter_id ORDER BY fight_id, fighter_id"""
+    FROM round_stats GROUP BY fight_id, fighter_id, source ORDER BY fight_id, source, fighter_id"""
 
 
 def fighters(con, w: Writer) -> None:
     """f/<id>.json: the fighter, their fights newest first (from their side), and per fight the
-    stat totals of each side (the opponent's for strike defense)."""
+    stat totals of each side by source (the opponent's for strike defense)."""
     hist = defaultdict(list)
     _, fs = rows(con, f"""SELECT {", ".join(FIGHT_HIST)}, a_id, a_name, a_res, b_id, b_name, b_res
                           FROM site_fights ORDER BY date DESC, event_id, card""")
@@ -369,11 +372,11 @@ def fighters(con, w: Writer) -> None:
             hist[a_id].append(base + [a_res, b_id, b_name])
         if b_id:
             hist[b_id].append(base + [b_res, a_id, a_name])
-    sums = defaultdict(dict)
+    sums = defaultdict(dict)  # (fight, source) -> fighter -> totals
     for r in rows(con, STAT_SUMS)[1]:
-        sums[r[0]][r[1]] = r
+        sums[r[0], r[2]][r[1]] = r
     stats = defaultdict(list)
-    for fight, sides in sums.items():
+    for (fight, _), sides in sums.items():
         for fid, r in sides.items():
             opp = next((o for o in sides.values() if o[1] != fid), None)
             stats[fid].append([fight, *r[2:], opp[6] if opp else None, opp[5] if opp else None])
@@ -404,12 +407,12 @@ def grouped(con, sql: str, by: int = 0) -> tuple[list[str], dict]:
 
 
 def events(con, w: Writer) -> None:
-    """e/<id>.json: the event and its card, each bout with its round stats, judges' cards and
-    odds; fx/<xx>.json: which event each fight is on, for links to a fight alone."""
+    """e/<id>.json: the event and its card, each bout with its round stats (a list, one per
+    source, official sources first), judges' cards and odds; fx/<xx>.json: which event each fight is on, for links to a fight alone."""
     fcols, fights = grouped(con, """SELECT event_id, fight_id, card, division, has_stats, a_id, a_name, a_res,
         b_id, b_name, b_res, weight_class, title_fight, scheduled_rounds, method, end_round, end_time, time_format,
         referee, details, overturned, no_contest FROM site_fights ORDER BY event_id, card""")
-    rcols, rounds = grouped(con, "SELECT * FROM round_stats ORDER BY fight_id, round, fighter_id")
+    rcols, rounds = grouped(con, "SELECT * FROM round_stats ORDER BY fight_id, source, round, fighter_id")
     ccols, cage = grouped(con, "SELECT * FROM smartcage_round_stats ORDER BY fight_id, round, fighter_id")
     scols, scores = grouped(con, "SELECT fight_id, fighter_id, round, judge, score, deduction FROM judge_scores "
                                  "ORDER BY fight_id, judge, round, fighter_id")
@@ -432,10 +435,14 @@ def events(con, w: Writer) -> None:
         stats, cards, lines, ufc = {}, {}, {}, {}
         for f in card:
             fight = f[0]
-            if fight in rounds:
-                stats[fight] = {"source": rounds[fight][0][src_at], "cage": False, "cols": rcols, "rows": rounds[fight]}
-            elif fight in cage:
-                stats[fight] = {"source": "smartcage", "cage": True, "cols": ccols, "rows": cage[fight]}
+            sets = defaultdict(list)
+            for row in rounds.get(fight, []):
+                sets[row[src_at]].append(row)
+            found = [{"source": src, "cage": False, "cols": rcols, "rows": rs} for src, rs in sets.items()]
+            if fight in cage:
+                found.append({"source": "smartcage", "cage": True, "cols": ccols, "rows": cage[fight]})
+            if found:
+                stats[fight] = sorted(found, key=lambda st: STATS_ORDER.index(st["source"]))
             if fight in scores:
                 cards[fight] = scores[fight]
             if fight in odds:

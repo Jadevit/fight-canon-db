@@ -45,6 +45,8 @@ def _canon(path):
                      [(1, 2, 0, "W"), (1, 3, 1, "L"), (2, 1, 0, "W"), (2, 2, 1, "L"), (3, 1, 0, "W"), (3, 3, 1, "L")])
     conn.execute("INSERT INTO round_stats (fight_id, fighter_id, round, sig_str_land, sig_str_att, source) "
                  "VALUES (2, 1, 1, 30, 60, 'ufcstats')")
+    conn.executemany("INSERT INTO round_stats (fight_id, fighter_id, round, sig_str_land, source) VALUES (3, 1, 1, ?, ?)",
+                     [(6, "sofascore"), (5, "oktagon")])  # two counts of one fight
     conn.commit()
     return conn
 
@@ -79,14 +81,17 @@ def test_site_json(tmp_path, monkeypatch):
     assert aldo["fighter"]["wins"] == 31 and aldo["aliases"] == {"sherdog": ["1"], "ufcstats": ["a" * 16]}
     assert [(f["fight_id"], f["result"], f["opp"]) for f in rows(aldo["fights"])] == [
         (3, "W", "Carl Cole"), (2, "W", "Ben Baker")]  # newest first
-    [st] = rows(aldo["stats"])
-    assert (st["fight_id"], st["sl"], st["sa"], st["opp_sa"]) == (2, 30, 60, None)
+    assert [(st["fight_id"], st["source"], st["sl"], st["sa"]) for st in rows(aldo["stats"])] == [
+        (2, "ufcstats", 30, 60), (3, "oktagon", 5, None), (3, "sofascore", 6, None)]  # per source
 
     e1 = read("e/1.json")
     assert [f["fight_id"] for f in rows(e1["fights"])] == [1, 2]  # card order
-    assert e1["stats"]["2"]["source"] == "ufcstats" and "1" not in e1["stats"]
+    assert [st["source"] for st in e1["stats"]["2"]] == ["ufcstats"] and "1" not in e1["stats"]
     assert e1["aliases"] == {"ufcstats": ["e1"]} and e1["ufcstats"] == {"2": "f1"}  # links to UFC Stats' pages
     assert read(f"fx/{site_json.shard(2)}.json")["2"] == 1
+    # Each count of a fight, the promotion's own first.
+    assert [(st["source"], st["rows"][0][st["cols"].index("sig_str_land")]) for st in read("e/2.json")["stats"]["3"]] == [
+        ("oktagon", 5), ("sofascore", 6)]
     assert [e["event_id"] for e in rows(read("events/y/2020.json"))] == [1]
 
     # Search: "jo" matches José (and Junior, his alias) only, so it isn't split; Carl Cole and
