@@ -14,8 +14,10 @@ import re
 import sqlite3
 import unicodedata
 from datetime import date, timedelta
+from functools import lru_cache
 
 
+@lru_cache(maxsize=None)
 def norm(s: str) -> str:
     s = unicodedata.normalize("NFKD", s or "")
     s = "".join(c for c in s if not unicodedata.combining(c)).upper()
@@ -44,6 +46,12 @@ class Matcher:
     def _score(name: str, names: list[str]) -> float:
         return max((sim(name, n) for n in names), default=0.0)
 
+    @staticmethod
+    def _bound(name: str, names: list[str]) -> float:
+        """At least _score(): SequenceMatcher's quick_ratio is cheap and never below ratio."""
+        return max((difflib.SequenceMatcher(None, norm(name), norm(n)).quick_ratio() for n in names),
+                   default=0.0)
+
     def match(self, fight: dict, min_score=0.8, margin=0.1):
         """(fight_id, {bfo_slug: fighter_id}) or (None, reason)."""
         d = date.fromisoformat(fight["date"])
@@ -54,6 +62,11 @@ class Matcher:
             if len(c["corners"]) != 2:
                 continue
             (i0, n0), (i1, n1) = c["corners"]
+            # A fight below min_score - margin can neither win nor make the winner ambiguous;
+            # most of a day's fights are that far off, so skip them before scoring exactly.
+            ua, ub = (self._bound(a["name"], n0), self._bound(a["name"], n1)),                 (self._bound(b["name"], n0), self._bound(b["name"], n1))
+            if max(ua[0] + ub[1], ua[1] + ub[0]) / 2 < min_score - margin - 1e-9:
+                continue
             straight = (self._score(a["name"], n0) + self._score(b["name"], n1)) / 2
             swapped = (self._score(a["name"], n1) + self._score(b["name"], n0)) / 2
             if straight >= swapped:

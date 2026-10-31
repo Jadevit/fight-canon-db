@@ -414,7 +414,7 @@ def events(con, w: Writer) -> None:
         referee, details, overturned, no_contest FROM site_fights ORDER BY event_id, card""")
     rcols, rounds = grouped(con, "SELECT * FROM round_stats ORDER BY fight_id, source, round, fighter_id")
     ccols, cage = grouped(con, "SELECT * FROM smartcage_round_stats ORDER BY fight_id, round, fighter_id")
-    scols, scores = grouped(con, "SELECT fight_id, fighter_id, round, judge, score, deduction FROM judge_scores "
+    scols, scores = grouped(con, "SELECT fight_id, fighter_id, round, judge, score, deduction, source FROM judge_scores "
                                  "ORDER BY fight_id, judge, round, fighter_id")
     ocols, odds = grouped(con, "SELECT fight_id, fighter_id, open, close, close_low, close_high FROM odds "
                                "WHERE book = 'all' ORDER BY fight_id, fighter_id, source")

@@ -7,7 +7,9 @@ Each fight appears on both fighters' pages; the first one read wins.
 
 Which fighters:
   default     fighters on cards from the last --recent-days days (closing lines settle after)
-  --all       every fighter who fought since 2007 (BestFightOdds starts in 2007)
+  --all       every fighter in the site's sitemap (~22k pages, ~7 h the first time): starting from
+              its side finds fighters whose names we spell differently, and every promotion it
+              covers. Pages already on disk are kept (--refresh fetches them again).
   --offline   every page already on disk, no network
 A fighter's BestFightOdds page is found through fighter_aliases (source 'bestfightodds',
 recorded on first match) or else by name from the site's fighter sitemap. Pages that fail
@@ -72,7 +74,8 @@ def add_arguments(p: argparse.ArgumentParser) -> None:
     p.add_argument("--recent-days", type=int, default=21,
                    help="refresh fighters from cards in the last N days (default: 21)")
     p.add_argument("--all", action="store_true",
-                   help="every fighter who fought since 2007 (~3.5k pages, ~1 h)")
+                   help="every fighter in the sitemap (~22k pages, ~7 h the first time)")
+    p.add_argument("--refresh", action="store_true", help="with --all: fetch pages already on disk too")
     p.add_argument("--offline", action="store_true",
                    help="no network: re-read every page already on disk")
     p.add_argument("--delay", type=float, default=1.0, help="seconds between requests")
@@ -85,15 +88,20 @@ def update(conn: sqlite3.Connection, args: argparse.Namespace, raw: Path) -> Non
         slugs = sorted(p.stem for p in pages.glob("*.html"))
     else:
         fetcher = Fetcher(args.delay)
-        since = "2007-01-01" if args.all else (date.today() - timedelta(days=args.recent_days)).isoformat()
-        slugs = sorted(slugs_for(fighters_since(conn, since), conn, fetcher))
-        log.info("Fetching %d BestFightOdds fighter pages.", len(slugs))
-        for i, slug in enumerate(slugs, 1):
+        if args.all:
+            slugs = sorted(set(sitemap_slugs(fetcher)) | {r[0] for r in conn.execute(
+                "SELECT source_id FROM fighter_aliases WHERE source = ?", (NAME,))})
+            todo = slugs if args.refresh else [s for s in slugs if not (pages / f"{s}.html").exists()]
+        else:
+            since = (date.today() - timedelta(days=args.recent_days)).isoformat()
+            slugs = todo = sorted(slugs_for(fighters_since(conn, since), conn, fetcher))
+        log.info("Fetching %d BestFightOdds fighter pages.", len(todo))
+        for i, slug in enumerate(todo, 1):
             page = fetcher.get(f"{BASE}/fighters/{slug}")
             if page is not None:
                 save(pages / f"{slug}.html", page)
             if i % 250 == 0:
-                log.info("  %d/%d", i, len(slugs))
+                log.info("  %d/%d", i, len(todo))
 
     matcher = Matcher(conn)
     rows, aliases, seen = [], set(), set()

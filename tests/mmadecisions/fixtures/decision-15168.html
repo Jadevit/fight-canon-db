@@ -1,0 +1,2441 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+  <head>
+    <base href="https://mmadecisions.com">
+  
+  	<title>Daniel&nbsp;Marcos&nbsp;def. &nbsp;Adrian&nbsp;Yanez :: UFC on ESPN 65 :: MMA Decisions</title>
+
+		<meta http-equiv="keywords" content="mma decisions, ufc judges, ufc scoring, ufc scorecard, mma scores">
+	<meta http-equiv="description" content="MMA Decisions provides a summary of MMA judging decisions, focusing on UFC results">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+	
+	<!-- 
+	<meta property="og:title" content="MMADecisions.com" />
+	<meta property="og:type" content="sport" />
+	<meta property="og:url" content="http://mmadecisions.com/" />
+	<meta property="og:image" content="http://mmadecisions.com/img/mmadlogosquaresmall.png" />
+	<meta property="og:site_name" content="MMADecisions.com" />
+	-->
+	<meta property="fb:admins" content="517077224" />
+	 
+
+	<link rel="icon" type="image/gif" href="resources/img/favicon.ico" />
+	<link rel="stylesheet" type="text/css" href="resources/css/mmadecisions2.css" >
+	<link rel="stylesheet" type="text/css" href="resources/css/mmad-custom1/jquery-ui.min.css" />
+
+    <script type="text/javascript"
+        src="http://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+    <script type="text/javascript"
+        src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.18/jquery-ui.min.js"></script>
+  
+	<!-- <link rel="stylesheet" href="//code.jquery.com/ui/1.11.3/themes/smoothness/jquery-ui.css"> -->
+
+	<script src="//code.jquery.com/jquery-1.10.2.js"></script>
+	<script src="//code.jquery.com/ui/1.11.3/jquery-ui.js"></script>
+
+	<!-- Google Analytics -->
+	<script>
+	(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+	(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+	m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+	})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+	
+	ga('create', 'UA-18154317-1', 'auto');
+	ga('send', 'pageview');
+	</script>
+	<!-- End Google Analytics -->
+	
+	<style>
+	.ui-autocomplete-category {
+		font-weight: bold;
+		padding: .2em .4em;
+		margin: .2em 0 .2em;
+		line-height: 1.5;
+		text-align: left;
+		border-top: 1px dotted #036;
+		border-bottom: 1px dotted #036;
+		background-color: #eeeeee;
+	}
+	.ui-autocomplete {
+	    max-height: 450px;
+	    overflow-y: auto;
+	    /* prevent horizontal scrollbar */
+	    overflow-x: hidden;
+	}
+	
+	</style>
+
+	<script>	
+	  $.widget( "custom.catcomplete", $.ui.autocomplete, {	
+	    _create: function() {	
+	      this._super();	
+	      this.widget().menu( "option", "items", "> :not(.ui-autocomplete-category)" );	
+	    },	
+	    _renderMenu: function( ul, items ) {	
+	      var that = this,	
+	        currentCategory = "";	
+	      $.each( items, function( index, item ) {	
+	        var li;	
+	        if ( item.category != currentCategory ) {	
+	          ul.append( "<li class='ui-autocomplete-category'>" + item.category + "</li>" );	
+	          currentCategory = item.category;	
+	        }	
+	        li = that._renderItemData( ul, item );	
+	        if ( item.category ) {	
+	          li.attr( "aria-label", item.category + " : " + item.label );	
+	        }	
+	      });	
+	    }	
+	  });	
+	</script>	
+	  	
+	<script>	
+	  	
+		$(function() {	
+		    $("#s").catcomplete({	
+		        source: function(request, response) {	
+		            $.ajax({	
+		                url: "getdata",	
+		                type: "GET",	
+		                data: { term: request.term },	
+		                dataType: "json",	
+			
+		                success: function(data) {	
+		                    response(data);	
+		                }	
+		           });          	
+		        },	
+		        select: function( event, ui ) { 	
+		            window.location.href = ui.item.url;	
+		        },	
+		        minLength: 3,	
+		        delay: 400	
+		    });	
+		});
+		
+		$(function() {	
+		    $("#s-fighter1").catcomplete({	
+		        source: function(request, response) {	
+		            $.ajax({	
+		                url: "getfighterdata",	
+		                type: "GET",	
+		                data: { term: request.term },	
+		                dataType: "json",	
+			
+		                success: function(data) {	
+		                    response(data);	
+		                }	
+		           });          	
+		        },
+		        select: function( event, ui ) { 	
+		        	$("#Fighter1").val(ui.item.ID);
+		        },	
+		        minLength: 3,	
+		        delay: 400	
+		    });	
+		});	
+		
+		$(function() {	
+		    $("#s-fighter2").catcomplete({	
+		        source: function(request, response) {	
+		            $.ajax({	
+		                url: "getfighterdata",	
+		                type: "GET",	
+		                data: { term: request.term },	
+		                dataType: "json",	
+			
+		                success: function(data) {	
+		                    response(data);	
+		                }	
+		           });          	
+		        },
+		        select: function( event, ui ) { 	
+		        	$("#Fighter2").val(ui.item.ID);
+		        },	
+		        minLength: 3,	
+		        delay: 400	
+		    });	
+		});	
+	    	
+	</script>	
+	  	
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">	
+	<script async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>	
+	<script>	
+	  (adsbygoogle = window.adsbygoogle || []).push({	
+	    google_ad_client: "ca-pub-6570223566815186",	
+	    enable_page_level_ads: true	
+	  });	
+	</script>
+	
+	<script>	
+	  (adsbygoogle = window.adsbygoogle || []).push({	
+	    google_ad_client: "ca-pub-6570223566815186",	
+	    enable_page_level_ads: true	
+	  });	
+	</script>
+
+
+	
+	<script type="text/javascript">
+
+		function clickRound(entry, championship) {
+		
+			var dataDiv = document.getElementById(entry);
+			var menuDiv = document.getElementById(entry + 'Menu');
+
+			// Clear all menu items
+			round1Menu.style.fontWeight = "";
+			round1Menu.style.background = "#FFFFFF";
+			round2Menu.style.fontWeight = "";
+			round2Menu.style.background = "#FFFFFF";
+			round3Menu.style.fontWeight = "";
+			round3Menu.style.background = "#FFFFFF";
+			
+			if (championship) {
+				round4Menu.style.fontWeight = "";
+				round4Menu.style.background = "#FFFFFF";
+				round5Menu.style.fontWeight = "";
+				round5Menu.style.background = "#FFFFFF";
+			}
+			
+			// Highlight the selected menu item
+			menuDiv.style.fontWeight = "bold";
+			menuDiv.style.background = "#EEDD82";
+			
+			// Hide all data tables
+			round1.style.display = "none";
+			round2.style.display = "none";
+			round3.style.display = "none";
+			
+			if (championship) {
+				round4.style.display = "none";
+				round5.style.display = "none";
+			}
+			
+			// Show the selected data table
+			dataDiv.style.display = "inline";
+
+		}
+		
+		function totalScore(fighter, rounds) {
+			
+			var total = 0;
+			
+			for (var i=1; i<=rounds; i++) {
+				total = total + parseInt(document.getElementById('fighter' + fighter + 'Score[' + i + "]").value);
+			}
+
+			if (isNaN(total)) {
+				document.getElementById('f' + fighter + '_total_display').innerHTML = '-';
+				document.getElementById('fighter' + fighter + 'TotalScore').value = '0';
+			}
+			else {
+				document.getElementById('f' + fighter + '_total_display').innerHTML = total;
+				document.getElementById('fighter' + fighter + 'TotalScore').value = total;
+			}
+		
+		}
+		
+		function createCookie(fightID) {
+			
+			var date = new Date();
+			var days = 1000;
+			date.setTime(date.getTime()+(days*24*60*60*1000));
+			var expires = "; expires="+date.toGMTString();
+
+			document.cookie = "scorecard" + fightID +"=true"+expires+"; path=/";
+		}
+
+		function readCookie(name) {
+			var nameEQ = name + "=";
+			var ca = document.cookie.split(';');
+			for(var i=0;i < ca.length;i++) {
+				var c = ca[i];
+				while (c.charAt(0)==' ') c = c.substring(1,c.length);
+				if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length,c.length);
+			}
+			return null;
+		}
+		
+		function eraseCookie(name) {
+			document.cookie = name + '=; expires=Thu, 01-Jan-70 00:00:01 GMT; path=/';
+		}
+
+	    function cookiesEnabled() {
+	        var r = false;
+	        createCookie(0);
+	        if (readCookie("scorecard0") != null) {
+	            r = true;
+	            //eraseCookie("scorecard0");
+	        }
+	        return r;
+	    }
+		
+		function init() {
+
+			if (cookiesEnabled()) {
+				
+				// Scorecard has already been submitted. Hide the editor.
+				if(readCookie('scorecard15168')) {
+					
+					document.getElementById("scorecard_editor").style.display = "none";
+					document.getElementById("scorecard_totals").style.display = "inline";
+					document.getElementById("chart_div").style.display = "inline";
+					document.getElementById("chart_div2").style.display = "inline";
+					document.getElementById("scorecards_submitted").style.display = "inline";
+					document.getElementById("show_scorecard").style.display = "none";
+				}
+				// Scorecard has not yet been submitted. Show the editor.
+				else {
+					
+					document.getElementById("scorecard_editor").style.display = "inline";
+					document.getElementById("scorecard_totals").style.display = "none";
+					document.getElementById("chart_div").style.display = "none";
+					document.getElementById("chart_div2").style.display = "none";
+					document.getElementById("scorecards_submitted").style.display = "none";
+					document.getElementById("show_scorecard").style.display = "none";
+				}
+			}
+			else {
+				document.getElementById("scorecard_editor").style.display = "none";
+				document.getElementById("scorecard_totals").style.display = "inline";
+				document.getElementById("chart_div").style.display = "inline";
+				document.getElementById("chart_div2").style.display = "inline";
+				document.getElementById("scorecards_submitted").style.display = "inline";
+				document.getElementById("show_scorecard").style.display = "none";
+				document.getElementById("cookies_disabled").style.display = "inline";
+			}
+		}
+		
+		window.onload = init;
+		
+		function validateScorecard(rounds) {
+			
+			var isValid = true;
+		
+			for (var i=1;i<=rounds;i++) {
+			
+				var fighter1ScoreObj = document.getElementById('fighter1Score[' + i + "]");
+				var fighter2ScoreObj = document.getElementById('fighter2Score[' + i + "]");
+				
+				var fighter1Score = fighter1ScoreObj.options[fighter1ScoreObj.selectedIndex].value;
+				var fighter2Score = fighter2ScoreObj.options[fighter2ScoreObj.selectedIndex].value;
+				
+				// Ensure a score was selected for each round
+				if ((fighter1Score == 'Select') || (fighter2Score == 'Select')) { 
+					alert('Round ' + i + ' is invalid. You must select scores for all rounds.');
+					isValid = false; 
+				} 
+				
+				// No need to continue validation unless all values have been filled in
+				if (!isValid) { break; }
+				
+				// Can convert to Int now that we know a value was selected
+				fighter1Score = parseInt(fighter1Score);
+				fighter2Score = parseInt(fighter2Score);
+				
+				var fighter1RoundMax = parseInt(document.getElementById('fighter1MaxScore[' + i + ']').value);
+				var fighter2RoundMax = parseInt(document.getElementById('fighter2MaxScore[' + i + ']').value);
+
+				// Ensure at least one fighter scored maximum available points for the round
+				if ((fighter1Score < fighter1RoundMax) && (fighter2Score < fighter2RoundMax)) {
+					alert('Round ' + i + ' is invalid. At least one fighter needs to score their maximum available points.');
+					isValid = false; 
+				}
+
+				// No need to continue validation unless all values have been filled in
+				if (!isValid) {	break; }
+
+			}
+
+			return(isValid);
+		}
+		
+		function submitScorecard(fightID, rounds) {
+			
+			if (validateScorecard(rounds)) {
+
+				if (confirm("Are you sure you would like to submit this scorecard?" + "\n\n" + "You will not be able to edit your scorecard after you submit it.")) {
+
+					ga('send', {
+						  hitType: 'event',
+						  eventCategory: 'Fan Scorecard',
+						  eventAction: 'Submit',
+						  eventLabel: '15168' + '/Marcos/Yanez'
+						});
+
+					return(true);
+				}
+				else {
+					return(false);
+				}
+			}
+			else {
+				return(false);				
+			}		
+		}
+		
+		function showTotals()
+		{
+			document.getElementById("scorecard_editor").style.display = "none";
+			document.getElementById("scorecard_totals").style.display = "inline";
+			document.getElementById("chart_div").style.display = "inline";
+			document.getElementById("chart_div2").style.display = "inline";
+			document.getElementById("scorecards_submitted").style.display = "inline";
+			document.getElementById("show_scorecard").style.display = "inline";
+		}
+		
+		function hideTotals()
+		{
+			document.getElementById("scorecard_editor").style.display = "inline";
+			document.getElementById("scorecard_totals").style.display = "none";
+			document.getElementById("chart_div").style.display = "none";
+			document.getElementById("chart_div2").style.display = "none";
+			document.getElementById("scorecards_submitted").style.display = "none";
+			document.getElementById("show_scorecard").style.display = "none";
+
+		}
+
+	</script>
+	
+    <!--Load the AJAX API-->
+    <script type="text/javascript" src="https://www.google.com/jsapi"></script>
+    <script type="text/javascript">
+
+      // Load the Visualization API and the piechart package.
+      google.load('visualization', '1.0', {'packages':['corechart']});
+      google.load('visualization', '1', {packages: ['corechart', 'bar']});
+
+      // Set a callback to run when the Google Visualization API is loaded.
+      google.setOnLoadCallback(drawChart);
+      google.setOnLoadCallback(drawMultSeries);
+
+      // Callback that creates and populates a data table,
+      // instantiates the pie chart, passes in the data and
+      // draws it.
+      function drawChart() {
+
+        // Create the data table.
+        var data = new google.visualization.DataTable();
+        data.addColumn('string', 'Round Score');
+        data.addColumn('number', 'Scorecards');
+        data.addRows([
+			['Marcos', 69],['Yanez', 22],['Draw', 1]
+        ]);
+
+        // Set chart options
+        var options = {'title':'Fan Scoring Summary',
+        	       'titleTextStyle':{ 
+        	       		color: '#003366',
+        	       		fontName: 'Verdana',
+        	       		fontSize: 15,
+        	       		bold: true,
+        	       		italic: true},
+        
+                       'width':400,
+                       'height':200,
+                       'is3D':true,
+        	       'backgroundColor':{ 
+				'fill': '#f1f1f1', 
+				'stroke': '#003366', 
+				'strokeWidth': 3} ,
+		       'chartArea':{left:10,top:28,width:"84%",height:"80%"},
+                       'legend':'left',
+                       'colors':['#6699CC','#003366','#ffcf43'],
+                       'tooltip':{
+                       		textStyle: {color: '#003366'}, 
+                       		showColorCode: true},
+		       'slices': {  0: {offset: 0.050},
+		                    1: {offset: 0.1},
+		                    2: {offset: 0.125}
+		                 }
+                       };
+
+        // Instantiate and draw our chart, passing in some options.
+        var chart = new google.visualization.PieChart(document.getElementById('chart_div'));
+        chart.draw(data, options);
+      }
+      
+      // Don't include function if there are no records
+      
+      
+			// Bar Chart
+		   function drawMultSeries() {
+		       var data = google.visualization.arrayToDataTable([
+		         ['Outcome', 'Marcos', 'Yanez', 'Draw'],
+				
+					['Brazil', 0, 1, 0],
+				
+					['United Kingdom', 1, 0, 0],
+				
+					['United States', 0, 1, 0],
+				
+		       ]);
+		
+		       var options = {
+		         title: 'Fan Voting by Country (Top 5)',
+		         chartArea: {width: '55%'},
+		         hAxis: {
+		           title: 'Total Scorecards',
+		           minValue: 0
+		         },
+		         bar: { groupWidth: '85%' },
+		         height: 350,
+		         colors: ['#6699CC', '#003366', '#ffcf43']
+		         //vAxis: {
+		         //  title: 'Country'
+		         //}
+		       };
+		       
+		       var chart = new google.visualization.BarChart(document.getElementById('chart_div2'));
+		       chart.draw(data, options);
+		     }
+			
+	   
+
+   		</script>
+		
+	<script async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+	<script>
+	  (adsbygoogle = window.adsbygoogle || []).push({
+	    google_ad_client: "ca-pub-6570223566815186",
+	    enable_page_level_ads: true
+	  });
+	</script>
+	
+	<script src="resources/js/prebid-ads.js"></script>
+		
+  </head>
+
+  <body >
+  
+    
+	<header>
+		<div class="positionwrapper">
+			<p id="bottomalign">
+				<a id="HomeLink" class="logo" href=""><img src="resources/img/mmadlogo.png" alt="MMADecisions.com" border="0" /></a>
+			</p>
+			<div class="click-nav">
+				<ul class="no-js">
+					<li class="clicker" style="width:130px"><a>DECISIONS <span style="font-size: 6pt">&#x25BC;</span></a>
+					    <ul>
+					      <li><a href='decisions-by-event/'><span>by EVENT</span></a></li>
+					      <li><a href='decisions-by-judge/'><span>by JUDGE</span></a></li>
+					      <li><a href='decisions-by-fighter/'><span>by FIGHTER</span></a></li>
+					    </ul>
+					</li>
+					<li class="clicker" style="width:130px"><a>JUDGES <span style="font-size: 6pt">&#x25BC;</span></a>
+					    <ul>
+					      <li><a href='decisions-by-judge/'><span>all JUDGES</span></a></li>
+					      <li><a href='most-decisions-by-judge/'><span>most DECISIONS</span></a></li>
+					      <li><a href='minority-report/'><span>MINORITY report</span></a></li>
+					      <li><a href='ten-ten-report/'><span>10-10 report</span></a></li>
+					    </ul>
+					</li>
+					<li class="nonclicker" style="width:130px"><a href="decisions-by-fighter/">FIGHTERS</a>
+					 <!--
+					    <ul>
+					      <li><a href="decisions-by-fighter/">all FIGHTERS</a></li>
+					      <li><a href="most-decisions-fighters/">most DECISIONS</a></li>
+					    </ul>
+					 -->
+					</li>
+					<li class="nonclicker" style="width:90px"><a href="decisions-by-event/">EVENTS</a></li>
+					<li class="nonclicker" style="width:90px"><a href="blog/">BLOG</a></li>
+					<li class="nonclicker" style="width:90px"><a target="_blank" href="https://www.abcboxing.com/wp-content/uploads/2021/10/Unifed-MMA-Rules-2019-.pdf">CRITERIA</a></li>
+				</ul>
+			</div>
+		</div>
+	</header>
+	
+	<!-- jQuery -->
+	<script>
+	$(function() {
+		// degrade gracefully
+		$('.click-nav > ul').toggleClass('no-js js');
+		// hide dropdown menus
+		$('.click-nav .js ul').hide();
+		// reveal filter dropdown menu on click rather than hover
+		$('.click-nav .js li.clicker').click(function(e) {
+			// slideUp any open dropdown menus
+			if ($('.click-nav .js ul').not($(this).find('ul')).is(':visible')) {
+					$('.click-nav .js ul').not($(this).find('ul')).stop(true, true).slideUp();
+					$('.click-nav .js li.clicker').removeClass('active');
+				};
+				
+				// slide current dropdown menu up or down
+				$(this).find('ul').stop(true, true).slideToggle(200);
+				$(this).toggleClass('active');
+				// instead of return false; or preventDefault(), use stopPropagation which keeps all links clickable in the dropdown menu
+				e.stopPropagation();
+		});
+		
+		// click anywhere on the page to slide up any visible dropdown menus
+		$(document).click(function() {
+			if ($('.click-nav .js ul').is(':visible')) {
+				$('.click-nav .js ul', this).stop(true, true).slideUp();
+				$('.clicker').removeClass('active');
+			}
+		});
+	});
+	</script>
+    	
+   	<div id="container_outer">
+   	
+   		<script type="text/javascript">
+	function validateForm()
+	{
+		  if(document.search.s.value.length < 2)
+		  { 
+		    return false;
+		  }
+		  return true;
+	}
+	</script>
+
+	<table id="main">
+	
+		<tr style="border-bottom: 1px solid #999;">
+		
+			<td width="735px" align="center">
+				
+				<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6570223566815186"
+				     crossorigin="anonymous"></script>
+				<!-- 728x90, created 8/3/10 -->
+				<ins class="adsbygoogle"
+				     style="display:inline-block;width:728px;height:90px"
+				     data-ad-client="ca-pub-6570223566815186"
+				     data-ad-slot="1718129579"></ins>
+				<script>
+				     (adsbygoogle = window.adsbygoogle || []).push({});
+				</script>
+			
+			</td>
+				
+			<td width="230px" align="right" valign="bottom">
+
+				<span style="font-size:2.4em;font-family:'Open Sans', sans-serif;color: #2f4e7a;">f o l l o w</span>&nbsp;&nbsp;&nbsp;
+				<a href="http://twitter.com/MMADecisions/"><img src="resources/img/twit.png" border="0" height="25px"></a>&nbsp;&nbsp;&nbsp;
+				<a href="http://facebook.com/MMADecisions/"><img src="resources/img/fb.png" border="0" height="25px"></a>&nbsp;&nbsp;&nbsp;
+				<br><hr>
+				
+				<div class=frame>
+					<form name="search" id="search" method="get" action="search" onsubmit="return validateForm();">
+				    	<input type="search" id="s" name="s" size="26" placeholder="search fighters, judges, events" style="background-color: #ffcf43;color: #003366;font-size: 11px;vertical-align: middle;"/><button type="submit" style="border: 0; padding: 0; background: transparent; vertical-align: middle;"><img src="resources/img/search.jpg"></img></button>
+				    	<br>
+				    </form>
+			    </div>
+			    
+			</td>
+		
+		</tr>
+		
+	</table>
+   	
+	<table border="0" width="965px" cellspacing="0" cellpadding="2" align="center">
+		<tr>
+  			
+    
+		<td width="765px" valign="top" align="center" style="border-right: 1px solid #999;">
+
+			<table style="border: 0px; border-spacing: 0px; width: 100%">
+				<tr>
+					<td width="60%" align="left" valign="top">
+
+						<table style="border: 0px; border-spacing: 0px; width: 100%">
+							<tr class="top-row">
+							
+							
+							
+							
+								<td class="decision-top" align="right" width="50%">
+				
+									<a href="fighter/6380/Daniel-Marcos">
+										Daniel&nbsp;Marcos
+									</a>
+								</td>
+								<td class="decision-top" width="50%">
+									&nbsp;
+								</td>
+							</tr>
+							<tr>
+								<td class="decision-middle" colspan="2" align="center">
+									<i> defeats</i>
+								</td>
+							</tr>
+							<tr class="bottom-row">
+							
+							
+							
+							
+								<td class="decision-bottom" width="50%">
+									&nbsp;
+								</td>
+								<td class="decision-bottom" width="50%" colspan="2" align="left">
+									<a href="fighter/3723/Adrian-Yanez">
+										Adrian&nbsp;Yanez
+									</a>
+								</td>
+			
+							</tr>
+							<tr>
+								<th colspan="2" class="event2" align="center"><i>Split Decision</i></th>
+							</tr>
+							<tr class="top-row">
+								<td colspan="2" class="decision-top2" align="center" style="background:url('resources/img/ufc_small.png') 15px 10px no-repeat;">
+								
+									
+									
+									
+									
+									
+									
+								
+									<b><a href="event/1517/UFC-on-ESPN-65-Covington-vs-Buckley">UFC on ESPN 65: Covington vs. Buckley</a></b><br>
+									December 14, 2024<br>
+									Tampa, Florida, USA
+								</td>
+							</tr>
+							<tr class="bottom-row">
+								
+								
+									
+								
+								<td colspan="2" class="decision-bottom2" align="center">
+									<b>REFEREE:</b> Unknown
+								</td>
+							</tr>
+						</table>
+					
+					</td>
+					<td width="40%" align="right" valign="bottom">
+					
+						
+					
+							<table style="border: 0px; width: 97%">
+								<tr class="top-row">
+									<td class="top-cell" colspan="6" align="center"><b>TALE OF THE TAPE</b></td>
+								</tr>
+				
+								<tr class="top-row">
+									<td class="decision-top2" colspan="3" align="center" width="50%"><b>Yanez</b></td>
+									<td class="decision-top2" colspan="3" align="center" width="50%"><b>Marcos</b></td>
+								</tr>
+								
+								
+								
+								
+									<tr class="decision">			
+										<td colspan="2" align="center" width="42%">Texas, USA</td>
+										<td colspan="2" align="center" bgcolor="#EEEEEE" width="16%"><b>BORN</b></td>
+										<td colspan="2" align="center" width="42%">Peru</td>
+									</tr>
+								
+								
+								
+								
+								
+									<tr class="decision">
+										<td colspan="2" align="center">31</td>
+										<td colspan="2" align="center" bgcolor="#EEEEEE"><b>AGE</b></td>
+										<td colspan="2" align="center">31</td>
+									</tr>
+								
+								
+								
+								
+								
+									<tr class="decision">
+										<td colspan="2" align="center">5'7"</td>
+										<td colspan="2" align="center" bgcolor="#EEEEEE"><b>HEIGHT</b></td>
+										<td colspan="2" align="center">5'7"</td>
+									</tr>
+								
+						
+								
+								
+								
+									<tr class="decision">
+										<td colspan="2" align="center">136 lbs.</td>
+										<td colspan="2" align="center" bgcolor="#EEEEEE"><b>WEIGHT</b></td>
+										<td colspan="2" align="center">136 lbs.</td>
+									</tr>
+								
+						
+								
+								
+								
+									<tr class="decision">
+										<td colspan="2" align="center">70"</td>
+										<td colspan="2" align="center" bgcolor="#EEEEEE"><b>REACH</b></td>
+										<td colspan="2" align="center">69"</td>
+									</tr>
+								
+						
+								
+								
+								
+									<tr class="decision">
+										<td colspan="2" align="center">Houston, TX</td>
+										<td style="font-size: 7pt" colspan="2" align="center" bgcolor="#EEEEEE"><b>FIGHTING<br>OUT OF</b></td>
+										<td colspan="2" align="center">Boca Raton, FL</td>
+									</tr>
+								
+						
+								<tr class="bottom-row">
+									<td colspan="3" class="decision-bottom2" align="center"><i>Pretty Boy</i></td>
+									<td colspan="3" class="decision-bottom2" align="center"><i>Soncora</i></td>
+								</tr>
+								
+							</table>
+						
+												
+					</td>
+				</tr>
+				
+				<tr height="30px">
+					<td colspan="2" align="center">
+					
+						<div class="pw-widget pw-counter-none">
+							<a class="pw-button-facebook pw-look-native"></a>
+							<a class="pw-button-twitter pw-look-native"></a>
+							<a class="pw-button-reddit pw-look-native"></a>
+							<a class="pw-button-googleplus pw-look-native"></a>
+							<a class="pw-button-post-share"></a>
+						</div>
+						<script src="http://i.po.st/static/v3/post-widget.js#publisherKey=lmlf98ojrofesud2c8i5&retina=true" type="text/javascript"></script>
+					
+					</td>
+				</tr>
+				
+				<tr>
+					<td colspan="2">
+
+						<table style="width: 100%; border: 0">
+							<tr>
+								
+								
+									
+									
+
+									<td width="33%">
+									
+										<table style="border-spacing: 1px; width: 100%">
+								
+											<tr class="top-row">
+												<td colspan="3" align="center" class="judge">
+												
+													
+													
+												
+													
+														<a href="judge/318/Derek-Cleary">Derek&nbsp;Cleary</a>
+													
+													
+													
+												</td>
+											</tr>
+											
+											<tr class="top-row">
+												<td class="top-cell-small" width="10%">ROUND</td>
+												<td align="center" class="top-cell" width="45%"><b>Marcos</b></td>
+												<td align="center" class="top-cell" width="45%"><b>Yanez</b></td>
+											</tr>
+
+											
+																
+
+												
+												
+												
+												
+												
+												
+													
+												
+
+													<tr class="decision">
+														<td class="list" align="center">1</td>
+														<td class="list" align="center">10</td>
+														<td class="list" align="center">9</td>
+													</tr>
+												
+												
+												
+												
+												
+												
+												
+												
+												
+																
+
+												
+												
+												
+												
+												
+												
+													
+												
+
+													<tr class="decision">
+														<td class="list" align="center">2</td>
+														<td class="list" align="center">10</td>
+														<td class="list" align="center">9</td>
+													</tr>
+												
+												
+												
+												
+												
+												
+												
+												
+												
+																
+
+												
+												
+												
+												
+												
+												
+													
+												
+
+													<tr class="decision">
+														<td class="list" align="center">3</td>
+														<td class="list" align="center">10</td>
+														<td class="list" align="center">9</td>
+													</tr>
+												
+												
+												
+												
+												
+												
+												
+													<tr class="bottom-row">
+															<td class="bottom-cell-small">TOTAL</td>
+															<td class="bottom-cell" align="center"><b>30</b></td>
+															<td class="bottom-cell" align="center"><b>27</b></td>
+													</tr>
+												
+												
+												
+												
+												
+											
+											
+										</table>
+
+									</td>
+								
+								
+									
+									
+
+									<td width="33%">
+									
+										<table style="border-spacing: 1px; width: 100%">
+								
+											<tr class="top-row">
+												<td colspan="3" align="center" class="judge">
+												
+													
+													
+												
+													
+														<a href="judge/86/Eric-Colón">Eric&nbsp;Colón</a>
+													
+													
+													
+												</td>
+											</tr>
+											
+											<tr class="top-row">
+												<td class="top-cell-small" width="10%">ROUND</td>
+												<td align="center" class="top-cell" width="45%"><b>Marcos</b></td>
+												<td align="center" class="top-cell" width="45%"><b>Yanez</b></td>
+											</tr>
+
+											
+																
+
+												
+												
+												
+												
+												
+												
+													
+												
+
+													<tr class="decision">
+														<td class="list" align="center">1</td>
+														<td class="list" align="center">10</td>
+														<td class="list" align="center">9</td>
+													</tr>
+												
+												
+												
+												
+												
+												
+												
+												
+												
+																
+
+												
+												
+												
+												
+												
+												
+													
+												
+
+													<tr class="decision">
+														<td class="list" align="center">2</td>
+														<td class="list" align="center">9</td>
+														<td class="list" align="center">10</td>
+													</tr>
+												
+												
+												
+												
+												
+												
+												
+												
+												
+																
+
+												
+												
+												
+												
+												
+												
+													
+												
+
+													<tr class="decision">
+														<td class="list" align="center">3</td>
+														<td class="list" align="center">10</td>
+														<td class="list" align="center">9</td>
+													</tr>
+												
+												
+												
+												
+												
+												
+												
+													<tr class="bottom-row">
+															<td class="bottom-cell-small">TOTAL</td>
+															<td class="bottom-cell" align="center"><b>29</b></td>
+															<td class="bottom-cell" align="center"><b>28</b></td>
+													</tr>
+												
+												
+												
+												
+												
+											
+											
+										</table>
+
+									</td>
+								
+								
+									
+									
+
+									<td width="33%">
+									
+										<table style="border-spacing: 1px; width: 100%">
+								
+											<tr class="top-row">
+												<td colspan="3" align="center" class="judge">
+												
+													
+													
+												
+													
+														<a href="judge/53/Chris-Lee">Chris&nbsp;Lee</a>
+													
+													
+													
+												</td>
+											</tr>
+											
+											<tr class="top-row">
+												<td class="top-cell-small" width="10%">ROUND</td>
+												<td align="center" class="top-cell" width="45%"><b>Marcos</b></td>
+												<td align="center" class="top-cell" width="45%"><b>Yanez</b></td>
+											</tr>
+
+											
+																
+
+												
+												
+												
+												
+												
+												
+													
+												
+
+													<tr class="decision">
+														<td class="list" align="center">1</td>
+														<td class="list" align="center">10</td>
+														<td class="list" align="center">9</td>
+													</tr>
+												
+												
+												
+												
+												
+												
+												
+												
+												
+																
+
+												
+												
+												
+												
+												
+												
+													
+												
+
+													<tr class="decision">
+														<td class="list" align="center">2</td>
+														<td class="list" align="center">9</td>
+														<td class="list" align="center">10</td>
+													</tr>
+												
+												
+												
+												
+												
+												
+												
+												
+												
+																
+
+												
+												
+												
+												
+												
+												
+													
+												
+
+													<tr class="decision">
+														<td class="list" align="center">3</td>
+														<td class="list" align="center">9</td>
+														<td class="list" align="center">10</td>
+													</tr>
+												
+												
+												
+												
+												
+												
+												
+													<tr class="bottom-row">
+															<td class="bottom-cell-small">TOTAL</td>
+															<td class="bottom-cell" align="center"><b>28</b></td>
+															<td class="bottom-cell" align="center"><b>29</b></td>
+													</tr>
+												
+												
+												
+												
+												
+											
+											
+										</table>
+
+									</td>
+								
+								
+																	
+							</tr>
+							
+							
+							
+						</table>
+					
+					</td>
+				</tr>
+				
+				<tr>
+					<td colspan="2" align="center">
+					
+						<table>
+							
+						</table>
+					
+					</td>
+				</tr>
+				
+			</table>
+			
+			<br>
+			
+			<table style="border-spacing: 0px; width: 100%; border: 0">
+				
+				<tr>
+					<td width="34%" valign="top">
+					
+						
+					
+							<table style="border-spacing: 0px; width: 100%">
+								<tr class="top-row">
+									<td class="top-cell" colspan="3" align="center"><b>MEDIA SCORES</b></td>
+								</tr>
+						
+								
+						
+								
+								
+									
+								
+									
+									
+									
+									
+									
+									
+									
+									
+									<tr class="decision">
+										<td align="center" bgcolor="#f1f1f1">
+											
+											
+												Tyler&nbsp;Treese<br><i><a href='https://www.sherdog.com/news/news/UFC-on-ESPN-63-Covington-vs-Buckley-PlaybyPlay-Results-Round-Scoring-195715'>Sherdog.com</a></i>
+											
+										</td>
+										<td align="center" bgcolor="#f1f1f1">
+											<a href='https://www.sherdog.com/news/news/UFC-on-ESPN-63-Covington-vs-Buckley-PlaybyPlay-Results-Round-Scoring-195715' class='external' target="_blank">29-28</a>
+										</td>
+										<td align="center" bgcolor="#f1f1f1">Marcos</td>
+									</tr>
+									
+									
+									
+								
+								
+									
+								
+									
+									
+									
+									
+									
+									
+									
+									
+									<tr class="decision">
+										<td align="center" bgcolor="#ffffff">
+											
+											
+												Tristen&nbsp;Critchfield<br><i><a href='https://www.sherdog.com/news/news/UFC-on-ESPN-63-Covington-vs-Buckley-PlaybyPlay-Results-Round-Scoring-195715'>Sherdog.com</a></i>
+											
+										</td>
+										<td align="center" bgcolor="#ffffff">
+											<a href='https://www.sherdog.com/news/news/UFC-on-ESPN-63-Covington-vs-Buckley-PlaybyPlay-Results-Round-Scoring-195715' class='external' target="_blank">29-28</a>
+										</td>
+										<td align="center" bgcolor="#ffffff">Marcos</td>
+									</tr>
+									
+									
+									
+								
+								
+									
+								
+									
+									
+									
+									
+									
+									
+									
+									
+									<tr class="decision">
+										<td align="center" bgcolor="#f1f1f1">
+											
+											
+												Brian&nbsp;Knapp<br><i><a href='https://www.sherdog.com/news/news/UFC-on-ESPN-63-Covington-vs-Buckley-PlaybyPlay-Results-Round-Scoring-195715'>Sherdog.com</a></i>
+											
+										</td>
+										<td align="center" bgcolor="#f1f1f1">
+											<a href='https://www.sherdog.com/news/news/UFC-on-ESPN-63-Covington-vs-Buckley-PlaybyPlay-Results-Round-Scoring-195715' class='external' target="_blank">29-28</a>
+										</td>
+										<td align="center" bgcolor="#f1f1f1">Marcos</td>
+									</tr>
+									
+									
+									
+								
+								
+									
+								
+									
+									
+									
+									
+									
+									
+									
+									
+									<tr class="decision">
+										<td align="center" bgcolor="#ffffff">
+											
+											
+												Dayne&nbsp;Fox<br><i><a href='https://x.com/TheDayneFox/status/1868146944247517289'>Sherdog.com</a></i>
+											
+										</td>
+										<td align="center" bgcolor="#ffffff">
+											<a href='https://x.com/TheDayneFox/status/1868146944247517289' class='external' target="_blank">29-28</a>
+										</td>
+										<td align="center" bgcolor="#ffffff">Marcos</td>
+									</tr>
+									
+									
+									
+								
+								
+									
+								
+									
+									
+									
+									
+									
+									
+									
+									
+									<tr class="decision">
+										<td align="center" bgcolor="#f1f1f1">
+											
+											
+												Keith&nbsp;Shillan<br><i><a href='https://x.com/KeithShillanMMA/status/1868146948961706028'>Sherdog.com</a></i>
+											
+										</td>
+										<td align="center" bgcolor="#f1f1f1">
+											<a href='https://x.com/KeithShillanMMA/status/1868146948961706028' class='external' target="_blank">29-28</a>
+										</td>
+										<td align="center" bgcolor="#f1f1f1">Marcos</td>
+									</tr>
+									
+									
+									
+								
+								
+									
+								
+									
+									
+									
+									
+									
+									
+									
+									
+									<tr class="decision">
+										<td align="center" bgcolor="#ffffff">
+											
+											
+												Ryan&nbsp;Frederick<br><i><a href='https://x.com/ryanjfrederick/status/1868147091962474650'>WrestlingObserver.com</a></i>
+											
+										</td>
+										<td align="center" bgcolor="#ffffff">
+											<a href='https://x.com/ryanjfrederick/status/1868147091962474650' class='external' target="_blank">29-28</a>
+										</td>
+										<td align="center" bgcolor="#ffffff">Marcos</td>
+									</tr>
+									
+									
+									
+								
+								
+									
+								
+									
+									
+									
+									
+									
+									
+									
+									
+									<tr class="decision">
+										<td align="center" bgcolor="#f1f1f1">
+											
+											
+												Steve&nbsp;Duncan<br><i><a href='https://x.com/ATSteveDuncan/status/1868147109784064303'>mma.uno</a></i>
+											
+										</td>
+										<td align="center" bgcolor="#f1f1f1">
+											<a href='https://x.com/ATSteveDuncan/status/1868147109784064303' class='external' target="_blank">29-28</a>
+										</td>
+										<td align="center" bgcolor="#f1f1f1">Marcos</td>
+									</tr>
+									
+									
+									
+								
+								
+									
+								
+									
+									
+									
+									
+									
+									
+									
+									
+									<tr class="decision">
+										<td align="center" bgcolor="#ffffff">
+											
+											
+												Zane&nbsp;Simon<br><i><a href='https://x.com/TheZaneSimon/status/1868147202859888954'>The MMA Vivisection</a></i>
+											
+										</td>
+										<td align="center" bgcolor="#ffffff">
+											<a href='https://x.com/TheZaneSimon/status/1868147202859888954' class='external' target="_blank">29-28</a>
+										</td>
+										<td align="center" bgcolor="#ffffff">Marcos</td>
+									</tr>
+									
+									
+									
+								
+								
+									
+								
+									
+									
+									
+									
+									
+									
+									
+									
+									<tr class="decision">
+										<td align="center" bgcolor="#f1f1f1">
+											
+											
+												Jake&nbsp;Noecker<br><i><a href='https://x.com/JakeNoeckerMMA/status/1868147250398183527'>Home of Fight</a></i>
+											
+										</td>
+										<td align="center" bgcolor="#f1f1f1">
+											<a href='https://x.com/JakeNoeckerMMA/status/1868147250398183527' class='external' target="_blank">29-28</a>
+										</td>
+										<td align="center" bgcolor="#f1f1f1">Marcos</td>
+									</tr>
+									
+									
+									
+								
+								
+									
+								
+									
+									
+									
+									
+									
+									
+									
+									
+									<tr class="decision">
+										<td align="center" bgcolor="#ffffff">
+											
+											
+												Matthew&nbsp;Wells<br><i><a href='https://mmajunkie.usatoday.com/2024/12/ufc-tampa-covington-vs-buckley-live-updates-results'>MMAJunkie.com</a></i>
+											
+										</td>
+										<td align="center" bgcolor="#ffffff">
+											<a href='https://mmajunkie.usatoday.com/2024/12/ufc-tampa-covington-vs-buckley-live-updates-results' class='external' target="_blank">29-28</a>
+										</td>
+										<td align="center" bgcolor="#ffffff">Marcos</td>
+									</tr>
+									
+									
+									
+								
+								
+									
+								
+									
+									
+										
+									
+									
+									
+									
+									
+									
+										<tr><td colspan="3"><hr></td></tr>
+									
+									
+									<tr class="decision">
+										<td align="center" bgcolor="#f1f1f1">
+											
+											
+												Jed&nbsp;Meshew<br><i><a href='https://x.com/JedKMeshew/status/1868147058349400412'>MMAFighting.com</a></i>
+											
+										</td>
+										<td align="center" bgcolor="#f1f1f1">
+											<a href='https://x.com/JedKMeshew/status/1868147058349400412' class='external' target="_blank">28-29</a>
+										</td>
+										<td align="center" bgcolor="#f1f1f1">Yanez</td>
+									</tr>
+									
+									
+									
+								
+								
+									
+								
+									
+									
+										
+									
+									
+									
+									
+									
+									
+									
+									<tr class="decision">
+										<td align="center" bgcolor="#ffffff">
+											
+											
+												Patrick&nbsp;McCorry<br><i><a href='https://x.com/Patrick_McCorry/status/1868147591655154076'>Cageside Press</a></i>
+											
+										</td>
+										<td align="center" bgcolor="#ffffff">
+											<a href='https://x.com/Patrick_McCorry/status/1868147591655154076' class='external' target="_blank">28-29</a>
+										</td>
+										<td align="center" bgcolor="#ffffff">Yanez</td>
+									</tr>
+									
+									
+									
+								
+								
+								<tr><td colspan="3"><hr></td></tr>
+						
+							</table>
+							
+						
+						
+						
+
+					</td>
+					<td width="66%" valign="top" align="center">						
+
+								
+					
+						<div id="scorecard_editor" style="display:inline;">
+					
+
+						
+						
+							
+							
+							
+							
+							
+							
+							
+							
+
+							
+							<form method="POST" action="decision/15168/Daniel-Marcos-vs-Adrian-Yanez" modelAttribute="fanScorecard">
+								
+								<input type="hidden" name="rounds" value="3">
+								<input type="hidden" name="fightID" value="15168">
+								<input type="hidden" id="fighter1TotalScore" name="fighter1TotalScore" value="0">
+								<input type="hidden" id="fighter2TotalScore" name="fighter2TotalScore" value="0">
+												
+								<br>
+					
+								<table style="border-spacing: 1px; width: 70%;" id="fanScorecard">
+					
+									<tr class="top-row">
+											<th colspan="3" align="center" class="event2">YOUR SCORECARD</th>
+									</tr>
+						
+									<tr class="top-row">
+										<td class="top-cell-small" width="10%">ROUND</td>
+										<td align="center" class="top-cell" width="45%"><b>Marcos</b></td>
+										<td align="center" class="top-cell" width="45%"><b>Yanez</b></td>
+									</tr>
+	
+									
+										<tr class="decision">
+											<td class="list" align="center">1</td>
+											<td class="list" align="center">
+												<input type="hidden" id="fighter1MaxScore[1]" value="10">
+												<select class="scorecard" id="fighter1Score[1]" name="fighter1Score[1]" onchange="totalScore(1, 3)">
+										 			<option value="Select">-</option>
+										 			 
+														<option value="10">10</option>
+													 
+														<option value="9">9</option>
+													 
+														<option value="8">8</option>
+													 
+														<option value="7">7</option>
+													
+												</select>
+											</td>
+											<td class="list" align="center">
+												<input type="hidden" id="fighter2MaxScore[1]" value="10">
+												<select class="scorecard" id="fighter2Score[1]" name="fighter2Score[1]" onchange="totalScore(2, 3)">
+									 				<option value="Select">-</option>
+										 			 
+														<option value="10">10</option>
+													 
+														<option value="9">9</option>
+													 
+														<option value="8">8</option>
+													 
+														<option value="7">7</option>
+													
+												</select>
+											</td>
+										</tr>
+									
+										<tr class="decision">
+											<td class="list" align="center">2</td>
+											<td class="list" align="center">
+												<input type="hidden" id="fighter1MaxScore[2]" value="10">
+												<select class="scorecard" id="fighter1Score[2]" name="fighter1Score[2]" onchange="totalScore(1, 3)">
+										 			<option value="Select">-</option>
+										 			 
+														<option value="10">10</option>
+													 
+														<option value="9">9</option>
+													 
+														<option value="8">8</option>
+													 
+														<option value="7">7</option>
+													
+												</select>
+											</td>
+											<td class="list" align="center">
+												<input type="hidden" id="fighter2MaxScore[2]" value="10">
+												<select class="scorecard" id="fighter2Score[2]" name="fighter2Score[2]" onchange="totalScore(2, 3)">
+									 				<option value="Select">-</option>
+										 			 
+														<option value="10">10</option>
+													 
+														<option value="9">9</option>
+													 
+														<option value="8">8</option>
+													 
+														<option value="7">7</option>
+													
+												</select>
+											</td>
+										</tr>
+									
+										<tr class="decision">
+											<td class="list" align="center">3</td>
+											<td class="list" align="center">
+												<input type="hidden" id="fighter1MaxScore[3]" value="10">
+												<select class="scorecard" id="fighter1Score[3]" name="fighter1Score[3]" onchange="totalScore(1, 3)">
+										 			<option value="Select">-</option>
+										 			 
+														<option value="10">10</option>
+													 
+														<option value="9">9</option>
+													 
+														<option value="8">8</option>
+													 
+														<option value="7">7</option>
+													
+												</select>
+											</td>
+											<td class="list" align="center">
+												<input type="hidden" id="fighter2MaxScore[3]" value="10">
+												<select class="scorecard" id="fighter2Score[3]" name="fighter2Score[3]" onchange="totalScore(2, 3)">
+									 				<option value="Select">-</option>
+										 			 
+														<option value="10">10</option>
+													 
+														<option value="9">9</option>
+													 
+														<option value="8">8</option>
+													 
+														<option value="7">7</option>
+													
+												</select>
+											</td>
+										</tr>
+									
+								
+									<tr class="bottom-row">
+											<td class="bottom-cell-small">TOTAL</td>
+											<td class="bottom-cell" align="center"><b id="f1_total_display">-</b></td>
+											<td class="bottom-cell" align="center"><b id="f2_total_display">-</b></td>
+									</tr>
+						
+									<tr>
+										<td colspan="3" align="center">
+											<input name="addFanScorecard" type="Submit" value="Submit Scorecard" onClick="return(submitScorecard(15168, 3));">
+										</td>
+									</tr>
+						
+								</table>
+
+							</form>
+							
+							<br>
+							
+							<a onclick="javaScript:showTotals();" class="external">Show Results</a>
+							
+						
+		
+					</div>
+					
+					<div id="cookies_disabled" style="display:none;">
+						
+						<table style="border:1px solid black;border-color:red;background-color:#FFCCCC">
+							<tr>
+								<td>Cookies must be enabled on your browser to submit a scorecard</td>
+							</tr>
+						</table>
+						
+						<br>
+						
+					</div>
+
+					
+					
+						<div id="scorecard_totals" style="display:none;">
+					
+					
+						
+						
+						
+
+						<table width="100%" border="0" cellspacing="2" cellpadding="0">
+							<tr class="top-row">
+								<td class="top-cell" colspan="6"><b>FAN SCORING</b></td>
+							</tr>
+							<tr>
+								<td valign="top" colspan="6">
+								
+									<table width="100%">
+									
+										
+										
+
+										
+
+											
+
+											<tr>
+												<td class="selectedTop" align="center" width="50%">Marcos defeats Yanez</td>
+												<td class="selectedTop" align="center" width="14%">29 - 28</td>
+												<td class="selectedTop" align="center" width="10%">55.4%</td>
+												<td class="bar"><div style="width: 100.0%"></div></td>
+											</tr>
+											
+											
+											
+										
+
+											
+												
+											
+
+											<tr>
+												<td class="list" align="center" width="50%">Marcos defeats Yanez</td>
+												<td class="list" align="center" width="14%">30 - 27</td>
+												<td class="list" align="center" width="10%">19.6%</td>
+												<td class="bar"><div style="width: 35.294117647058826%"></div></td>
+											</tr>
+											
+											
+											
+										
+
+											
+
+											<tr>
+												<td class="list" align="center" width="50%">Yanez defeats Marcos</td>
+												<td class="list" align="center" width="14%">29 - 28</td>
+												<td class="list" align="center" width="10%">19.6%</td>
+												<td class="bar"><div style="width: 35.294117647058826%"></div></td>
+											</tr>
+											
+											
+											
+										
+
+											
+												
+											
+
+											<tr>
+												<td class="list" align="center" width="50%">Yanez defeats Marcos</td>
+												<td class="list" align="center" width="14%">30 - 27</td>
+												<td class="list" align="center" width="10%">3.3%</td>
+												<td class="bar"><div style="width: 5.88235294117647%"></div></td>
+											</tr>
+											
+											
+											
+										
+
+											
+												
+											
+
+											<tr>
+												<td class="list" align="center" width="50%">Yanez defeats Marcos</td>
+												<td class="list" align="center" width="14%">30 - 28</td>
+												<td class="list" align="center" width="10%">1.1%</td>
+												<td class="bar"><div style="width: 1.9607843137254901%"></div></td>
+											</tr>
+											
+											
+											
+										
+										
+									</table>
+									
+									<br>
+									
+									
+									
+									
+										<table width="100%" border="0" cellspacing="0" cellpadding="0">
+										
+											<tr>
+	
+											
+											
+												
+	
+												<td width="33%" valign="top">
+													<table width="100%">
+														<tr class="top-row">
+															<td class="top-cell-small" colspan="3">ROUND 1</td>
+														</tr>
+														
+														
+															
+																								
+														
+														
+															
+															
+															<tr class="decision">
+																<td width="22%" align="left" style="font-weight:bold">10-9</td>
+																<td align="left" style="font-weight:bold">Marcos</td>
+																<td style="font-weight:bold">88.0%</td>
+															</tr>
+															
+															
+															
+														
+														
+															
+																
+															
+															
+															<tr class="decision">
+																<td width="22%" align="left" style="font-weight:normal">10-9</td>
+																<td align="left" style="font-weight:normal">Yanez</td>
+																<td style="font-weight:normal">7.6%</td>
+															</tr>
+															
+															
+															
+														
+														
+															
+																
+															
+															
+															<tr class="decision">
+																<td width="22%" align="left" style="font-weight:normal">10-10</td>
+																<td align="left" style="font-weight:normal">Draw</td>
+																<td style="font-weight:normal">2.2%</td>
+															</tr>
+															
+															
+															
+														
+														
+													</table>
+												</td>
+												
+												
+											
+											
+												
+	
+												<td width="33%" valign="top">
+													<table width="100%">
+														<tr class="top-row">
+															<td class="top-cell-small" colspan="3">ROUND 2</td>
+														</tr>
+														
+														
+															
+																								
+														
+														
+															
+															
+															<tr class="decision">
+																<td width="22%" align="left" style="font-weight:bold">10-9</td>
+																<td align="left" style="font-weight:bold">Yanez</td>
+																<td style="font-weight:bold">75.0%</td>
+															</tr>
+															
+															
+															
+														
+														
+															
+																
+															
+															
+															<tr class="decision">
+																<td width="22%" align="left" style="font-weight:normal">10-9</td>
+																<td align="left" style="font-weight:normal">Marcos</td>
+																<td style="font-weight:normal">21.7%</td>
+															</tr>
+															
+															
+															
+														
+														
+															
+																
+															
+															
+															<tr class="decision">
+																<td width="22%" align="left" style="font-weight:normal">10-10</td>
+																<td align="left" style="font-weight:normal">Draw</td>
+																<td style="font-weight:normal">1.1%</td>
+															</tr>
+															
+															
+															
+														
+														
+													</table>
+												</td>
+												
+												
+											
+											
+												
+	
+												<td width="33%" valign="top">
+													<table width="100%">
+														<tr class="top-row">
+															<td class="top-cell-small" colspan="3">ROUND 3</td>
+														</tr>
+														
+														
+															
+																								
+														
+														
+															
+															
+															<tr class="decision">
+																<td width="22%" align="left" style="font-weight:bold">10-9</td>
+																<td align="left" style="font-weight:bold">Marcos</td>
+																<td style="font-weight:bold">75.0%</td>
+															</tr>
+															
+															
+															
+														
+														
+															
+																
+															
+															
+															<tr class="decision">
+																<td width="22%" align="left" style="font-weight:normal">10-9</td>
+																<td align="left" style="font-weight:normal">Yanez</td>
+																<td style="font-weight:normal">21.7%</td>
+															</tr>
+															
+															
+															
+														
+														
+															
+																
+															
+															
+															<tr class="decision">
+																<td width="22%" align="left" style="font-weight:normal">10-10</td>
+																<td align="left" style="font-weight:normal">Draw</td>
+																<td style="font-weight:normal">1.1%</td>
+															</tr>
+															
+															
+															
+														
+														
+													</table>
+												</td>
+												
+												
+											
+											
+											</tr>
+											
+										</table>
+									
+									
+			
+								</td>
+							</tr>
+						</table>
+						
+						
+
+					</div>
+					
+					<br>
+					
+					<div id="chart_div"></div>
+					
+					
+					<div id="chart_div2"></div>
+					
+
+					<div id="scorecards_submitted" style="display:none;">
+						<br>	
+						<table style="border:1px solid black;border-color:yellow;background-color:#FFFFCC">
+							<tr valign="middle">
+								<td><b>92</b> SCORECARDS SUBMITTED</td>
+							</tr>
+						</table>
+					</div>
+					
+					<div id="show_scorecard" style="display:none;">
+						<br>
+						<a onclick="javaScript:hideTotals();" class="external">Show Scorecard</a>
+					</div>
+					
+					</td>
+				</tr>
+				
+			</table>
+			
+			<br>
+			
+			<table style="border: 0; width: 100%; border-spacing: 0px;">
+			
+				<tr>
+					<td colspan="2" align="center">
+					
+						
+
+					</td>
+				</tr>
+				
+				<tr>
+					<td colspan="2">&nbsp;</td>
+				</tr>
+				
+				<tr>
+					<td colspan="2">
+						<table style="border: 0px; width: 100%">
+							<tr>
+								<td class="list-center">
+					
+									
+									
+									
+									
+									
+									
+									
+									
+					                
+									<div id="disqus_thread" align="left"></div>
+									<script>
+
+									    var disqus_config = function () {
+									        this.page.url = 'http://mmadecisions.com/decision/15168/Daniel-Marcos-vs-Adrian-Yanez';
+									        this.page.identifier = 'decision15168';
+									        
+									        this.callbacks.onNewComment = [function(comment) {
+												ga('send', {
+													  hitType: 'event',
+													  eventCategory: 'Comment',
+													  eventAction: 'Submit',
+													  eventLabel: '15168' + '/Marcos/Yanez'
+													});
+									        }];
+									        
+									    };
+
+									    (function() { 
+									        var d = document, s = d.createElement('script');
+									        s.src = '//mmadecisions.disqus.com/embed.js'; 
+									        s.setAttribute('data-timestamp', +new Date());
+									        (d.head || d.body).appendChild(s);
+									    })();
+									</script>
+									<noscript>Please enable JavaScript to view the <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments powered by Disqus.</a></noscript>
+
+								</td>
+							</tr>
+						</table>
+					</td>
+				</tr>
+			</table>
+	
+		</td>
+		
+		<td width="200px" valign="top" align="center">
+		
+			<br>
+		
+			<script type="text/javascript"><!--
+			google_ad_client = "pub-6570223566815186";
+			/* 200x200, created 8/11/11 */
+			google_ad_slot = "7059271191";
+			google_ad_width = 200;
+			google_ad_height = 200;
+			//-->
+			</script>
+			<script type="text/javascript"
+			src="http://pagead2.googlesyndication.com/pagead/show_ads.js">
+			</script>	
+			
+			<br>
+			
+			
+			
+				<div id="list4">
+				  <ul>
+				    <li>RELATED DECISIONS
+				      <ul>
+				      	
+					        <li>Daniel&nbsp;MARCOS
+						      <ul>
+	    
+								
+								
+									
+									
+									
+									
+									
+									
+									
+									
+								
+									<li>
+										<a href="decision/14157/Daniel-Marcos-vs-Davey-Grant">
+											Marcos&nbsp;def.&nbsp;Grant 
+										</a>
+									</li>
+									
+								
+								
+									
+									
+									
+									
+									
+									
+									
+									
+								
+									<li>
+										<a href="decision/15407/Montel-Jackson-vs-Daniel-Marcos">
+											Jackson&nbsp;def.&nbsp;Marcos 
+										</a>
+									</li>
+									
+								
+								
+									
+									
+									
+									
+									
+									
+									
+									
+								
+									<li>
+										<a href="decision/14776/Daniel-Marcos-vs-John-Castaneda">
+											Marcos&nbsp;def.&nbsp;Castaneda 
+										</a>
+									</li>
+									
+								
+					    	    
+						      </ul>
+						    </li>
+					    
+					    
+					    
+					        <li>Adrian&nbsp;YANEZ
+						      <ul>
+	    
+								
+								
+									
+									
+									
+									
+									
+									
+									
+									
+								
+									<li>
+										<a href="decision/12734/Adrian-Yanez-vs-Davey-Grant">
+											Yanez&nbsp;def.&nbsp;Grant 
+										</a>
+									</li>
+									
+								
+								
+									
+									
+									
+									
+									
+									
+									
+									
+								
+									<li>
+										<a href="decision/15984/Adrian-Yanez-vs-Ricky-Simon">
+											Yanez&nbsp;drew with&nbsp;Simon 
+										</a>
+									</li>
+									
+								
+								
+									
+									
+									
+									
+									
+									
+									
+									
+								
+									<li>
+										<a href="decision/6789/Adrian-Yanez-vs-Ryan-Hollis">
+											Yanez&nbsp;def.&nbsp;Hollis 
+										</a>
+									</li>
+									
+								
+					    	    
+						      </ul>
+						    </li>
+						
+						
+					    
+					        <li>UFC ON ESPN 65:<br>&nbsp;&nbsp;Covington vs. Buckley
+						      <ul>
+	    
+								
+								
+									
+									
+									
+									
+									
+									
+									
+									
+								
+									<li>
+										<a href="decision/15167/Navajo-Stirling-vs-Tuco-Tokkos">
+											Stirling&nbsp;def.&nbsp;Tokkos 
+										</a>
+									</li>
+									
+								
+								
+									
+									
+									
+									
+									
+									
+									
+									
+								
+									<li>
+										<a href="decision/15163/Felipe-Lima-vs-Miles-Johns">
+											Lima&nbsp;def.&nbsp;Johns 
+										</a>
+									</li>
+									
+								
+								
+									
+									
+									
+									
+									
+									
+									
+									
+								
+									<li>
+										<a href="decision/15162/Miranda-Maverick-vs-Jamey-Lyn-Horth">
+											Maverick&nbsp;def.&nbsp;Horth 
+										</a>
+									</li>
+									
+								
+								
+									
+									
+									
+									
+									
+									
+									
+									
+								
+									<li>
+										<a href="decision/15161/Davey-Grant-vs-Ramon-Taveras">
+											Grant&nbsp;def.&nbsp;Taveras 
+										</a>
+									</li>
+									
+								
+								
+									
+									
+									
+									
+									
+									
+									
+									
+								
+									<li>
+										<a href="decision/15160/Piera-Rodriguez-vs-Josefine-Knutsson">
+											Rodriguez&nbsp;def.&nbsp;Knutsson 
+										</a>
+									</li>
+									
+								
+					    	    
+						      </ul>
+						    </li>
+						
+						
+				      </ul>
+				    </li>
+				  </ul>
+				</div>
+			
+			
+		</td>
+		
+				
+		</tr>
+	</table>
+	
+	</div>
+	
+	<br>
+	
+		<div class="footer">
+	    	<a href="">Home</a> |
+	    	<a href="definitions/">Definitions</a> |
+	    	<a href="blog/">Blog</a> |
+	    	<a href="http://twitter.com/MMADecisions/" target="_blank">Twitter</a> |
+	    	<a href="http://feeds.feedburner.com/MMADecisions/Events">RSS</a> 
+	    	<!-- 
+	    	|
+	    	<a href="contact/"> Contact Us</a>
+	    	-->
+	    	<br><br>
+	</div>
+	<span style="color: white">&copy; 2020 MMADecisions.com</span>
+
+<!-- 
+	<script src="resources/js/sailthru.js" type="text/javascript"></script>
+	
+	<script src="/sailthru.js" type="text/javascript"></script>
+
+	<script type="text/javascript">
+		if (document.getElementById('QTXoNxcEbPCU')) {
+			QTXoNxcEbPCU = 'No';
+		} else {
+			QTXoNxcEbPCU = 'Yes';
+		}
+
+		if (typeof ga !== 'undefined') {
+			ga('send', 'event', 'Blocking Ads', QTXoNxcEbPCU, {
+				'nonInteraction' : 1
+			});
+		} else if (typeof _gaq !== 'undefined') {
+			_gaq.push([ '_trackEvent', 'Blocking Ads', QTXoNxcEbPCU, undefined,
+					undefined, true ]);
+		}
+	</script>
+-->
+
+</body>
+  
+
+</html>

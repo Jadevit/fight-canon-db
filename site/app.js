@@ -195,7 +195,8 @@ function winKind(method) {
 }
 
 // Links to the pages a row came from, by the sources' own ids (the aliases tables).
-const SOURCE_NAMES = { ufcstats: "UFC Stats", pfl: "PFL", oktagon: "Oktagon", sofascore: "Sofascore", sherdog: "Sherdog", smartcage: "PFL SmartCage" };
+const SOURCE_NAMES = { ufcstats: "UFC Stats", pfl: "PFL", oktagon: "Oktagon", sofascore: "Sofascore", sherdog: "Sherdog", smartcage: "PFL SmartCage",
+  "ufc.com": "UFC", mmadecisions: "MMA Decisions" };
 // What a stats source leaves out, said under its stats.
 const STATS_NOTES = {
   oktagon: "Oktagon counts only what landed: no attempts, knockdowns or control time.",
@@ -1012,7 +1013,7 @@ async function fight(id, show) {
       </section>
       ${st ? `<section class="section" id="rbr">${roundsBlock()}</section>`
         : `<p class="muted">No round-by-round stats recorded for this fight.</p>`}
-      ${judges.length ? `<section class="section"><div class="block-head"><span class="label">Judges' scorecards</span>${badge("UFC")}</div>
+      ${judges.length ? `<section class="section"><div class="block-head"><span class="label">Judges' scorecards</span>${badge(srcName(scores[0].source))}</div>
         <div class="scorecards">${judges.map(card).join("")}</div></section>` : ""}
       ${odds.length ? `<section class="section"><div class="block-head"><span class="label">Closing odds</span>${badge("BestFightOdds")}</div>
         <div class="odds">${oddsTile(L)}${oddsTile(R)}</div>

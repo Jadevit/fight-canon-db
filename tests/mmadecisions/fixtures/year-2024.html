@@ -1,0 +1,1801 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+  <head>
+    <base href="https://mmadecisions.com">
+  
+  	<title>MMA Decisions - Events</title>
+
+		<meta http-equiv="keywords" content="mma decisions, ufc judges, ufc scoring, ufc scorecard, mma scores">
+	<meta http-equiv="description" content="MMA Decisions provides a summary of MMA judging decisions, focusing on UFC results">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+	
+	<!-- 
+	<meta property="og:title" content="MMADecisions.com" />
+	<meta property="og:type" content="sport" />
+	<meta property="og:url" content="http://mmadecisions.com/" />
+	<meta property="og:image" content="http://mmadecisions.com/img/mmadlogosquaresmall.png" />
+	<meta property="og:site_name" content="MMADecisions.com" />
+	-->
+	<meta property="fb:admins" content="517077224" />
+	 
+
+	<link rel="icon" type="image/gif" href="resources/img/favicon.ico" />
+	<link rel="stylesheet" type="text/css" href="resources/css/mmadecisions2.css" >
+	<link rel="stylesheet" type="text/css" href="resources/css/mmad-custom1/jquery-ui.min.css" />
+
+    <script type="text/javascript"
+        src="http://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+    <script type="text/javascript"
+        src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.18/jquery-ui.min.js"></script>
+  
+	<!-- <link rel="stylesheet" href="//code.jquery.com/ui/1.11.3/themes/smoothness/jquery-ui.css"> -->
+
+	<script src="//code.jquery.com/jquery-1.10.2.js"></script>
+	<script src="//code.jquery.com/ui/1.11.3/jquery-ui.js"></script>
+
+	<!-- Google Analytics -->
+	<script>
+	(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+	(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+	m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+	})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+	
+	ga('create', 'UA-18154317-1', 'auto');
+	ga('send', 'pageview');
+	</script>
+	<!-- End Google Analytics -->
+	
+	<style>
+	.ui-autocomplete-category {
+		font-weight: bold;
+		padding: .2em .4em;
+		margin: .2em 0 .2em;
+		line-height: 1.5;
+		text-align: left;
+		border-top: 1px dotted #036;
+		border-bottom: 1px dotted #036;
+		background-color: #eeeeee;
+	}
+	.ui-autocomplete {
+	    max-height: 450px;
+	    overflow-y: auto;
+	    /* prevent horizontal scrollbar */
+	    overflow-x: hidden;
+	}
+	
+	</style>
+
+	<script>	
+	  $.widget( "custom.catcomplete", $.ui.autocomplete, {	
+	    _create: function() {	
+	      this._super();	
+	      this.widget().menu( "option", "items", "> :not(.ui-autocomplete-category)" );	
+	    },	
+	    _renderMenu: function( ul, items ) {	
+	      var that = this,	
+	        currentCategory = "";	
+	      $.each( items, function( index, item ) {	
+	        var li;	
+	        if ( item.category != currentCategory ) {	
+	          ul.append( "<li class='ui-autocomplete-category'>" + item.category + "</li>" );	
+	          currentCategory = item.category;	
+	        }	
+	        li = that._renderItemData( ul, item );	
+	        if ( item.category ) {	
+	          li.attr( "aria-label", item.category + " : " + item.label );	
+	        }	
+	      });	
+	    }	
+	  });	
+	</script>	
+	  	
+	<script>	
+	  	
+		$(function() {	
+		    $("#s").catcomplete({	
+		        source: function(request, response) {	
+		            $.ajax({	
+		                url: "getdata",	
+		                type: "GET",	
+		                data: { term: request.term },	
+		                dataType: "json",	
+			
+		                success: function(data) {	
+		                    response(data);	
+		                }	
+		           });          	
+		        },	
+		        select: function( event, ui ) { 	
+		            window.location.href = ui.item.url;	
+		        },	
+		        minLength: 3,	
+		        delay: 400	
+		    });	
+		});
+		
+		$(function() {	
+		    $("#s-fighter1").catcomplete({	
+		        source: function(request, response) {	
+		            $.ajax({	
+		                url: "getfighterdata",	
+		                type: "GET",	
+		                data: { term: request.term },	
+		                dataType: "json",	
+			
+		                success: function(data) {	
+		                    response(data);	
+		                }	
+		           });          	
+		        },
+		        select: function( event, ui ) { 	
+		        	$("#Fighter1").val(ui.item.ID);
+		        },	
+		        minLength: 3,	
+		        delay: 400	
+		    });	
+		});	
+		
+		$(function() {	
+		    $("#s-fighter2").catcomplete({	
+		        source: function(request, response) {	
+		            $.ajax({	
+		                url: "getfighterdata",	
+		                type: "GET",	
+		                data: { term: request.term },	
+		                dataType: "json",	
+			
+		                success: function(data) {	
+		                    response(data);	
+		                }	
+		           });          	
+		        },
+		        select: function( event, ui ) { 	
+		        	$("#Fighter2").val(ui.item.ID);
+		        },	
+		        minLength: 3,	
+		        delay: 400	
+		    });	
+		});	
+	    	
+	</script>	
+	  	
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">	
+	<script async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>	
+	<script>	
+	  (adsbygoogle = window.adsbygoogle || []).push({	
+	    google_ad_client: "ca-pub-6570223566815186",	
+	    enable_page_level_ads: true	
+	  });	
+	</script>
+	
+	<script>	
+	  (adsbygoogle = window.adsbygoogle || []).push({	
+	    google_ad_client: "ca-pub-6570223566815186",	
+	    enable_page_level_ads: true	
+	  });	
+	</script>
+
+
+	
+	
+		
+	<script async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+	<script>
+	  (adsbygoogle = window.adsbygoogle || []).push({
+	    google_ad_client: "ca-pub-6570223566815186",
+	    enable_page_level_ads: true
+	  });
+	</script>
+	
+	<script src="resources/js/prebid-ads.js"></script>
+		
+  </head>
+
+  <body >
+  
+    
+	<header>
+		<div class="positionwrapper">
+			<p id="bottomalign">
+				<a id="HomeLink" class="logo" href=""><img src="resources/img/mmadlogo.png" alt="MMADecisions.com" border="0" /></a>
+			</p>
+			<div class="click-nav">
+				<ul class="no-js">
+					<li class="clicker" style="width:130px"><a>DECISIONS <span style="font-size: 6pt">&#x25BC;</span></a>
+					    <ul>
+					      <li><a href='decisions-by-event/'><span>by EVENT</span></a></li>
+					      <li><a href='decisions-by-judge/'><span>by JUDGE</span></a></li>
+					      <li><a href='decisions-by-fighter/'><span>by FIGHTER</span></a></li>
+					    </ul>
+					</li>
+					<li class="clicker" style="width:130px"><a>JUDGES <span style="font-size: 6pt">&#x25BC;</span></a>
+					    <ul>
+					      <li><a href='decisions-by-judge/'><span>all JUDGES</span></a></li>
+					      <li><a href='most-decisions-by-judge/'><span>most DECISIONS</span></a></li>
+					      <li><a href='minority-report/'><span>MINORITY report</span></a></li>
+					      <li><a href='ten-ten-report/'><span>10-10 report</span></a></li>
+					    </ul>
+					</li>
+					<li class="nonclicker" style="width:130px"><a href="decisions-by-fighter/">FIGHTERS</a>
+					 <!--
+					    <ul>
+					      <li><a href="decisions-by-fighter/">all FIGHTERS</a></li>
+					      <li><a href="most-decisions-fighters/">most DECISIONS</a></li>
+					    </ul>
+					 -->
+					</li>
+					<li class="nonclicker" style="width:90px"><a href="decisions-by-event/">EVENTS</a></li>
+					<li class="nonclicker" style="width:90px"><a href="blog/">BLOG</a></li>
+					<li class="nonclicker" style="width:90px"><a target="_blank" href="https://www.abcboxing.com/wp-content/uploads/2021/10/Unifed-MMA-Rules-2019-.pdf">CRITERIA</a></li>
+				</ul>
+			</div>
+		</div>
+	</header>
+	
+	<!-- jQuery -->
+	<script>
+	$(function() {
+		// degrade gracefully
+		$('.click-nav > ul').toggleClass('no-js js');
+		// hide dropdown menus
+		$('.click-nav .js ul').hide();
+		// reveal filter dropdown menu on click rather than hover
+		$('.click-nav .js li.clicker').click(function(e) {
+			// slideUp any open dropdown menus
+			if ($('.click-nav .js ul').not($(this).find('ul')).is(':visible')) {
+					$('.click-nav .js ul').not($(this).find('ul')).stop(true, true).slideUp();
+					$('.click-nav .js li.clicker').removeClass('active');
+				};
+				
+				// slide current dropdown menu up or down
+				$(this).find('ul').stop(true, true).slideToggle(200);
+				$(this).toggleClass('active');
+				// instead of return false; or preventDefault(), use stopPropagation which keeps all links clickable in the dropdown menu
+				e.stopPropagation();
+		});
+		
+		// click anywhere on the page to slide up any visible dropdown menus
+		$(document).click(function() {
+			if ($('.click-nav .js ul').is(':visible')) {
+				$('.click-nav .js ul', this).stop(true, true).slideUp();
+				$('.clicker').removeClass('active');
+			}
+		});
+	});
+	</script>
+    	
+   	<div id="container_outer">
+   	
+   		<script type="text/javascript">
+	function validateForm()
+	{
+		  if(document.search.s.value.length < 2)
+		  { 
+		    return false;
+		  }
+		  return true;
+	}
+	</script>
+
+	<table id="main">
+	
+		<tr style="border-bottom: 1px solid #999;">
+		
+			<td width="735px" align="center">
+				
+				<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6570223566815186"
+				     crossorigin="anonymous"></script>
+				<!-- 728x90, created 8/3/10 -->
+				<ins class="adsbygoogle"
+				     style="display:inline-block;width:728px;height:90px"
+				     data-ad-client="ca-pub-6570223566815186"
+				     data-ad-slot="1718129579"></ins>
+				<script>
+				     (adsbygoogle = window.adsbygoogle || []).push({});
+				</script>
+			
+			</td>
+				
+			<td width="230px" align="right" valign="bottom">
+
+				<span style="font-size:2.4em;font-family:'Open Sans', sans-serif;color: #2f4e7a;">f o l l o w</span>&nbsp;&nbsp;&nbsp;
+				<a href="http://twitter.com/MMADecisions/"><img src="resources/img/twit.png" border="0" height="25px"></a>&nbsp;&nbsp;&nbsp;
+				<a href="http://facebook.com/MMADecisions/"><img src="resources/img/fb.png" border="0" height="25px"></a>&nbsp;&nbsp;&nbsp;
+				<br><hr>
+				
+				<div class=frame>
+					<form name="search" id="search" method="get" action="search" onsubmit="return validateForm();">
+				    	<input type="search" id="s" name="s" size="26" placeholder="search fighters, judges, events" style="background-color: #ffcf43;color: #003366;font-size: 11px;vertical-align: middle;"/><button type="submit" style="border: 0; padding: 0; background: transparent; vertical-align: middle;"><img src="resources/img/search.jpg"></img></button>
+				    	<br>
+				    </form>
+			    </div>
+			    
+			</td>
+		
+		</tr>
+		
+	</table>
+   	
+	<table border="0" width="965px" cellspacing="0" cellpadding="2" align="center">
+		<tr>
+  			
+    
+		<td width="320px" valign="top">
+		
+			<table border="0" width="100%" align="center">
+				<tr>
+					<td class="judge2">EVENTS</td>
+				</tr>
+				
+				<tr>
+					<td>
+						<table width="100%"><tr><td class="list2" align="center"><a href="decisions-by-event/2026/">2026</td><td class="list2" align="center"><a href="decisions-by-event/2025/">2025</td><td class="selected2"><b>2024</b></td><td class="list2" align="center"><a href="decisions-by-event/2023/">2023</td><td class="list2" align="center"><a href="decisions-by-event/2022/">2022</td><td class="list2" align="center"><a href="decisions-by-event/2021/">2021</td><td class="list2" align="center"><a href="decisions-by-event/2020/">2020</td><td class="list2" align="center"><a href="decisions-by-event/2019/">2019</td><td class="list2" align="center"><a href="decisions-by-event/2018/">2018</td><td class="list2" align="center"><a href="decisions-by-event/2017/">2017</td><td class="list2" align="center"><a href="decisions-by-event/2016/">2016</td><td class="list2" align="center"><a href="decisions-by-event/2015/">2015</td><td class="list2" align="center"><a href="decisions-by-event/2014/">2014</td><td class="list2" align="center"><a href="decisions-by-event/2013/">2013</td><td class="list2" align="center"><a href="decisions-by-event/2012/">2012</td><td class="list2" align="center"><a href="decisions-by-event/2011/">2011</td></tr><tr><td class="list2" align="center"><a href="decisions-by-event/2010/">2010</td><td class="list2" align="center"><a href="decisions-by-event/2009/">2009</td><td class="list2" align="center"><a href="decisions-by-event/2008/">2008</td><td class="list2" align="center"><a href="decisions-by-event/2007/">2007</td><td class="list2" align="center"><a href="decisions-by-event/2006/">2006</td><td class="list2" align="center"><a href="decisions-by-event/2005/">2005</td><td class="list2" align="center"><a href="decisions-by-event/2004/">2004</td><td class="list2" align="center"><a href="decisions-by-event/2003/">2003</td><td class="list2" align="center"><a href="decisions-by-event/2002/">2002</td><td class="list2" align="center"><a href="decisions-by-event/2001/">2001</td><td class="list2" align="center"><a href="decisions-by-event/2000/">2000</td><td class="list2" align="center"><a href="decisions-by-event/1999/">1999</td><td class="list2" align="center"><a href="decisions-by-event/1998/">1998</td><td class="list2" align="center"><a href="decisions-by-event/1997/">1997</td><td class="list2" align="center"><a href="decisions-by-event/1996/">1996</td><td class="list2" align="center"><a href="decisions-by-event/1995/">1995</td></tr></table>
+					</td>
+				</tr>
+			</table>
+
+			<table border="0" width="100%" align="center">
+			
+				<tr class="top-row">
+					<td class="top-cell"><b>Date</b></td>
+					<td class="top-cell"><b>Event</b></td>
+					<td class="top-cell"><b>#</b></td>
+				</tr>
+				
+				
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Dec 21, 2024&nbsp;</td>
+					<td class="list"><a href="event/1518/Boxing-Usyk-vs-Fury-2">Boxing: Usyk vs. Fury 2</a></td>
+					<td class="list-center" align="center">1</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Dec 14, 2024&nbsp;</td>
+					<td class="list"><a href="event/1517/UFC-on-ESPN-65-Covington-vs-Buckley">UFC on ESPN 65: Covington vs. Buckley</a></td>
+					<td class="list-center" align="center">6</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Dec 07, 2024&nbsp;</td>
+					<td class="list"><a href="event/1516/UFC-310-Pantoja-vs-Asakura">UFC 310: Pantoja vs. Asakura</a></td>
+					<td class="list-center" align="center">5</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Nov 29, 2024&nbsp;</td>
+					<td class="list"><a href="event/1515/PFL-10-2024-Season">PFL 10: 2024 Season</a></td>
+					<td class="list-center" align="center">4</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Nov 23, 2024&nbsp;</td>
+					<td class="list"><a href="event/1514/CW-181-Cage-Warriors-181">CW 181: Cage Warriors 181</a></td>
+					<td class="list-center" align="center">2</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Nov 23, 2024&nbsp;</td>
+					<td class="list"><a href="event/1513/UFC-on-ESPN+-106-Yan-vs-Figueiredo">UFC on ESPN+ 106: Yan vs. Figueiredo</a></td>
+					<td class="list-center" align="center">7</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Nov 16, 2024&nbsp;</td>
+					<td class="list"><a href="event/1512/UFC-309-Jones-vs-Miocic">UFC 309: Jones vs. Miocic</a></td>
+					<td class="list-center" align="center">7</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Nov 16, 2024&nbsp;</td>
+					<td class="list"><a href="event/1511/KSW-100-Khalidov-vs-Bartosinski">KSW 100: Khalidov vs. Bartosinski</a></td>
+					<td class="list-center" align="center">2</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Nov 16, 2024&nbsp;</td>
+					<td class="list"><a href="event/1510/Boxing-Tyson-vs-Paul">Boxing: Tyson vs. Paul</a></td>
+					<td class="list-center" align="center">2</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Nov 15, 2024&nbsp;</td>
+					<td class="list"><a href="event/1509/CW-180-Cage-Warriors-180">CW 180: Cage Warriors 180</a></td>
+					<td class="list-center" align="center">3</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Nov 09, 2024&nbsp;</td>
+					<td class="list"><a href="event/1508/UFC-on-ESPN+-105-Magny-vs-Prates">UFC on ESPN+ 105: Magny vs. Prates</a></td>
+					<td class="list-center" align="center">3</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Nov 02, 2024&nbsp;</td>
+					<td class="list"><a href="event/1506/CW-179-Cage-Warriors-179">CW 179: Cage Warriors 179</a></td>
+					<td class="list-center" align="center">6</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Nov 02, 2024&nbsp;</td>
+					<td class="list"><a href="event/1507/UFC-on-ESPN+-104-Moreno-vs-Albazi">UFC on ESPN+ 104: Moreno vs. Albazi</a></td>
+					<td class="list-center" align="center">9</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Oct 26, 2024&nbsp;</td>
+					<td class="list"><a href="event/1505/UFC-308-Topuria-vs-Holloway">UFC 308: Topuria vs. Holloway</a></td>
+					<td class="list-center" align="center">6</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Oct 19, 2024&nbsp;</td>
+					<td class="list"><a href="event/1503/PFL-Super-Fights-Battle-of-the-Giants">PFL Super Fights: Battle of the Giants</a></td>
+					<td class="list-center" align="center">6</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Oct 19, 2024&nbsp;</td>
+					<td class="list"><a href="event/1504/UFC-on-ESPN+-103-Hernandez-vs-Pereira">UFC on ESPN+ 103: Hernandez vs. Pereira</a></td>
+					<td class="list-center" align="center">9</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Oct 19, 2024&nbsp;</td>
+					<td class="list"><a href="event/1502/KSW-99-Vojcak-vs-Martinek">KSW 99: Vojcak vs. Martinek</a></td>
+					<td class="list-center" align="center">5</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Oct 12, 2024&nbsp;</td>
+					<td class="list"><a href="event/1501/UFC-on-ESPN+-102-Royval-vs-Taira">UFC on ESPN+ 102: Royval vs. Taira</a></td>
+					<td class="list-center" align="center">7</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Oct 05, 2024&nbsp;</td>
+					<td class="list"><a href="event/1500/UFC-307-Pereira-vs-Rountree-Jr">UFC 307: Pereira vs. Rountree Jr.</a></td>
+					<td class="list-center" align="center">7</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Sep 28, 2024&nbsp;</td>
+					<td class="list"><a href="event/1499/UFC-on-ESPN+-101-Moicano-vs-Saint-Denis">UFC on ESPN+ 101: Moicano vs. Saint Denis</a></td>
+					<td class="list-center" align="center">8</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Sep 21, 2024&nbsp;</td>
+					<td class="list"><a href="event/1498/CW-178-Manchester">CW 178: Manchester</a></td>
+					<td class="list-center" align="center">3</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Sep 20, 2024&nbsp;</td>
+					<td class="list"><a href="event/1497/CW-177-Unplugged">CW 177: Unplugged</a></td>
+					<td class="list-center" align="center">1</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Sep 14, 2024&nbsp;</td>
+					<td class="list"><a href="event/1496/Bellator-Champions-Series-5-McCourt-vs-Collins">Bellator Champions Series 5: McCourt vs. Collins</a></td>
+					<td class="list-center" align="center">5</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Sep 14, 2024&nbsp;</td>
+					<td class="list"><a href="event/1495/UFC-306-O-Malley-vs-Dvalishvili">UFC 306: O&#039;Malley vs. Dvalishvili</a></td>
+					<td class="list-center" align="center">8</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Sep 07, 2024&nbsp;</td>
+					<td class="list"><a href="event/1493/UFC-on-ESPN+-100-Burns-vs-Brady">UFC on ESPN+ 100: Burns vs. Brady</a></td>
+					<td class="list-center" align="center">6</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Sep 07, 2024&nbsp;</td>
+					<td class="list"><a href="event/1492/CW-176-Glasgow">CW 176: Glasgow</a></td>
+					<td class="list-center" align="center">9</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Sep 07, 2024&nbsp;</td>
+					<td class="list"><a href="event/1494/Bellator-Champions-Series-4-Nurmagomedov-vs-Shabliy">Bellator Champions Series 4: Nurmagomedov vs. Shabliy</a></td>
+					<td class="list-center" align="center">4</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Aug 24, 2024&nbsp;</td>
+					<td class="list"><a href="event/1491/UFC-on-ESPN-62-Cannonier-vs-Borralho">UFC on ESPN 62: Cannonier vs. Borralho</a></td>
+					<td class="list-center" align="center">6</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Aug 23, 2024&nbsp;</td>
+					<td class="list"><a href="event/1490/PFL-9-2024-Season">PFL 9: 2024 Season</a></td>
+					<td class="list-center" align="center">7</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Aug 17, 2024&nbsp;</td>
+					<td class="list"><a href="event/1489/UFC-305-du-Plessis-vs-Adesanya">UFC 305: du Plessis vs. Adesanya</a></td>
+					<td class="list-center" align="center">6</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Aug 16, 2024&nbsp;</td>
+					<td class="list"><a href="event/1488/PFL-8-2024-Season">PFL 8: 2024 Season</a></td>
+					<td class="list-center" align="center">7</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Aug 10, 2024&nbsp;</td>
+					<td class="list"><a href="event/1487/UFC-on-ESPN-61-Tybura-vs-Spivac-2">UFC on ESPN 61: Tybura vs. Spivac 2</a></td>
+					<td class="list-center" align="center">7</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Aug 03, 2024&nbsp;</td>
+					<td class="list"><a href="event/1485/UFC-on-ABC-7-Sandhagen-vs-Nurmagomedov">UFC on ABC 7: Sandhagen vs. Nurmagomedov</a></td>
+					<td class="list-center" align="center">9</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Aug 02, 2024&nbsp;</td>
+					<td class="list"><a href="event/1486/PFL-7-2024-Season">PFL 7: 2024 Season</a></td>
+					<td class="list-center" align="center">4</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Jul 27, 2024&nbsp;</td>
+					<td class="list"><a href="event/1484/UFC-304-Edwards-vs-Muhammad-2">UFC 304: Edwards vs. Muhammad 2</a></td>
+					<td class="list-center" align="center">9</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Jul 25, 2024&nbsp;</td>
+					<td class="list"><a href="event/1483/CW-175-Manchester">CW 175: Manchester</a></td>
+					<td class="list-center" align="center">5</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Jul 20, 2024&nbsp;</td>
+					<td class="list"><a href="event/1480/UFC-on-ESPN-60-Lemos-vs-Jandiroba">UFC on ESPN 60: Lemos vs. Jandiroba</a></td>
+					<td class="list-center" align="center">5</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Jul 20, 2024&nbsp;</td>
+					<td class="list"><a href="event/1482/CW-174-PrizeFighter">CW 174: PrizeFighter</a></td>
+					<td class="list-center" align="center">7</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Jul 13, 2024&nbsp;</td>
+					<td class="list"><a href="event/1479/UFC-on-ESPN-59-Namajunas-vs-Cortez">UFC on ESPN 59: Namajunas vs. Cortez</a></td>
+					<td class="list-center" align="center">5</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Jun 29, 2024&nbsp;</td>
+					<td class="list"><a href="event/1478/UFC-303-Pereira-vs-Prochazka-2">UFC 303: Pereira vs. Prochazka 2</a></td>
+					<td class="list-center" align="center">8</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Jun 28, 2024&nbsp;</td>
+					<td class="list"><a href="event/1477/PFL-6-2024-Season">PFL 6: 2024 Season</a></td>
+					<td class="list-center" align="center">6</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Jun 22, 2024&nbsp;</td>
+					<td class="list"><a href="event/1476/Bellator-Champions-Series-3-Jackson-vs-Kuramagomedov">Bellator Champions Series 3: Jackson vs. Kuramagomedov</a></td>
+					<td class="list-center" align="center">5</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Jun 22, 2024&nbsp;</td>
+					<td class="list"><a href="event/1475/UFC-on-ABC-6-Whittaker-vs-Aliskerov">UFC on ABC 6: Whittaker vs. Aliskerov</a></td>
+					<td class="list-center" align="center">7</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Jun 21, 2024&nbsp;</td>
+					<td class="list"><a href="event/1474/PFL-5-2024-Season">PFL 5: 2024 Season</a></td>
+					<td class="list-center" align="center">8</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Jun 15, 2024&nbsp;</td>
+					<td class="list"><a href="event/1472/UFC-on-ESPN-58-Perez-vs-Taira">UFC on ESPN 58: Perez vs. Taira</a></td>
+					<td class="list-center" align="center">7</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Jun 13, 2024&nbsp;</td>
+					<td class="list"><a href="event/1473/PFL-4-2024-Season">PFL 4: 2024 Season</a></td>
+					<td class="list-center" align="center">6</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Jun 08, 2024&nbsp;</td>
+					<td class="list"><a href="event/1471/UFC-on-ESPN-57-Cannonier-vs-Imavov">UFC on ESPN 57: Cannonier vs. Imavov</a></td>
+					<td class="list-center" align="center">8</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Jun 07, 2024&nbsp;</td>
+					<td class="list"><a href="event/1598/CW-173-Cage-Warriors-173">CW 173: Cage Warriors 173</a></td>
+					<td class="list-center" align="center">4</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Jun 01, 2024&nbsp;</td>
+					<td class="list"><a href="event/1470/UFC-302-Makhachev-vs-Poirier">UFC 302: Makhachev vs. Poirier</a></td>
+					<td class="list-center" align="center">9</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">May 25, 2024&nbsp;</td>
+					<td class="list"><a href="event/1469/CW-172-Newcastle">CW 172: Newcastle</a></td>
+					<td class="list-center" align="center">1</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">May 18, 2024&nbsp;</td>
+					<td class="list"><a href="event/1467/UFC-on-ESPN+-99-Barboza-vs-Murphy">UFC on ESPN+ 99: Barboza vs. Murphy</a></td>
+					<td class="list-center" align="center">5</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">May 18, 2024&nbsp;</td>
+					<td class="list"><a href="event/1468/Boxing-Fury-vs-Usyk">Boxing: Fury vs Usyk</a></td>
+					<td class="list-center" align="center">1</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">May 17, 2024&nbsp;</td>
+					<td class="list"><a href="event/1466/Bellator-Champions-Series-2-Mix-vs-Magomedov-2">Bellator Champions Series 2: Mix vs. Magomedov 2</a></td>
+					<td class="list-center" align="center">5</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">May 11, 2024&nbsp;</td>
+					<td class="list"><a href="event/1465/UFC-on-ESPN-56-Lewis-vs-Nascimento">UFC on ESPN 56: Lewis vs. Nascimento</a></td>
+					<td class="list-center" align="center">7</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">May 04, 2024&nbsp;</td>
+					<td class="list"><a href="event/1464/UFC-301-Pantoja-vs-Erceg">UFC 301: Pantoja vs. Erceg</a></td>
+					<td class="list-center" align="center">7</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Apr 27, 2024&nbsp;</td>
+					<td class="list"><a href="event/1463/UFC-Vegas-91-Nicolau-vs-Perez">UFC Vegas 91: Nicolau vs. Perez</a></td>
+					<td class="list-center" align="center">6</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Apr 20, 2024&nbsp;</td>
+					<td class="list"><a href="event/1462/CW-171-Glasgow">CW 171: Glasgow</a></td>
+					<td class="list-center" align="center">9</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Apr 19, 2024&nbsp;</td>
+					<td class="list"><a href="event/1461/PFL-3-2024-Season">PFL 3: 2024 Season</a></td>
+					<td class="list-center" align="center">6</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Apr 13, 2024&nbsp;</td>
+					<td class="list"><a href="event/1460/UFC-300-Pereira-vs-Hill">UFC 300: Pereira vs. Hill</a></td>
+					<td class="list-center" align="center">5</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Apr 12, 2024&nbsp;</td>
+					<td class="list"><a href="event/1459/PFL-2-2024-Season">PFL 2: 2024 Season</a></td>
+					<td class="list-center" align="center">1</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Apr 06, 2024&nbsp;</td>
+					<td class="list"><a href="event/1457/UFC-on-ESPN+-98-Allen-vs-Curtis-2">UFC on ESPN+ 98: Allen vs. Curtis 2</a></td>
+					<td class="list-center" align="center">8</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Apr 06, 2024&nbsp;</td>
+					<td class="list"><a href="event/1456/CW-170-Dublin">CW 170: Dublin</a></td>
+					<td class="list-center" align="center">3</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Apr 06, 2024&nbsp;</td>
+					<td class="list"><a href="event/1458/KSW-93-Paris">KSW 93: Paris</a></td>
+					<td class="list-center" align="center">4</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Apr 04, 2024&nbsp;</td>
+					<td class="list"><a href="event/1455/PFL-1-2024-Season">PFL 1: 2024 Season</a></td>
+					<td class="list-center" align="center">5</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Mar 30, 2024&nbsp;</td>
+					<td class="list"><a href="event/1454/UFC-on-ESPN-54-Blanchfield-vs-Fiorot">UFC on ESPN 54: Blanchfield vs. Fiorot</a></td>
+					<td class="list-center" align="center">5</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Mar 30, 2024&nbsp;</td>
+					<td class="list"><a href="event/1453/CW-169-Cage-Warriors-169">CW 169: Cage Warriors 169</a></td>
+					<td class="list-center" align="center">5</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Mar 23, 2024&nbsp;</td>
+					<td class="list"><a href="event/1452/UFC-on-ESPN-53-Ribas-vs-Namajunas">UFC on ESPN 53: Ribas vs. Namajunas</a></td>
+					<td class="list-center" align="center">7</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Mar 22, 2024&nbsp;</td>
+					<td class="list"><a href="event/1451/Bellator-302-Anderson-vs-Moore">Bellator 302: Anderson vs. Moore</a></td>
+					<td class="list-center" align="center">6</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Mar 16, 2024&nbsp;</td>
+					<td class="list"><a href="event/1448/CW-168-Manchester">CW 168: Manchester</a></td>
+					<td class="list-center" align="center">6</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Mar 16, 2024&nbsp;</td>
+					<td class="list"><a href="event/1450/UFC-on-ESPN+-97-Tuivasa-vs-Tybura">UFC on ESPN+ 97: Tuivasa vs. Tybura</a></td>
+					<td class="list-center" align="center">5</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Mar 16, 2024&nbsp;</td>
+					<td class="list"><a href="event/1449/KSW-92-Wiklacz-vs-Jojua">KSW 92: Wiklacz vs. Jojua</a></td>
+					<td class="list-center" align="center">4</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Mar 15, 2024&nbsp;</td>
+					<td class="list"><a href="event/1447/CW-167-Unplugged">CW 167: Unplugged</a></td>
+					<td class="list-center" align="center">4</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Mar 09, 2024&nbsp;</td>
+					<td class="list"><a href="event/1446/UFC-299-O-Malley-vs-Vera-2">UFC 299: O&#039;Malley vs. Vera 2</a></td>
+					<td class="list-center" align="center">9</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Mar 02, 2024&nbsp;</td>
+					<td class="list"><a href="event/1444/UFC-on-ESPN+-96-Rozenstruik-vs-Gaziev">UFC on ESPN+ 96: Rozenstruik vs. Gaziev</a></td>
+					<td class="list-center" align="center">5</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Feb 24, 2024&nbsp;</td>
+					<td class="list"><a href="event/1442/PFL-vs--Bellator-Champs">PFL vs. Bellator: Champs</a></td>
+					<td class="list-center" align="center">4</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Feb 24, 2024&nbsp;</td>
+					<td class="list"><a href="event/1443/UFC-on-ESPN+-95-Moreno-vs-Royval-2">UFC on ESPN+ 95: Moreno vs. Royval 2</a></td>
+					<td class="list-center" align="center">6</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Feb 23, 2024&nbsp;</td>
+					<td class="list"><a href="event/1445/CW-166-Cage-Warriors-166">CW 166: Cage Warriors 166</a></td>
+					<td class="list-center" align="center">5</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Feb 17, 2024&nbsp;</td>
+					<td class="list"><a href="event/1441/KSW-91-Mircea-vs-Brichta">KSW 91: Mircea vs. Brichta</a></td>
+					<td class="list-center" align="center">3</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Feb 17, 2024&nbsp;</td>
+					<td class="list"><a href="event/1440/UFC-298-Volkanovski-vs-Topuria">UFC 298: Volkanovski vs. Topuria</a></td>
+					<td class="list-center" align="center">7</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Feb 10, 2024&nbsp;</td>
+					<td class="list"><a href="event/1439/UFC-on-ESPN+-94-Hermansson-vs-Pyfer">UFC on ESPN+ 94: Hermansson vs. Pyfer</a></td>
+					<td class="list-center" align="center">7</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Feb 03, 2024&nbsp;</td>
+					<td class="list"><a href="event/1438/UFC-on-ESPN+-93-Dolidze-vs-Imavov">UFC on ESPN+ 93: Dolidze vs. Imavov</a></td>
+					<td class="list-center" align="center">7</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Jan 20, 2024&nbsp;</td>
+					<td class="list"><a href="event/1481/CW-174-CW-174-X-PrizeFighter">CW 174: CW 174 X PrizeFighter</a></td>
+					<td class="list-center" align="center">1</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Jan 20, 2024&nbsp;</td>
+					<td class="list"><a href="event/1436/UFC-297-Strickland-vs-du-Plessis">UFC 297: Strickland vs. du Plessis</a></td>
+					<td class="list-center" align="center">7</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Jan 20, 2024&nbsp;</td>
+					<td class="list"><a href="event/1437/KSW-90-Wrzosek-vs-Vitasovic">KSW 90: Wrzosek-vs-Vitasovic</a></td>
+					<td class="list-center" align="center">2</td>
+				</tr>
+		
+	      		
+				
+				
+				
+				
+				
+				
+				
+	
+				<tr class="decision">
+					
+					<td class="list-center" align="center">Jan 13, 2024&nbsp;</td>
+					<td class="list"><a href="event/1435/UFC-on-ESPN+-92-Ankalaev-vs-Walker-2">UFC on ESPN+ 92: Ankalaev vs. Walker 2</a></td>
+					<td class="list-center" align="center">4</td>
+				</tr>
+		
+	      		
+	      		
+	      	</table>
+     
+		</td>
+		
+		<td width="280px" valign="top" align="center">
+
+			<script async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+			<!-- Large Skyscraper -->
+			<ins class="adsbygoogle"
+			     style="display:inline-block;width:300px;height:600px"
+			     data-ad-client="ca-pub-6570223566815186"
+			     data-ad-slot="1797861218"></ins>
+			<script>
+			(adsbygoogle = window.adsbygoogle || []).push({});
+			</script>
+			
+		</td>
+	
+		<!-- 
+		<td width="245px" valign="top" align="center">
+			
+			<a class="twitter-timeline" href="https://twitter.com/MMADecisions" data-widget-id="344967035924647936" height="615">Tweets by @MMADecisions</a>
+			<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+"://platform.twitter.com/widgets.js";fjs.parentNode.insertBefore(js,fjs);}}(document,"script","twitter-wjs");</script>
+
+		</td>	
+		 -->
+
+		
+				
+		</tr>
+	</table>
+	
+	</div>
+	
+	<br>
+	
+		<div class="footer">
+	    	<a href="">Home</a> |
+	    	<a href="definitions/">Definitions</a> |
+	    	<a href="blog/">Blog</a> |
+	    	<a href="http://twitter.com/MMADecisions/" target="_blank">Twitter</a> |
+	    	<a href="http://feeds.feedburner.com/MMADecisions/Events">RSS</a> 
+	    	<!-- 
+	    	|
+	    	<a href="contact/"> Contact Us</a>
+	    	-->
+	    	<br><br>
+	</div>
+	<span style="color: white">&copy; 2020 MMADecisions.com</span>
+
+<!-- 
+	<script src="resources/js/sailthru.js" type="text/javascript"></script>
+	
+	<script src="/sailthru.js" type="text/javascript"></script>
+
+	<script type="text/javascript">
+		if (document.getElementById('QTXoNxcEbPCU')) {
+			QTXoNxcEbPCU = 'No';
+		} else {
+			QTXoNxcEbPCU = 'Yes';
+		}
+
+		if (typeof ga !== 'undefined') {
+			ga('send', 'event', 'Blocking Ads', QTXoNxcEbPCU, {
+				'nonInteraction' : 1
+			});
+		} else if (typeof _gaq !== 'undefined') {
+			_gaq.push([ '_trackEvent', 'Blocking Ads', QTXoNxcEbPCU, undefined,
+					undefined, true ]);
+		}
+	</script>
+-->
+
+</body>
+  
+
+</html>

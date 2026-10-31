@@ -27,7 +27,7 @@ PROMOTIONS = Path(__file__).resolve().parent / "promotions.csv"
 
 TABLES = ("promotions", "promotion_aliases", "fighters", "fighter_aliases", "merged_ids", "events",
           "event_aliases", "event_cards", "event_pages", "non_pro_bouts", "fights", "fight_aliases", "fight_participants",
-          "round_stats", "smartcage_round_stats", "sofascore_round_stats", "judge_scores", "odds")
+          "round_stats", "smartcage_round_stats", "sofascore_round_stats", "judge_scores", "media_scores", "odds")
 
 
 def digest(conn: sqlite3.Connection) -> str:
@@ -72,7 +72,8 @@ def sync_promotions(conn: sqlite3.Connection) -> None:
 
 
 DROP_SHARE, DROP_ROWS = 0.02, 100  # a fall bigger than both stops a publish (see drops())
-BY_SOURCE = ("fighter_aliases", "event_aliases", "fight_aliases", "round_stats", "odds")
+BY_SOURCE = ("fighter_aliases", "event_aliases", "fight_aliases", "round_stats", "judge_scores", "media_scores",
+             "odds")
 
 
 def counts(conn: sqlite3.Connection) -> dict[str, int]:

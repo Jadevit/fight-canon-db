@@ -24,7 +24,7 @@ KINDS = {"fighter": ("fighters", "fighter_id", "fighter_aliases"),
 FULL_STATS = ("ufcstats", "pfl")  # official counts with every column; a fight with one has no other
 STATS_RANK = (*FULL_STATS, "sofascore", "oktagon")
 STATS_TABLES = ("round_stats", "smartcage_round_stats", "sofascore_round_stats")
-FIGHT_ROWS = ("round_stats", "smartcage_round_stats", "sofascore_round_stats", "judge_scores", "odds")
+FIGHT_ROWS = ("round_stats", "smartcage_round_stats", "sofascore_round_stats", "judge_scores", "media_scores", "odds")
 FIGHTER_ROWS = ("fight_participants", *FIGHT_ROWS)
 
 

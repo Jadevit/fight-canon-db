@@ -249,8 +249,10 @@ CREATE TABLE sofascore_round_stats (
     PRIMARY KEY (fight_id, fighter_id, round)
 );
 
--- Per-judge, per-round scores from official UFC scorecards (2020-08 to 2024-11 so far).
--- Rounds after a finish aren't scored, so a finish has rows only for completed rounds.
+-- Per-judge, per-round scores. `source` is 'ufc.com' (official UFC scorecards, 2020-08 to
+-- 2024-11) or 'mmadecisions' (MMA Decisions' copies of the official cards, decisions only,
+-- many promotions); a fight's rows come from one source, ufc.com's first. Rounds after a
+-- finish aren't scored, so a finish has rows only for completed rounds.
 CREATE TABLE judge_scores (
     fight_id     INTEGER NOT NULL REFERENCES fights(fight_id),
     fighter_id   INTEGER NOT NULL REFERENCES fighters(fighter_id),
@@ -260,6 +262,20 @@ CREATE TABLE judge_scores (
     deduction    INTEGER NOT NULL DEFAULT 0,  -- points taken off this fighter that round
     source       TEXT NOT NULL,
     PRIMARY KEY (fight_id, fighter_id, round, judge)
+);
+
+-- Journalists' scores of decisions (MMA Decisions' media scores): one row per writer per
+-- fighter, with the writer's total for that fighter (rounds aren't given). Opinions, not
+-- results: they show how a decision was seen. The writer's pick is the higher score.
+CREATE TABLE media_scores (
+    fight_id     INTEGER NOT NULL REFERENCES fights(fight_id),
+    fighter_id   INTEGER NOT NULL REFERENCES fighters(fighter_id),
+    writer       TEXT NOT NULL,
+    outlet       TEXT,                      -- where the writer published it
+    score        INTEGER NOT NULL,          -- the writer's total for this fighter
+    url          TEXT,                      -- the published score, when given
+    source       TEXT NOT NULL,
+    PRIMARY KEY (fight_id, fighter_id, writer)
 );
 
 -- Betting lines, American odds. One row per fighter per fight per source per book.
