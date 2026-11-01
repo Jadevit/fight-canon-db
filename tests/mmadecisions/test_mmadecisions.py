@@ -84,14 +84,13 @@ def test_load(tmp_path):
     assert conn.execute("SELECT COUNT(*) FROM judge_scores").fetchone() == (18,)
 
 
-def test_official_cards_and_disagreeing_results(tmp_path):
+def test_replaces_other_cards_and_disagreeing_results(tmp_path):
     conn = _db()
     conn.execute("INSERT INTO judge_scores (fight_id, fighter_id, round, judge, score, source) "
                  "VALUES (1, 1, 1, 'Derek Cleary', 10, 'ufc.com')")
     counts = load(conn, _raw(tmp_path))
-    assert counts["fights with official card images"] == 1
-    assert conn.execute("SELECT DISTINCT source FROM judge_scores").fetchall() == [("ufc.com",)]
-    assert conn.execute("SELECT COUNT(*) FROM media_scores").fetchone() == (24,)  # media scores still come
+    assert counts["fights whose other cards were replaced"] == 1  # one source per fight: ours
+    assert conn.execute("SELECT source, COUNT(*) FROM judge_scores GROUP BY 1").fetchall() == [("mmadecisions", 18)]
 
     conn = _db(results=("L", "W"))  # our winner is the page's loser: not the same fight
     assert load(conn, tmp_path)["decisions whose result disagrees"] == 1

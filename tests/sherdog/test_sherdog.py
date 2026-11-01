@@ -25,8 +25,7 @@ def test_parse_event():
 
 def test_labels():
     conn = _db()
-    labels = Labels(conn, hints={"1": "PRIDE"})
-    assert labels.label("1", "Pride Fighting Championships") == "PRIDE"  # shares our events
+    labels = Labels(conn)
     assert labels.label("2", "Absolute Fighting Championship") == "Absolute Fighting Championship"
     assert labels.label("3", "Absolute Fighting Championship") == "Absolute Fighting Championship (3)"
     assert labels.label("2", "Absolute Fighting Championship") == "Absolute Fighting Championship"

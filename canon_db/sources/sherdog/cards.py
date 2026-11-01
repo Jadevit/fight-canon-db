@@ -260,10 +260,10 @@ def crawl(conn: sqlite3.Connection, pages: Pages, recent_days: int, workers: int
 
 # --- pro, exhibition or amateur -----------------------------------------------------------
 
-def classify(conn: sqlite3.Connection, pages: Pages, since: str | None, workers: int = 1) -> Counter:
+def classify(conn: sqlite3.Connection, pages: Pages, since: str, workers: int = 1) -> Counter:
     """Event pages don't say whether a bout was pro: read fighter pages to set bout_type on
     card fights that don't have it and no promotion's site has (those stay whatever Sherdog
-    says) (cards read since `since`, or all of them if None), fill
+    says) (cards read since `since`), fill
     those fighters' bios, then delete the amateur and exhibition fights. One fighter's page
     covers both sides of a bout, so fighters with the most such bouts go first and anyone
     whose bouts are all covered is skipped. A page on disk is used if it lists one of the
@@ -275,7 +275,7 @@ def classify(conn: sqlite3.Connection, pages: Pages, since: str | None, workers:
             f"JOIN fight_aliases a ON a.fight_id = f.fight_id AND a.source = ? "
             f"WHERE f.bout_type IS NULL AND k.fetched_at >= ? AND f.fight_id NOT IN (SELECT fight_id "
             f"FROM fight_aliases WHERE source IN ({', '.join('?' * len(ids.OFFICIAL))}))",
-            (NAME, since or "", *sorted(ids.OFFICIAL))):
+            (NAME, since, *sorted(ids.OFFICIAL))):
         for sid in fight.rsplit(":", 1)[1].split("-"):
             todo.setdefault(sid, set()).add(fight)
     owner = dict(conn.execute("SELECT source_id, fighter_id FROM fighter_aliases WHERE source = ?", (NAME,)))

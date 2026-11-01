@@ -3,9 +3,9 @@ database already has.
 
 MMA Decisions copies each decision's official cards (every judge, round by round) and
 collects journalists' scores of the fight. Cards go in judge_scores with `source =
-'mmadecisions'`, unless the fight already has official card images ('ufc.com'): a fight's
-cards come from one source. A card is kept only if every round has both scores and the
-rounds add up to its totals. Judges' names take UFC Stats' spelling where the fight's UFC
+'mmadecisions'`; a fight's cards come from one source, so where any are kept they replace
+another source's ('ufc.com', read from the official card images). A card is kept only if every
+round has both scores and the rounds add up to its totals. Judges' names take UFC Stats' spelling where the fight's UFC
 Stats details name the judge (by surname). Media scores go in media_scores, one row per
 writer per fighter; a score whose higher side isn't the writer's stated pick is left out.
 
@@ -65,7 +65,7 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
         names.setdefault(fid, []).append(name)
     event_of = dict(conn.execute("SELECT fight_id, event_id FROM fights"))
 
-    cards, media, aliases, event_alias, seen = [], [], set(), {}, set()
+    cards, media, aliases, event_alias, seen, replaced = [], [], set(), {}, set(), set()
     for path in sorted((raw / "decisions").glob("*.html"), key=lambda p: int(p.stem)):
         d = decision(path.read_text(encoding="utf-8"))
         if d is None:
@@ -92,20 +92,20 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
                 aliases.add((ids[f["slug"]], NAME, f["slug"], f["name"]))
         event_alias[d["event"]["id"]] = event_of[fight]
 
-        if fight in official:
-            counts["fights with official card images"] += 1
-        else:
-            spelled = ufcstats_judges(details.get(fight))
-            kept = [c for c in d["judges"] if valid(c)]
-            for c in d["judges"]:
-                if c not in kept:  # many pages give only totals
-                    counts["cards without round scores" if any(None in r for r in c["rounds"])
-                           else "cards whose rounds don't add up"] += 1
-            for c in kept:
-                judge = spelled.get((norm(c["name"]).split() or [""])[-1], c["name"])
-                for n, sa, sb in c["rounds"]:
-                    cards += [(fight, a, n, judge, sa, NAME), (fight, b, n, judge, sb, NAME)]
-            counts["fights with cards"] += bool(kept)
+        spelled = ufcstats_judges(details.get(fight))
+        kept = [c for c in d["judges"] if valid(c)]
+        for c in d["judges"]:
+            if c not in kept:  # many pages give only totals
+                counts["cards without round scores" if any(None in r for r in c["rounds"])
+                       else "cards whose rounds don't add up"] += 1
+        for c in kept:
+            judge = spelled.get((norm(c["name"]).split() or [""])[-1], c["name"])
+            for n, sa, sb in c["rounds"]:
+                cards += [(fight, a, n, judge, sa, NAME), (fight, b, n, judge, sb, NAME)]
+        if kept:
+            counts["fights with cards"] += 1
+            if fight in official:
+                replaced.add(fight)
 
         for m in d["media"]:
             high = 0 if m["score"][0] > m["score"][1] else 1 if m["score"][1] > m["score"][0] else None
@@ -124,11 +124,14 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
         for fight in seen:  # each fight read here is replaced by what's on disk; the rest stay
             conn.execute("DELETE FROM judge_scores WHERE fight_id = ? AND source = ?", (fight, NAME))
             conn.execute("DELETE FROM media_scores WHERE fight_id = ? AND source = ?", (fight, NAME))
+        for fight in replaced:  # a fight's cards come from one source: ours replace any other's
+            conn.execute("DELETE FROM judge_scores WHERE fight_id = ? AND source <> ?", (fight, NAME))
         conn.executemany("INSERT OR REPLACE INTO judge_scores (fight_id, fighter_id, round, judge, score, source) "
                          "VALUES (?,?,?,?,?,?)", cards)
         conn.executemany("INSERT OR REPLACE INTO media_scores (fight_id, fighter_id, writer, outlet, score, url, "
                          "source) VALUES (?,?,?,?,?,?,?)", media)
-    counts.update({"judge_scores rows": len(cards), "media_scores rows": len(media)})
+    counts.update({"fights whose other cards were replaced": len(replaced), "judge_scores rows": len(cards),
+                   "media_scores rows": len(media)})
     return counts
 
 

@@ -251,7 +251,8 @@ CREATE TABLE sofascore_round_stats (
 
 -- Per-judge, per-round scores. `source` is 'ufc.com' (official UFC scorecards, 2020-08 to
 -- 2024-11) or 'mmadecisions' (MMA Decisions' copies of the official cards, decisions only,
--- many promotions); a fight's rows come from one source, ufc.com's first. Rounds after a
+-- many promotions); a fight's rows come from one source, MMA Decisions' where it has the
+-- fight's cards. Rounds after a
 -- finish aren't scored, so a finish has rows only for completed rounds.
 CREATE TABLE judge_scores (
     fight_id     INTEGER NOT NULL REFERENCES fights(fight_id),

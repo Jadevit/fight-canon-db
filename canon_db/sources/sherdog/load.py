@@ -26,7 +26,6 @@ Which pages:
               earlier career)
   --all       every such fighter, whenever they fought (~4.5k pages, ~1.5 h)
   --offline   every page already on disk, no network
-  --relabel   no fighter pages: label every Sherdog event from its organization
 """
 
 from __future__ import annotations
@@ -139,8 +138,8 @@ class State:
 # --- reading pages ------------------------------------------------------------------------
 
 class Pages:
-    def __init__(self, raw: Path, fetcher: Fetcher | None, cached: bool = False):
-        self.dir, self.events, self.fetcher, self.cached = raw / "fighters", raw / "events", fetcher, cached
+    def __init__(self, raw: Path, fetcher: Fetcher | None):
+        self.dir, self.events, self.fetcher = raw / "fighters", raw / "events", fetcher
         self.dir.mkdir(parents=True, exist_ok=True)
         self.events.mkdir(parents=True, exist_ok=True)
 
@@ -158,11 +157,10 @@ class Pages:
                 save(path, page)
         return path.read_text(encoding="utf-8") if path.exists() else None
 
-    def get(self, sid: str, cached: bool | None = None) -> dict | None:
-        """A fighter's page, fetched fresh unless `cached` (default: self.cached) and it's on
-        disk already."""
+    def get(self, sid: str, cached: bool = False) -> dict | None:
+        """A fighter's page, fetched fresh unless `cached` and it's on disk already."""
         path = self.dir / f"{sid}.html"
-        if self.fetcher is not None and not ((self.cached if cached is None else cached) and path.exists()):
+        if self.fetcher is not None and not (cached and path.exists()):
             page = self.fetcher.get(f"{BASE}/fighter/{sid}")
             if page is not None:
                 save(path, page)
@@ -215,16 +213,15 @@ def verify_seed(st: State, fid: int, page: dict) -> bool:
                            and norm(page["name"]) in {norm(n) for n in st.names.get(fid, [])})
 
 
-def crawl(st: State, pages: Pages, scope: set[int], limit: int | None = None) -> dict[int, dict]:
+def crawl(st: State, pages: Pages, scope: set[int]) -> dict[int, dict]:
     """Read the pages of every linked fighter in `scope` (and of anyone linked on the way),
-    seeding unlinked ones from the sitemap. Returns {fighter_id: parsed page}. `limit` caps
-    the pages read (for trying it out)."""
+    seeding unlinked ones from the sitemap. Returns {fighter_id: parsed page}."""
     read: dict[int, dict] = {}
     names = None
     tried: set[int] = set()
 
     def walk(queue: list[int]) -> None:
-        while queue and (limit is None or len(read) < limit):
+        while queue:
             fid = queue.pop()
             if fid in read or fid not in st.sd:
                 continue
@@ -239,8 +236,6 @@ def crawl(st: State, pages: Pages, scope: set[int], limit: int | None = None) ->
     walk(sorted(f for f in scope if f in st.sd))
     # Seed the fighters nobody linked yet, most fights first; each seed's walk links many more.
     for fid in sorted(scope, key=lambda f: -len(st.fights.get(f, []))):
-        if limit is not None and len(read) >= limit:
-            break
         if fid in st.sd or fid in tried or not st.fights.get(fid):
             continue
         tried.add(fid)
@@ -265,36 +260,19 @@ class Labels:
     PRIDE), else its Sherdog name ("Absolute Fighting Championship"), with its id added if
     another organization already has that name."""
 
-    def __init__(self, conn: sqlite3.Connection, hints: dict[str, str] | None = None):
+    def __init__(self, conn: sqlite3.Connection):
         self.by_org = dict(conn.execute(
             "SELECT source_id, promotion FROM promotion_aliases WHERE source = ?", (NAME,)))
         self.named = {p: o for o, p in self.by_org.items()}
-        self.hints = hints or {}
         self.new: dict[str, tuple[str, str]] = {}  # org id -> (label, name)
 
     def label(self, org_id: str, org: str) -> str:
         if org_id not in self.by_org:
-            label = self.hints.get(org_id)
-            if label is None:
-                label = org if self.named.get(org, org_id) == org_id else f"{org} ({org_id})"
-                self.named[label] = org_id
+            label = org if self.named.get(org, org_id) == org_id else f"{org} ({org_id})"
+            self.named[label] = org_id
             self.by_org[org_id] = label
             self.new[org_id] = (label, org)
         return self.by_org[org_id]
-
-
-def org_hints(conn: sqlite3.Connection, pages: Pages) -> dict[str, str]:
-    """Sherdog organization -> the label most of its events in the database have, from the
-    events a promotion's own site also has."""
-    votes = defaultdict(lambda: defaultdict(int))
-    for sid, label in conn.execute(
-            f"SELECT a.source_id, e.promotion FROM event_aliases a JOIN events e USING (event_id) "
-            f"WHERE a.source = ? AND a.event_id IN (SELECT event_id FROM event_aliases WHERE source IN "
-            f"({', '.join('?' * len(ids.OFFICIAL))}))", (NAME, *sorted(ids.OFFICIAL))):
-        info = pages.event(sid)
-        if info and info["org_id"]:
-            votes[info["org_id"]][label] += 1
-    return {org: max(v, key=v.get) for org, v in votes.items()}
 
 
 def label_events(pages: Pages, labels: Labels, events: dict[int, str]) -> list[tuple]:
@@ -420,8 +398,7 @@ class Writer:
         return fight
 
 
-def write(conn: sqlite3.Connection, st: State, read: dict[int, dict], pages: Pages | None = None,
-          relabel: bool = False) -> Counter:
+def write(conn: sqlite3.Connection, st: State, read: dict[int, dict], pages: Pages | None = None) -> Counter:
     """Write the fights on these fighters' pages ({fighter: parsed page})."""
     ours = {p.casefold(): p for (p,) in conn.execute("SELECT promotion FROM promotions")}
     found = {}  # fight key -> (the page's fighter, their Sherdog id, the fight, a match in the database)
@@ -454,12 +431,10 @@ def write(conn: sqlite3.Connection, st: State, read: dict[int, dict], pages: Pag
                 if old not in touched:
                     ids.drop_claim(conn, old, NAME)
                     w.counts["fights no longer listed"] += 1
-        # New events (all of them with `relabel`) get their promotion from their page.
+        # New events get their promotion from their page.
         todo = dict(w.new_events)
-        if relabel:
-            todo.update({e: s for s, e in st.events.items() if e not in w.ranked_events})
         if pages is not None and todo:
-            labels = Labels(conn, org_hints(conn, pages) if relabel else None)
+            labels = Labels(conn)
             conn.executemany("UPDATE events SET promotion = ?, location = coalesce(?, location) WHERE event_id = ?",
                              label_events(pages, labels, todo))
             conn.executemany("INSERT OR IGNORE INTO promotions (promotion, coverage) VALUES (?, 'partial')",
@@ -526,26 +501,16 @@ def add_arguments(p: argparse.ArgumentParser) -> None:
     p.add_argument("--offline", action="store_true",
                    help="no network: re-read every page already on disk")
     p.add_argument("--delay", type=float, default=1.0, help="seconds between requests")
-    p.add_argument("--limit", type=int, help="read at most N pages (for trying it out)")
-    p.add_argument("--cached", action="store_true",
-                   help="reuse fighter pages already on disk; fetch only missing ones")
     p.add_argument("--no-cards", action="store_true",
                    help="skip reading whole cards (the events in Sherdog's sitemaps that are due)")
-    p.add_argument("--classify-all", action="store_true",
-                   help="check the bout type of every card fight not checked yet, not just recent cards")
     p.add_argument("--workers", type=int, default=4,
                    help="pages fetched at once for cards and bout types (the delay still holds)")
-    p.add_argument("--relabel", action="store_true",
-                   help="label every Sherdog event from its organization (~25k event pages "
-                        "the first time, ~7 h; read from disk after)")
 
 
 def update(conn: sqlite3.Connection, args: argparse.Namespace, raw: Path) -> None:
     st = State(conn)
-    pages = Pages(raw, None if args.offline else Fetcher(args.delay), args.cached)
-    if args.relabel:  # event pages only
-        read = {}
-    elif args.offline:
+    pages = Pages(raw, None if args.offline else Fetcher(args.delay))
+    if args.offline:
         on_disk = set(pages.on_disk())
         read = {}
         queue = sorted(f for f, s in st.sd.items() if s in on_disk and f in st.official)
@@ -563,14 +528,14 @@ def update(conn: sqlite3.Connection, args: argparse.Namespace, raw: Path) -> Non
             f"fight_aliases WHERE source IN ({', '.join('?' * len(ids.OFFICIAL))}))", (since, *sorted(ids.OFFICIAL)))}
         log.info("Sherdog: %d fighters in scope, %d already linked.",
                  len(scope), len(scope & st.sd.keys()))
-        read = crawl(st, pages, scope, args.limit)
+        read = crawl(st, pages, scope)
     links = len(st.new_links)
-    counts = write(conn, st, read, pages, args.relabel)
-    if not (args.offline or args.relabel or args.no_cards):
+    counts = write(conn, st, read, pages)
+    if not (args.offline or args.no_cards):
         from canon_db.sources.sherdog import cards  # it builds on this module
         c = cards.crawl(conn, pages, args.recent_days, args.workers)
         log.info("Sherdog cards: %s.", ", ".join(f"{k} {v}" for k, v in c.items()))
-        since = None if args.classify_all else (date.today() - timedelta(days=args.recent_days)).isoformat()
+        since = (date.today() - timedelta(days=args.recent_days)).isoformat()
         c = cards.classify(conn, pages, since, args.workers)
         log.info("Sherdog bout types: %s.", ", ".join(f"{k} {v}" for k, v in c.items()))
     (raw / "conflicts.tsv").unlink(missing_ok=True)
