@@ -27,7 +27,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from canon_db.http import Fetcher, save
-from canon_db.ids import alias
+from canon_db.ids import alias, clear
 from canon_db.matching import Matcher, norm
 from canon_db.sources.bestfightodds.pages import parse_fighter_page
 
@@ -128,8 +128,7 @@ def update(conn: sqlite3.Connection, args: argparse.Namespace, raw: Path) -> Non
                 rows.append((fight_id, ids[f["slug"]], NAME, "all", f["open"], None,
                              f["close_low"], f["close_high"]))
     with conn:
-        conn.executemany("DELETE FROM odds WHERE fight_id = ? AND source = ?",
-                         [(fid, NAME) for fid in seen])
+        clear(conn, NAME, seen, ("odds",))
         conn.executemany("INSERT OR REPLACE INTO odds (fight_id, fighter_id, source, book, open, "
                          "close, close_low, close_high) VALUES (?,?,?,?,?,?,?,?)", rows)
         for fid, sid, name in sorted(aliases):

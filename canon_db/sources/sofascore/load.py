@@ -37,7 +37,8 @@ from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
 
-from canon_db.ids import alias
+from canon_db.http import read_json
+from canon_db.ids import alias, clear
 from canon_db.matching import Cards, Matcher, name_ok
 from canon_db.sources.sofascore.pages import EXTRA_COLS, ROUND_COLS, bouts, rounds
 
@@ -60,13 +61,6 @@ BESIDE = "oktagon"  # the one official source whose stats Sofascore's sit beside
 log = logging.getLogger(NAME)
 
 
-def read(path: Path):
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
-
-
 def load(conn: sqlite3.Connection, raw: Path) -> Counter:
     """Load every season on disk."""
     counts = Counter()
@@ -78,7 +72,7 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
     result = {(f, p): r for f, p, r in conn.execute("SELECT fight_id, fighter_id, result FROM fight_participants")}
     aliases, event_alias, copies, touched = set(), {}, {}, set()  # copies: fight -> [(sides, rows)]
     for path in sorted((raw / "events").glob("*.json"), key=lambda p: int(p.stem)):
-        season = read(path)
+        season = read_json(path)
         if not season or season.get("promotion") not in PROMOTIONS:
             continue
         counts["events read"] += 1
@@ -97,7 +91,7 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
                     aliases.add((ids[f["slug"]], f["slug"], f["name"]))
                 else:
                     counts["names not saved as aliases"] += 1
-            stats = read(raw / "stats" / f"{b['id']}.json")
+            stats = read_json(raw / "stats" / f"{b['id']}.json")
             if stats is None:
                 continue
             per_round = rounds(stats)
@@ -140,9 +134,7 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
                                            "JOIN fights f USING (fight_id) WHERE r.source = ?", (NAME,))
                 if e in linked and f not in fights}
         counts["fights whose stats were cleared"] = len(gone - touched)
-        for fid in touched | gone:
-            conn.execute("DELETE FROM round_stats WHERE fight_id = ? AND source = ?", (fid, NAME))
-            conn.execute("DELETE FROM sofascore_round_stats WHERE fight_id = ?", (fid,))
+        clear(conn, NAME, touched | gone, ("round_stats", "sofascore_round_stats"))
         conn.executemany(
             f"INSERT OR REPLACE INTO round_stats (fight_id, fighter_id, round, {', '.join(ROUND_COLS)}, source) "
             f"VALUES ({', '.join('?' * (len(ROUND_COLS) + 4))})", rows)
@@ -199,7 +191,7 @@ def fetch(conn: sqlite3.Connection, args: argparse.Namespace, raw: Path) -> None
         for s in todo:
             fetch_events(site, raw, promotion, s["id"])
         for s in seasons:  # stats of bouts matching our fights: those not on disk yet, and recent ones
-            season = read(raw / "events" / f"{s['id']}.json")
+            season = read_json(raw / "events" / f"{s['id']}.json")
             listed = bouts(season) if season else []
             found = {b["id"]: matcher.match(b)[0] for b in listed}
             if not any(found.values()):

@@ -12,17 +12,12 @@ library.
 
 from __future__ import annotations
 
-import html as _html
 import re
 
-_TAG_RE = re.compile(r"<[^>]+>")
+from canon_db.pages import text
+
 _FIGHTER_LINK_RE = re.compile(r"fighter-details/([0-9a-f]{16})")
 _FIGHT_LINK_RE = re.compile(r"fight-details/([0-9a-f]{16})")
-
-
-def text(fragment: str) -> str:
-    """Visible text of an HTML fragment, whitespace collapsed."""
-    return re.sub(r"\s+", " ", _html.unescape(_TAG_RE.sub(" ", fragment))).strip()
 
 
 def _unique(ids) -> list[str]:

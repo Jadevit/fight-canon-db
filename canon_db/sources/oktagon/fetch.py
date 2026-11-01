@@ -7,11 +7,10 @@ The match logs are kept whole on disk; the database only takes their per-round t
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 
-from canon_db.http import Fetcher
+from canon_db.http import Fetcher, read_json, save_json
 
 STATS = "https://oktagon.sh12w3.esports.cz/api/export"
 API = "https://api.oktagonmma.com/v1"
@@ -24,11 +23,6 @@ def get_json(site: Fetcher, url: str):
         return r.json() if r is not None and r.status_code == 200 else None
     except ValueError:
         return None
-
-
-def save(path: Path, data) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
 
 
 def tournaments(site: Fetcher, years: list[int]) -> list[dict]:
@@ -48,13 +42,13 @@ def fetch_tournament(site: Fetcher, raw: Path, tid: int, fresh: bool) -> None:
         if data is None:
             log.warning("Oktagon: couldn't read tournament %s.", tid)
             return
-        save(path, data)
-    for m in json.loads(path.read_text(encoding="utf-8")).get("matches") or []:
+        save_json(path, data)
+    for m in (read_json(path) or {}).get("matches") or []:
         mpath = raw / "matches" / f"{m['id']}.json"
         if fresh or not mpath.exists():
             data = get_json(site, f"{STATS}/matches/{m['id']}")
             if data is not None:
-                save(mpath, data)
+                save_json(mpath, data)
 
 
 def fetch_cards(site: Fetcher, raw: Path, since: str, today: str, every: bool) -> None:
@@ -71,4 +65,4 @@ def fetch_cards(site: Fetcher, raw: Path, since: str, today: str, every: bool) -
         if day >= since or (every and not path.exists()):
             card = get_json(site, f"{API}/events/{e['slug']}/fightcard")
             if card is not None:
-                save(path, card)
+                save_json(path, card)

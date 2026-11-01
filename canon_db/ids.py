@@ -150,6 +150,12 @@ def delete_fight(conn: sqlite3.Connection, fight: int) -> None:
         conn.execute(f"DELETE FROM {t} WHERE fight_id = ?", (fight,))
 
 
+def clear(conn: sqlite3.Connection, source: str, fights, tables: tuple[str, ...]) -> None:
+    """Delete `source`'s rows in `tables` for these fights, before writing what it read now."""
+    for t in tables:
+        conn.executemany(f"DELETE FROM {t} WHERE fight_id = ? AND source = ?", [(f, source) for f in fights])
+
+
 def drop_claim(conn: sqlite3.Connection, fight: int, source: str) -> bool:
     """A source no longer lists this fight: remove its aliases (and its stats and odds), and
     the fight if no source is left. Returns True if the fight was deleted."""

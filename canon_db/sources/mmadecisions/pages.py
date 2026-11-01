@@ -5,15 +5,11 @@ event and date, each judge's card round by round, and the media scores (writers'
 
 from __future__ import annotations
 
-import html
 import re
 from datetime import datetime
 
 from canon_db.matching import norm
-
-
-def text(fragment: str) -> str:
-    return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", fragment))).strip()
+from canon_db.pages import text
 
 
 def events(page: str) -> list[dict]:

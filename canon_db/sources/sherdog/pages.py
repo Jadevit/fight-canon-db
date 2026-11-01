@@ -5,21 +5,17 @@ Sherdog's IDs are the number at the end of each URL: /fighter/Name-12345, /event
 
 from __future__ import annotations
 
-import html as _html
 import re
 from datetime import datetime
 
-_TAG_RE = re.compile(r"<[^>]+>")
+from canon_db.pages import text
+
 _ROW_RE = re.compile(r"<tr>(.*?)</tr>", re.S)
 _TD_RE = re.compile(r"<td[^>]*>(.*?)</td>", re.S)
 _FIGHTER_RE = re.compile(r'href="/fighter/[^"]*?-(\d+)"[^>]*>(.*?)</a>', re.S)
 _EVENT_RE = re.compile(r'href="/events/[^"]*?-(\d+)"[^>]*>(.*?)</a>', re.S)
 _SUB_RE = re.compile(r'<span class="sub_line">(.*?)</span>', re.S)
 RESULTS = {"win": "W", "loss": "L", "draw": "D", "nc": "NC"}
-
-
-def text(fragment: str) -> str:
-    return re.sub(r"\s+", " ", _html.unescape(_TAG_RE.sub(" ", fragment))).strip()
 
 
 def parse_date(s: str) -> str | None:

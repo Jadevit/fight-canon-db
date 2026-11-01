@@ -28,7 +28,7 @@ import sqlite3
 from collections import Counter
 from pathlib import Path
 
-from canon_db.ids import alias
+from canon_db.ids import alias, clear
 from canon_db.matching import Matcher, fighter_names, name_ok, norm
 from canon_db.sources.mmadecisions.pages import decision
 
@@ -119,9 +119,7 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
             alias(conn, "fighter", fid, NAME, sid, name)
         for sid, eid in event_alias.items():
             alias(conn, "event", eid, NAME, sid)
-        for fight in seen:  # each fight read here is replaced by what's on disk; the rest stay
-            conn.execute("DELETE FROM judge_scores WHERE fight_id = ? AND source = ?", (fight, NAME))
-            conn.execute("DELETE FROM media_scores WHERE fight_id = ? AND source = ?", (fight, NAME))
+        clear(conn, NAME, seen, ("judge_scores", "media_scores"))  # each fight read is replaced; the rest stay
         for fight in replaced:  # a fight's cards come from one source: ours replace any other's
             conn.execute("DELETE FROM judge_scores WHERE fight_id = ? AND source <> ?", (fight, NAME))
         conn.executemany("INSERT OR REPLACE INTO judge_scores (fight_id, fighter_id, round, judge, score, source) "

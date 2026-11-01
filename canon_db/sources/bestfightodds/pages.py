@@ -7,17 +7,13 @@ line and the closing range (lowest ... highest close across sportsbooks).
 
 from __future__ import annotations
 
-import html as _html
 import re
 from datetime import datetime
 
-_TAG = re.compile(r"<[^>]+>")
+from canon_db.pages import text
+
 _FIGHTER_LINK = re.compile(r'href="/fighters/([^"]+)"')
 _ODDS = re.compile(r"^[+-]\d+$")
-
-
-def text(fragment: str) -> str:
-    return re.sub(r"\s+", " ", _html.unescape(_TAG.sub(" ", fragment))).strip()
 
 
 def american(s: str) -> int | None:

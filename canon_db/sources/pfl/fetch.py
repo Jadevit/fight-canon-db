@@ -19,6 +19,7 @@ from pathlib import Path
 import requests
 
 from canon_db import http
+from canon_db.http import save
 
 BASE = "https://pflmma.com"
 EXPIRED = 419  # the session's token timed out
@@ -69,10 +70,9 @@ class Site(http.Fetcher):
             self.token = found.group(1) if found else self.token
             card = self.post(f"{BASE}/ajax/get_fight_card_component", tag,
                              data={"event_tag": tag, "is_mobile": 0})
-            out.mkdir(parents=True, exist_ok=True)
-            (out / "event.html").write_text(page.text, encoding="utf-8")
+            save(out / "event.html", page.text)
             if card is not None and card.status_code == 200:
-                (out / "card.html").write_text(card.text, encoding="utf-8")
+                save(out / "card.html", card.text)
         url = URL_RE.search((out / "event.html").read_text(encoding="utf-8"))
         return url.group(1) if url else None
 
@@ -83,7 +83,7 @@ class Site(http.Fetcher):
             r.json()
         except (AttributeError, ValueError):
             return False
-        (out / "stats.json").write_text(r.text, encoding="utf-8")
+        save(out / "stats.json", r.text)
         return True
 
 

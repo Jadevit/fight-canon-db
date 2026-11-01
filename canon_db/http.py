@@ -3,6 +3,7 @@ with backoff, and pages written so a crash never leaves half of one on disk."""
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
 import time
@@ -72,8 +73,22 @@ class Fetcher:
         return None if r is None else r.text
 
 
-def save(path: Path, html: str) -> None:
-    """Write via a temp file so a crash mid-write never leaves a half page that looks finished."""
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(html, encoding="utf-8")
+def save(path: Path, text: str) -> None:
+    """Write via a temp file so a crash mid-write never leaves a half page that looks finished.
+    Makes the folder if needed."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
     tmp.replace(path)
+
+
+def save_json(path: Path, data) -> None:
+    save(path, json.dumps(data, ensure_ascii=False))
+
+
+def read_json(path: Path):
+    """A saved JSON file's data, or None if it's missing or isn't JSON."""
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None

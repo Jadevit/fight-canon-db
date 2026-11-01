@@ -27,7 +27,7 @@ from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
 
-from canon_db.ids import alias
+from canon_db.ids import alias, clear
 from canon_db.matching import Cards
 from canon_db.sources.pfl.fetch import Site, fetch
 from canon_db.sources.pfl.pages import V1, V2, parse_event, parse_stats
@@ -95,9 +95,7 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
             alias(conn, "fighter", fid, NAME, pfl_id, name)
         for tag, eid in event_alias.items():
             alias(conn, "event", eid, NAME, tag)
-        for fid in fights:  # each fight's rows are replaced by what the site has now
-            conn.execute("DELETE FROM round_stats WHERE fight_id = ? AND source = ?", (fid, NAME))
-            conn.execute("DELETE FROM smartcage_round_stats WHERE fight_id = ?", (fid,))
+        clear(conn, NAME, fights, ("round_stats", "smartcage_round_stats"))  # replaced by what the site has now
         conn.executemany(
             f"INSERT OR REPLACE INTO round_stats (fight_id, fighter_id, round, {', '.join(ROUND_COLS)}, source) "
             f"VALUES ({', '.join('?' * (len(ROUND_COLS) + 4))})", rounds)

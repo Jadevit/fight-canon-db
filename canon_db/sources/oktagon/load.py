@@ -24,15 +24,14 @@ Which events:
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import sqlite3
 from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
 
-from canon_db.http import Fetcher
-from canon_db.ids import OFFICIAL, alias
+from canon_db.http import Fetcher, read_json
+from canon_db.ids import OFFICIAL, alias, clear
 from canon_db.matching import Cards
 from canon_db.sources.oktagon.fetch import fetch_cards, fetch_tournament, tournaments
 from canon_db.sources.oktagon.pages import COLS, card_fights, fighters, rounds
@@ -48,13 +47,6 @@ def is_test(name: str | None) -> bool:
     return "test" in (name or "").lower()
 
 
-def read(path: Path):
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
-
-
 def load(conn: sqlite3.Connection, raw: Path) -> Counter:
     """Load every tournament on disk."""
     counts = Counter()
@@ -67,11 +59,11 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
     by_match: dict[int, tuple] = {}   # stats-host match id -> (our fight, {Oktagon fighter id: ours})
     legacy: dict[int, int] = {}       # a match's older id -> its match id
     for path in sorted((raw / "tournaments").glob("*.json"), key=lambda p: int(p.stem)):
-        t = read(path)
+        t = read_json(path)
         if not t or not t.get("date"):
             continue
         first = next(iter(t.get("matches") or []), None)
-        if first and is_test((read(raw / "matches" / f"{first['id']}.json") or {}).get("tournamentName")):
+        if first and is_test((read_json(raw / "matches" / f"{first['id']}.json") or {}).get("tournamentName")):
             continue
         counts["events read"] += 1
         day = t["date"][:10]
@@ -87,7 +79,7 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
                 counts["bouts not matched"] += 1
                 continue
             fight_id, ids = by_match[m["id"]] = matched[m["id"]]
-            log_ = read(raw / "matches" / f"{m['id']}.json") or m
+            log_ = read_json(raw / "matches" / f"{m['id']}.json") or m
             if log_.get("externalId") is not None:
                 legacy[log_["externalId"]] = m["id"]
             for f in fighters(log_):
@@ -108,7 +100,7 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
 
     sexes: dict[str, str] = {}
     for path in sorted((raw / "fightcards").glob("*.json")) if (raw / "fightcards").exists() else []:
-        for f in card_fights(read(path) or []):
+        for f in card_fights(read_json(path) or []):
             match_id = f["stats_id"] if f["stats_id"] in by_match else legacy.get(f["legacy_id"])
             if f["sex"] and match_id in by_match:
                 for fid in by_match[match_id][1].values():
@@ -119,8 +111,7 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
             alias(conn, "fighter", fid, NAME, sid, name)
         for tid, eid in event_alias.items():
             alias(conn, "event", eid, NAME, tid)
-        for fid in {f for f, _ in by_match.values()}:  # each fight's rows are replaced by what's on disk
-            conn.execute("DELETE FROM round_stats WHERE fight_id = ? AND source = ?", (fid, NAME))
+        clear(conn, NAME, {f for f, _ in by_match.values()}, ("round_stats",))  # replaced by what's on disk
         conn.executemany(
             f"INSERT OR REPLACE INTO round_stats (fight_id, fighter_id, round, {', '.join(COLS)}, source) "
             f"VALUES ({', '.join('?' * (len(COLS) + 4))})", rows)

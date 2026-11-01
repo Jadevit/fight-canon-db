@@ -9,12 +9,13 @@ them; that raises Refused at once, so a run there skips the fetch instead of ret
 
 from __future__ import annotations
 
-import json
 import logging
 import time
 from pathlib import Path
 
 from curl_cffi import requests
+
+from canon_db.http import save_json
 
 BASE = "https://www.sofascore.com/api/v1"
 log = logging.getLogger("sofascore")
@@ -52,18 +53,13 @@ class Site:
         return None
 
 
-def save(path: Path, data) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-
-
 def fetch_seasons(site: Site, raw: Path, promotion: int) -> list[dict]:
     """[{id, name, year}] of a promotion's seasons, newest first, saved to disk."""
     data = site.get(f"/unique-tournament/{promotion}/seasons")
     if not data:
         log.warning("Sofascore: couldn't read the seasons of promotion %s.", promotion)
         return []
-    save(raw / "seasons" / f"{promotion}.json", data)
+    save_json(raw / "seasons" / f"{promotion}.json", data)
     return data.get("seasons") or []
 
 
@@ -80,7 +76,7 @@ def fetch_events(site: Site, raw: Path, promotion: int, season: int) -> bool:
         page += 1
     if not events:
         return False
-    save(raw / "events" / f"{season}.json", {"promotion": promotion, "events": events})
+    save_json(raw / "events" / f"{season}.json", {"promotion": promotion, "events": events})
     return True
 
 
@@ -89,4 +85,4 @@ def fetch_stats(site: Site, raw: Path, bout: int) -> None:
     again every run (a recent one still is)."""
     data = site.get(f"/event/{bout}/statistics")
     if data is not None:
-        save(raw / "stats" / f"{bout}.json", data)
+        save_json(raw / "stats" / f"{bout}.json", data)
