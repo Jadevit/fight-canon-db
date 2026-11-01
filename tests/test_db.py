@@ -22,14 +22,20 @@ def test_published_db_matches_schema_sql():
     assert _schema(published) == _schema(fresh)
 
 
-def test_digest_ignores_row_order():
-    a, b = sqlite3.connect(":memory:"), sqlite3.connect(":memory:")
-    for conn, rows in ((a, [(1,), (2,)]), (b, [(2,), (1,)])):
-        conn.execute("CREATE TABLE t (x)")
-        conn.executemany("INSERT INTO t VALUES (?)", rows)
-    assert db.digest(a) == db.digest(b)
-    b.execute("INSERT INTO t VALUES (3)")
-    assert db.digest(a) != db.digest(b)
+def test_changed_ignores_row_order(tmp_path):
+    a, b = tmp_path / "a.db", sqlite3.connect(":memory:")
+    for conn, rows in ((sqlite3.connect(a), [(1, None), (2, "x")]), (b, [(2, "x"), (1, None)])):
+        conn.execute("CREATE TABLE t (x, y)")
+        conn.executemany("INSERT INTO t VALUES (?, ?)", rows)
+        conn.commit()
+    assert not db.changed(b, a)
+    with b:
+        b.execute("UPDATE t SET y = 'z' WHERE x = 1")  # a NULL filled
+    assert db.changed(b, a)
+    with b:
+        b.execute("UPDATE t SET y = NULL WHERE x = 1")
+        b.execute("CREATE TABLE u (x)")  # a new table, even an empty one
+    assert db.changed(b, a)
 
 
 def _tiny_db(path):

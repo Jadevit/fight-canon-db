@@ -9,7 +9,6 @@ is why the comparison is on content, not bytes.
 from __future__ import annotations
 
 import csv
-import hashlib
 import json
 import logging
 import os
@@ -30,13 +29,21 @@ TABLES = ("promotions", "promotion_aliases", "fighters", "fighter_aliases", "mer
           "round_stats", "smartcage_round_stats", "sofascore_round_stats", "judge_scores", "media_scores", "odds")
 
 
-def digest(conn: sqlite3.Connection) -> str:
-    """Hash of the database's content: its SQL dump, sorted so it is independent of
-    file layout and of physical row order (re-inserted rows land in a new order)."""
-    h = hashlib.sha256()
-    for line in sorted(conn.iterdump()):
-        h.update(line.encode())
-    return h.hexdigest()
+def changed(conn: sqlite3.Connection, original: Path) -> bool:
+    """Whether `conn`'s content differs from the file `original`: its schema, or any table's
+    rows (compared both ways inside SQLite, so file layout and row order don't matter:
+    re-inserted rows land in a new order). Stops at the first table that differs."""
+    conn.execute("ATTACH ? AS original", (str(original),))
+    try:
+        schema = "SELECT type, name, sql FROM {}.sqlite_master ORDER BY 1, 2"
+        if conn.execute(schema.format("main")).fetchall() != conn.execute(schema.format("original")).fetchall():
+            return True
+        tables = [t for (t,) in conn.execute("SELECT name FROM main.sqlite_master WHERE type = 'table'")]
+        return any(conn.execute(f'SELECT EXISTS (SELECT * FROM main."{t}" EXCEPT SELECT * FROM original."{t}") '
+                                f'OR EXISTS (SELECT * FROM original."{t}" EXCEPT SELECT * FROM main."{t}")').fetchone()[0]
+                   for t in tables)
+    finally:
+        conn.execute("DETACH original")
 
 
 def summary(conn: sqlite3.Connection) -> dict:
@@ -111,9 +118,9 @@ def updating(db: Path, allow_drop: bool = False):
     conn = sqlite3.connect(work)
     result = Update()
     try:
-        before, rows = digest(conn), counts(conn)
+        rows = counts(conn)
         yield conn, result
-        result.changed = digest(conn) != before
+        result.changed = changed(conn, db)  # `db` is untouched until the copy replaces it
         if result.changed and (fell := drops(rows, counts(conn))):
             if not allow_drop:
                 raise RuntimeError("rows fell more than an update should (run with --allow-drop if "
