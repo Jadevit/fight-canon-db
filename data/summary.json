@@ -1,30 +1,30 @@
 {
-  "updated_at": "2026-10-31T18:02:16+00:00",
+  "updated_at": "2026-11-01T17:15:52+00:00",
   "coverage": {
     "first_event_date": "1963-12-02",
-    "last_event_date": "2026-10-30",
-    "last_event": "ACA 209 - Frolov vs. Odilov",
-    "last_event_id": 61570
+    "last_event_date": "2026-11-01",
+    "last_event": "Road FC 79 - Road Fighting Championship 79",
+    "last_event_id": 61599
   },
   "rows": {
-    "promotions": 12383,
-    "promotion_aliases": 12352,
-    "fighters": 180442,
-    "fighter_aliases": 212427,
-    "merged_ids": 1,
-    "events": 61540,
-    "event_aliases": 65285,
-    "event_cards": 61534,
-    "event_pages": 75567,
-    "non_pro_bouts": 911,
-    "fights": 372809,
-    "fight_aliases": 384337,
-    "fight_participants": 745618,
-    "round_stats": 75920,
+    "promotions": 12384,
+    "promotion_aliases": 12353,
+    "fighters": 180469,
+    "fighter_aliases": 212473,
+    "merged_ids": 2,
+    "events": 61556,
+    "event_aliases": 65304,
+    "event_cards": 61550,
+    "event_pages": 75570,
+    "non_pro_bouts": 1019,
+    "fights": 372918,
+    "fight_aliases": 384458,
+    "fight_participants": 745836,
+    "round_stats": 76038,
     "smartcage_round_stats": 3548,
     "sofascore_round_stats": 19130,
-    "judge_scores": 110988,
-    "media_scores": 115590,
-    "odds": 51668
+    "judge_scores": 111096,
+    "media_scores": 115694,
+    "odds": 51720
   }
 }
