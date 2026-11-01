@@ -3,8 +3,9 @@
 Matcher: event first: only fights dated within a day of the source's date are candidates
 (time zones shift dates), and the two fighter names only have to pick one bout among those.
 leftover() places a bout whose names didn't both match (ring names, married names) on the one
-unclaimed fight of its event that fits it best. Every source that attaches to our fights
-(PFL, Oktagon, Sofascore, BestFightOdds) and Sherdog's linking use these.
+unclaimed fight of its event that fits it best; Cards does both for a whole card. Every source
+that attaches to our fights (PFL, Oktagon, Sofascore, MMA Decisions, BestFightOdds) and
+Sherdog's linking use these.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ import difflib
 import re
 import sqlite3
 import unicodedata
+from collections import Counter
 from datetime import date, timedelta
 from functools import cache
 
@@ -91,10 +93,7 @@ class Bouts:
     links fighters through these (Sherdog, UFC Stats) never links by name alone."""
 
     def __init__(self, conn: sqlite3.Connection):
-        self.names: dict[int, list[str]] = {}
-        for fid, name in conn.execute("SELECT fighter_id, name FROM fighters UNION ALL "
-                                      "SELECT fighter_id, name FROM fighter_aliases"):
-            self.names.setdefault(fid, []).append(name)
+        self.names = fighter_names(conn)
         self.fights: dict[int, list[tuple]] = {}  # fighter -> [(date, fight_id, event_id, opponent)]
         for fight, eid, day, a, b in conn.execute("""
                 SELECT f.fight_id, f.event_id, e.date, p.fighter_id, o.fighter_id
@@ -139,6 +138,52 @@ def name_ok(name: str, names: list[str]) -> bool:
     words = {w for w in norm(name).split() if len(w) >= 3}
     return any(sim(name, n) >= 0.6 or words & {w for w in norm(n).split() if len(w) >= 3}
                for n in names)
+
+
+def fighter_names(conn: sqlite3.Connection) -> dict[int, list[str]]:
+    """Every spelling we have of each fighter: our name and each source's."""
+    names: dict[int, list[str]] = {}
+    for fid, name in conn.execute("SELECT fighter_id, name FROM fighters UNION "
+                                  "SELECT fighter_id, name FROM fighter_aliases"):
+        names.setdefault(fid, []).append(name)
+    return names
+
+
+class Cards:
+    """A source's whole card placed on our fights: each bout by Matcher, the event as the one
+    most of them landed on, then leftover() for the bouts whose names didn't both match."""
+
+    def __init__(self, conn: sqlite3.Connection, names: dict[int, list[str]] | None = None):
+        self.matcher = Matcher(conn)
+        self.names = fighter_names(conn) if names is None else names
+        self.event_of = dict(conn.execute("SELECT fight_id, event_id FROM fights"))
+        self.card: dict[int, dict[int, list]] = {}  # event -> fight -> [(fighter_id, names)] by corner
+        for eid, fight, fid in conn.execute("SELECT f.event_id, f.fight_id, p.fighter_id FROM fights f "
+                                            "JOIN fight_participants p USING (fight_id) ORDER BY p.corner"):
+            self.card.setdefault(eid, {}).setdefault(fight, []).append((fid, self.names.get(fid, [])))
+
+    def place(self, bouts: list[tuple]) -> tuple[int | None, dict, int]:
+        """`bouts`: [(key, {"date", "fighters": [{"slug", "name"}] x2})]. Returns (our event or
+        None, {key: (fight_id, {slug: fighter_id})}, how many were placed by leftover())."""
+        matched, hits, rest = {}, Counter(), []
+        for key, bout in bouts:
+            fight, ids = self.matcher.match(bout)
+            if fight is None:
+                rest.append((key, bout))
+                continue
+            matched[key] = (fight, ids)
+            hits[self.event_of[fight]] += 1
+        if not hits:
+            return None, matched, 0
+        eid, by_one = hits.most_common(1)[0][0], 0
+        for key, bout in rest:
+            taken = {f for f, _ in matched.values()}
+            found = leftover(bout["fighters"], [(k, v) for k, v in self.card.get(eid, {}).items()
+                                                if k not in taken and len(v) == 2])
+            if found:
+                matched[key] = found
+                by_one += 1
+        return eid, matched, by_one
 
 
 def leftover(who: list[dict], free: list[tuple]) -> tuple | None:

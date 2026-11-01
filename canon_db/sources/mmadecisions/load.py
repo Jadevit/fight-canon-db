@@ -28,7 +28,8 @@ import sqlite3
 from collections import Counter
 from pathlib import Path
 
-from canon_db.matching import Matcher, name_ok, norm
+from canon_db.ids import alias
+from canon_db.matching import Matcher, fighter_names, name_ok, norm
 from canon_db.sources.mmadecisions.pages import decision
 
 NAME = "mmadecisions"
@@ -59,10 +60,7 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
         results.setdefault(fight, {})[fighter] = res
     details = dict(conn.execute("SELECT fight_id, details FROM fights WHERE details IS NOT NULL"))
     official = {r[0] for r in conn.execute("SELECT DISTINCT fight_id FROM judge_scores WHERE source <> ?", (NAME,))}
-    names: dict[int, list[str]] = {}
-    for fid, name in conn.execute("SELECT fighter_id, name FROM fighters UNION SELECT fighter_id, name "
-                                  "FROM fighter_aliases"):
-        names.setdefault(fid, []).append(name)
+    names = fighter_names(conn)
     event_of = dict(conn.execute("SELECT fight_id, event_id FROM fights"))
 
     cards, media, aliases, event_alias, seen, replaced = [], [], set(), {}, set(), set()
@@ -89,7 +87,7 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
         counts["decisions matched"] += 1
         for f in d["fighters"]:
             if name_ok(f["name"], names.get(ids[f["slug"]], [])):
-                aliases.add((ids[f["slug"]], NAME, f["slug"], f["name"]))
+                aliases.add((ids[f["slug"]], f["slug"], f["name"]))
         event_alias[d["event"]["id"]] = event_of[fight]
 
         spelled = ufcstats_judges(details.get(fight))
@@ -117,10 +115,10 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
         counts["fights with media scores"] += bool(d["media"])
 
     with conn:
-        conn.executemany("INSERT OR IGNORE INTO fighter_aliases (fighter_id, source, source_id, name) "
-                         "VALUES (?,?,?,?)", sorted(aliases))
-        conn.executemany("INSERT OR REPLACE INTO event_aliases (event_id, source, source_id) VALUES (?,?,?)",
-                         [(eid, NAME, sid) for sid, eid in event_alias.items()])
+        for fid, sid, name in sorted(aliases):
+            alias(conn, "fighter", fid, NAME, sid, name)
+        for sid, eid in event_alias.items():
+            alias(conn, "event", eid, NAME, sid)
         for fight in seen:  # each fight read here is replaced by what's on disk; the rest stay
             conn.execute("DELETE FROM judge_scores WHERE fight_id = ? AND source = ?", (fight, NAME))
             conn.execute("DELETE FROM media_scores WHERE fight_id = ? AND source = ?", (fight, NAME))

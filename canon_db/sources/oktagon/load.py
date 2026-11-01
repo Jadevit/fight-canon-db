@@ -32,8 +32,8 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from canon_db.http import Fetcher
-from canon_db.ids import OFFICIAL
-from canon_db.matching import Matcher, leftover
+from canon_db.ids import OFFICIAL, alias
+from canon_db.matching import Cards
 from canon_db.sources.oktagon.fetch import fetch_cards, fetch_tournament, tournaments
 from canon_db.sources.oktagon.pages import COLS, card_fights, fighters, rounds
 
@@ -58,19 +58,10 @@ def read(path: Path):
 def load(conn: sqlite3.Connection, raw: Path) -> Counter:
     """Load every tournament on disk."""
     counts = Counter()
-    matcher = Matcher(conn)
-    event_of = dict(conn.execute("SELECT fight_id, event_id FROM fights"))
+    cards = Cards(conn)
     others = sorted(OFFICIAL - {NAME})  # another promotion's own count wins; Sofascore's sits beside ours
     has_stats = {r[0] for r in conn.execute(f"SELECT DISTINCT fight_id FROM round_stats WHERE source IN "
                                             f"({', '.join('?' * len(others))})", others)}
-    names: dict[str, list[str]] = {}
-    for fid, name in conn.execute("SELECT fighter_id, name FROM fighters UNION SELECT fighter_id, name "
-                                  "FROM fighter_aliases"):
-        names.setdefault(fid, []).append(name)
-    card: dict[str, dict[str, list]] = {}  # event_id -> fight_id -> [(fighter_id, names)]
-    for eid, fight_id, fid in conn.execute("SELECT f.event_id, f.fight_id, p.fighter_id FROM fights f "
-                                           "JOIN fight_participants p USING (fight_id) ORDER BY p.corner"):
-        card.setdefault(eid, {}).setdefault(fight_id, []).append((fid, names.get(fid, [])))
 
     aliases, event_alias, rows, fights, dobs = set(), {}, [], set(), {}
     by_match: dict[int, tuple] = {}   # stats-host match id -> (our fight, {Oktagon fighter id: ours})
@@ -83,23 +74,13 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
         if first and is_test((read(raw / "matches" / f"{first['id']}.json") or {}).get("tournamentName")):
             continue
         counts["events read"] += 1
-        day, matched, hits, rest = t["date"][:10], {}, Counter(), []
-        for m in t.get("matches") or []:
-            who = [dict(slug=f["id"], name=f["name"]) for f in fighters(m)]
-            fight_id, ids = matcher.match(dict(date=day, fighters=who))
-            if fight_id is None:
-                rest.append((m, who))
-                continue
-            matched[m["id"]] = (fight_id, ids)
-            hits[event_of[fight_id]] += 1
-        if hits:
-            event_alias[path.stem] = eid = hits.most_common(1)[0][0]
-            for m, who in rest:
-                taken = {f for f, _ in matched.values()}
-                found = leftover(who, [(k, v) for k, v in card.get(eid, {}).items()
-                                       if k not in taken and len(v) == 2])
-                if found:
-                    matched[m["id"]] = found
+        day = t["date"][:10]
+        eid, matched, by_one = cards.place(
+            [(m["id"], dict(date=day, fighters=[dict(slug=f["id"], name=f["name"]) for f in fighters(m)]))
+             for m in t.get("matches") or []])
+        if eid is not None:
+            event_alias[path.stem] = eid
+        counts["bouts matched by one fighter"] += by_one
         for m in t.get("matches") or []:
             counts["bouts"] += 1
             if m["id"] not in matched:
@@ -111,7 +92,7 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
                 legacy[log_["externalId"]] = m["id"]
             for f in fighters(log_):
                 if f["id"] in ids:
-                    aliases.add((ids[f["id"]], NAME, f["id"], f["name"]))
+                    aliases.add((ids[f["id"]], f["id"], f["name"]))
                     if f["dob"]:
                         dobs[ids[f["id"]]] = f["dob"]
             totals = rounds(log_)
@@ -134,10 +115,10 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
                     sexes[fid] = f["sex"]
 
     with conn:
-        conn.executemany("INSERT OR IGNORE INTO fighter_aliases (fighter_id, source, source_id, name) "
-                         "VALUES (?,?,?,?)", sorted(aliases))
-        conn.executemany("INSERT OR REPLACE INTO event_aliases (event_id, source, source_id) VALUES (?,?,?)",
-                         [(eid, NAME, tid) for tid, eid in event_alias.items()])
+        for fid, sid, name in sorted(aliases):
+            alias(conn, "fighter", fid, NAME, sid, name)
+        for tid, eid in event_alias.items():
+            alias(conn, "event", eid, NAME, tid)
         for fid in {f for f, _ in by_match.values()}:  # each fight's rows are replaced by what's on disk
             conn.execute("DELETE FROM round_stats WHERE fight_id = ? AND source = ?", (fid, NAME))
         conn.executemany(

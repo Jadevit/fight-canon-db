@@ -27,6 +27,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from canon_db.http import Fetcher, save
+from canon_db.ids import alias
 from canon_db.matching import Matcher, norm
 from canon_db.sources.bestfightodds.pages import parse_fighter_page
 
@@ -116,7 +117,7 @@ def update(conn: sqlite3.Connection, args: argparse.Namespace, raw: Path) -> Non
             if fight_id is None:
                 continue
             for f in fight["fighters"]:
-                aliases.add((ids[f["slug"]], NAME, f["slug"], f["name"]))
+                aliases.add((ids[f["slug"]], f["slug"], f["name"]))
             if fight_id in seen:
                 continue
             seen.add(fight_id)
@@ -131,8 +132,8 @@ def update(conn: sqlite3.Connection, args: argparse.Namespace, raw: Path) -> Non
                          [(fid, NAME) for fid in seen])
         conn.executemany("INSERT OR REPLACE INTO odds (fight_id, fighter_id, source, book, open, "
                          "close, close_low, close_high) VALUES (?,?,?,?,?,?,?,?)", rows)
-        conn.executemany("INSERT OR IGNORE INTO fighter_aliases (fighter_id, source, source_id, name) "
-                         "VALUES (?,?,?,?)", sorted(aliases))
+        for fid, sid, name in sorted(aliases):
+            alias(conn, "fighter", fid, NAME, sid, name)
     log.info("BestFightOdds: %d pages, %d fight listings -> %d fights matched, %d with odds "
              "(%d without a posted line).", len(slugs), stats["listed"], len(seen),
              len(rows) // 2, stats["no line"])

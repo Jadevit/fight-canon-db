@@ -27,7 +27,8 @@ from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
 
-from canon_db.matching import Matcher, leftover
+from canon_db.ids import alias
+from canon_db.matching import Cards
 from canon_db.sources.pfl.fetch import Site, fetch
 from canon_db.sources.pfl.pages import V1, V2, parse_event, parse_stats
 
@@ -41,17 +42,8 @@ log = logging.getLogger(NAME)
 def load(conn: sqlite3.Connection, raw: Path) -> Counter:
     """Load every event on disk that has stats."""
     counts = Counter()
-    matcher = Matcher(conn)
-    event_of = dict(conn.execute("SELECT fight_id, event_id FROM fights"))
+    cards = Cards(conn)
     has_stats = {r[0] for r in conn.execute("SELECT DISTINCT fight_id FROM round_stats WHERE source <> ?", (NAME,))}
-    names: dict[str, list[str]] = {}
-    for fid, name in conn.execute("SELECT fighter_id, name FROM fighters UNION SELECT fighter_id, name "
-                                  "FROM fighter_aliases"):
-        names.setdefault(fid, []).append(name)
-    card: dict[str, dict[str, list]] = {}  # event_id -> fight_id -> [(fighter_id, names)]
-    for eid, fight_id, fid in conn.execute("SELECT f.event_id, f.fight_id, p.fighter_id FROM fights f "
-                                           "JOIN fight_participants p USING (fight_id) ORDER BY p.corner"):
-        card.setdefault(eid, {}).setdefault(fight_id, []).append((fid, names.get(fid, [])))
     aliases, event_alias, rounds, smartcage, fights = set(), {}, [], [], set()
     folders = sorted(p for p in raw.iterdir() if (p / "stats.json").exists() and (p / "event.html").exists())
     for folder in folders:
@@ -63,33 +55,23 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
         if not event["date"] or not isinstance(listed, list):
             continue
         counts["events read"] += 1
-        # Every bout on the card links the event and its fighters, with stats or not.
-        matched, hits, rest = {}, Counter(), []  # the pair of PFL fighter ids -> (our fight, {PFL id: ours})
+        # Every bout on the card links the event and its fighters, with stats or not. A bout is
+        # keyed by its pair of PFL fighter ids.
+        bouts = []
         for f in listed:
             people = f.get("Fighters") or []
-            if len(people) != 2:
-                continue
-            who = [dict(slug=str(p["Id"]), name=f"{p.get('FirstName') or ''} {p.get('LastName') or ''}".strip())
-                   for p in people]
-            fight_id, ids = matcher.match(dict(date=event["date"], fighters=who))
-            if fight_id is None:
-                rest.append(who)
-                continue
-            matched[frozenset(w["slug"] for w in who)] = (fight_id, ids)
-            hits[event_of[fight_id]] += 1
-        if hits:
-            event_alias[folder.name] = eid = hits.most_common(1)[0][0]
-            for who in rest:
-                taken = {m[0] for m in matched.values()}
-                found = leftover(who, [(k, v) for k, v in card.get(eid, {}).items()
-                                       if k not in taken and len(v) == 2])
-                if found:
-                    matched[frozenset(w["slug"] for w in who)] = found
-                    counts["bouts matched by one fighter"] += 1
+            if len(people) == 2:
+                who = [dict(slug=str(p["Id"]), name=f"{p.get('FirstName') or ''} {p.get('LastName') or ''}".strip())
+                       for p in people]
+                bouts.append((frozenset(w["slug"] for w in who), dict(date=event["date"], fighters=who)))
+        eid, matched, by_one = cards.place(bouts)
+        if eid is not None:
+            event_alias[folder.name] = eid
+        counts["bouts matched by one fighter"] += by_one
         label = {str(p["Id"]): f"{p.get('FirstName') or ''} {p.get('LastName') or ''}".strip()
                  for f in listed for p in f.get("Fighters") or []}
         for _, ids in matched.values():
-            aliases.update((ours, NAME, pfl_id, label[pfl_id]) for pfl_id, ours in ids.items())
+            aliases.update((ours, pfl_id, label[pfl_id]) for pfl_id, ours in ids.items())
         for bout in parse_stats(listed, event["v2"]):
             counts["bouts with stats"] += 1
             found = matched.get(frozenset(x["id"] for x in bout["fighters"]))
@@ -109,10 +91,10 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
                 else:
                     rounds.append((*key, *(r[c] for c in ROUND_COLS), NAME))
     with conn:
-        conn.executemany("INSERT OR IGNORE INTO fighter_aliases (fighter_id, source, source_id, name) "
-                         "VALUES (?,?,?,?)", sorted(aliases))
-        conn.executemany("INSERT OR REPLACE INTO event_aliases (event_id, source, source_id) VALUES (?,?,?)",
-                         [(eid, NAME, tag) for tag, eid in event_alias.items()])
+        for fid, pfl_id, name in sorted(aliases):
+            alias(conn, "fighter", fid, NAME, pfl_id, name)
+        for tag, eid in event_alias.items():
+            alias(conn, "event", eid, NAME, tag)
         for fid in fights:  # each fight's rows are replaced by what the site has now
             conn.execute("DELETE FROM round_stats WHERE fight_id = ? AND source = ?", (fid, NAME))
             conn.execute("DELETE FROM smartcage_round_stats WHERE fight_id = ?", (fid,))

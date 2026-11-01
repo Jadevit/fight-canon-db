@@ -37,7 +37,8 @@ from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
 
-from canon_db.matching import Matcher, leftover, name_ok
+from canon_db.ids import alias
+from canon_db.matching import Cards, Matcher, name_ok
 from canon_db.sources.sofascore.pages import EXTRA_COLS, ROUND_COLS, bouts, rounds
 
 NAME = "sofascore"
@@ -69,18 +70,10 @@ def read(path: Path):
 def load(conn: sqlite3.Connection, raw: Path) -> Counter:
     """Load every season on disk."""
     counts = Counter()
-    matcher = Matcher(conn)
-    event_of = dict(conn.execute("SELECT fight_id, event_id FROM fights"))
+    cards = Cards(conn)
+    names = cards.names
     official = {r[0] for r in conn.execute("SELECT DISTINCT fight_id FROM round_stats WHERE source NOT IN (?, ?)",
                                            (NAME, BESIDE))}
-    names: dict[str, list[str]] = {}
-    for fid, name in conn.execute("SELECT fighter_id, name FROM fighters UNION SELECT fighter_id, name "
-                                  "FROM fighter_aliases"):
-        names.setdefault(fid, []).append(name)
-    card: dict[str, dict[str, list]] = {}  # event_id -> fight_id -> [(fighter_id, names)]
-    for eid, fight_id, fid in conn.execute("SELECT f.event_id, f.fight_id, p.fighter_id FROM fights f "
-                                           "JOIN fight_participants p USING (fight_id) ORDER BY p.corner"):
-        card.setdefault(eid, {}).setdefault(fight_id, []).append((fid, names.get(fid, [])))
 
     result = {(f, p): r for f, p, r in conn.execute("SELECT fight_id, fighter_id, result FROM fight_participants")}
     aliases, event_alias, copies, touched = set(), {}, {}, set()  # copies: fight -> [(sides, rows)]
@@ -89,23 +82,10 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
         if not season or season.get("promotion") not in PROMOTIONS:
             continue
         counts["events read"] += 1
-        matched, hits, rest = {}, Counter(), []
-        for b in bouts(season):
-            fight_id, ids = matcher.match(b)
-            if fight_id is None:
-                rest.append(b)
-                continue
-            matched[b["id"]] = (fight_id, ids)
-            hits[event_of[fight_id]] += 1
-        if hits:
-            event_alias[path.stem] = eid = hits.most_common(1)[0][0]
-            for b in rest:
-                taken = {f for f, _ in matched.values()}
-                found = leftover(b["fighters"], [(k, v) for k, v in card.get(eid, {}).items()
-                                                 if k not in taken and len(v) == 2])
-                if found:
-                    matched[b["id"]] = found
-                    counts["bouts matched by one fighter"] += 1
+        eid, matched, by_one = cards.place([(b["id"], b) for b in bouts(season)])
+        if eid is not None:
+            event_alias[path.stem] = eid
+        counts["bouts matched by one fighter"] += by_one
         for b in bouts(season):
             counts["bouts"] += 1
             if b["id"] not in matched:
@@ -114,7 +94,7 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
             fight_id, ids = matched[b["id"]]
             for f in b["fighters"]:
                 if name_ok(f["name"], names.get(ids[f["slug"]], [])):
-                    aliases.add((ids[f["slug"]], NAME, f["slug"], f["name"]))
+                    aliases.add((ids[f["slug"]], f["slug"], f["name"]))
                 else:
                     counts["names not saved as aliases"] += 1
             stats = read(raw / "stats" / f"{b['id']}.json")
@@ -149,10 +129,10 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
             extra.append((*key, *(r[c] for c in EXTRA_COLS), NAME))
 
     with conn:
-        conn.executemany("INSERT OR IGNORE INTO fighter_aliases (fighter_id, source, source_id, name) "
-                         "VALUES (?,?,?,?)", sorted(aliases))
-        conn.executemany("INSERT OR REPLACE INTO event_aliases (event_id, source, source_id) VALUES (?,?,?)",
-                         [(eid, NAME, sid) for sid, eid in event_alias.items()])
+        for fid, sid, name in sorted(aliases):
+            alias(conn, "fighter", fid, NAME, sid, name)
+        for sid, eid in event_alias.items():
+            alias(conn, "event", eid, NAME, sid)
         # Each fight's rows are replaced by what's on disk, and a fight on a loaded event that
         # no longer gets stats (its bout no longer matches, say) loses the ones it had.
         linked = set(event_alias.values())
