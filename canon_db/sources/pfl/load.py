@@ -27,7 +27,7 @@ from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
 
-from canon_db.matching import Matcher, leftover, name_ok
+from canon_db.matching import Matcher, leftover
 from canon_db.sources.pfl.fetch import Site, fetch
 from canon_db.sources.pfl.pages import V1, V2, parse_event, parse_stats
 

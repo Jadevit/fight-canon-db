@@ -1,0 +1,30 @@
+# On every push and pull request: lint (ruff), unused code (vulture) and the tests. The tests
+# that need data/canon.db skip without it; the daily update runs them against the release.
+name: Check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Lint
+        run: ruff check
+
+      - name: Unused code
+        run: vulture
+
+      - name: Tests
+        run: python -m pytest -q tests/

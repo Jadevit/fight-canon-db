@@ -10,7 +10,7 @@ Control time is split into clinch control and ground control ("Ground Clinch Con
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 # round_stats column -> Sofascore item. Every other round_stats column stays NULL.
 ROUND = {
@@ -58,7 +58,7 @@ def bouts(season: dict) -> list[dict]:
             continue
         if not e.get("startTimestamp"):
             continue
-        day = datetime.fromtimestamp(e["startTimestamp"], timezone.utc).date().isoformat()
+        day = datetime.fromtimestamp(e["startTimestamp"], UTC).date().isoformat()
         out.append(dict(id=e["id"], date=day, winner={1: 0, 2: 1}.get(e.get("winnerCode")), fighters=[
             dict(slug=str(e[k]["id"]), name=e[k]["name"]) for k in ("homeTeam", "awayTeam")]))
     return out

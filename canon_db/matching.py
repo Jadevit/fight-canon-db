@@ -14,10 +14,10 @@ import re
 import sqlite3
 import unicodedata
 from datetime import date, timedelta
-from functools import lru_cache
+from functools import cache
 
 
-@lru_cache(maxsize=None)
+@cache
 def norm(s: str) -> str:
     s = unicodedata.normalize("NFKD", s or "")
     s = "".join(c for c in s if not unicodedata.combining(c)).upper()

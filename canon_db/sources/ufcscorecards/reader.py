@@ -197,8 +197,8 @@ def read_card(path, keep_crops=False):
         round_rows = list(zip(hs[2:-3], hs[3:-2]))
         pad = 3
 
-        def cell(r, c):
-            return sub[r[0] + pad:r[1] - pad + 1, cols[c] + pad:cols[c + 1] - pad + 1]
+        def cell(r, c):  # called only within this pass of the loop
+            return sub[r[0] + pad:r[1] - pad + 1, cols[c] + pad:cols[c + 1] - pad + 1]  # noqa: B023
 
         rounds, crops = [], {"rounds": [], "round_no": []}
         for r in round_rows:

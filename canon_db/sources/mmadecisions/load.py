@@ -32,7 +32,6 @@ from canon_db.matching import Matcher, name_ok, norm
 from canon_db.sources.mmadecisions.pages import decision
 
 NAME = "mmadecisions"
-OFFICIAL_CARDS = "ufc.com"  # card images: a fight with these keeps them
 log = logging.getLogger(NAME)
 
 

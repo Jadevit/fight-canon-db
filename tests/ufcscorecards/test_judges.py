@@ -3,7 +3,7 @@ import sqlite3
 import pytest
 
 pytest.importorskip("cv2")  # the scorecard reader's extra dependency; not installed in CI
-from canon_db.sources.ufcscorecards.run import Judges, judges_in  # noqa: E402
+from canon_db.sources.ufcscorecards.run import Judges, judges_in
 
 
 def test_judges_in_details():

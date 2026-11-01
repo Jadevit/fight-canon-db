@@ -31,8 +31,8 @@ from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
 
-from canon_db.ids import OFFICIAL
 from canon_db.http import Fetcher
+from canon_db.ids import OFFICIAL
 from canon_db.matching import Matcher, leftover
 from canon_db.sources.oktagon.fetch import fetch_cards, fetch_tournament, tournaments
 from canon_db.sources.oktagon.pages import COLS, card_fights, fighters, rounds

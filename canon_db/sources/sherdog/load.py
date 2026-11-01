@@ -337,8 +337,10 @@ class Writer:
     def merges(self) -> None:
         """Fighters found to be one through a Sherdog id, events through a shared fight."""
         conn, st = self.conn, self.st
-        exists = lambda f: conn.execute("SELECT 1 FROM fighters WHERE fighter_id = ?", (f,)).fetchone()
-        for fid, sid, prior in st.new_links:
+        def exists(f: int) -> bool:
+            return conn.execute("SELECT 1 FROM fighters WHERE fighter_id = ?", (f,)).fetchone() is not None
+
+        for fid, _sid, prior in st.new_links:
             a, b = self.fighter_now(fid), self.fighter_now(prior)
             if b is not None and a != b and exists(a) and exists(b):
                 keep = ids.merge(conn, "fighter", a, b)

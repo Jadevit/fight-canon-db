@@ -301,7 +301,7 @@ def schema_tables() -> list[dict]:
     return out
 
 
-def query_help(con, w: "Writer") -> None:
+def query_help(con, w: Writer) -> None:
     """query.json: what the Query page needs to help: the rules for an assistant, and the tables."""
     w("query.json", {"rules": QUERY_RULES, "tables": schema_tables()})
 
@@ -658,7 +658,7 @@ def purge(out: Path) -> None:
                     break
             except urllib.error.HTTPError as e:
                 if e.code != 429 or attempt == 4:  # too many requests: wait, then again
-                    raise SystemExit(f"purge: HTTP {e.code}: {e.read()[:300].decode(errors='replace')}")
+                    raise SystemExit(f"purge: HTTP {e.code}: {e.read()[:300].decode(errors='replace')}") from None
                 time.sleep(10)
     print("cleared Cloudflare's cache" if len(urls) > PURGE_ALL else f"cleared {len(urls)} files from Cloudflare's cache")
 

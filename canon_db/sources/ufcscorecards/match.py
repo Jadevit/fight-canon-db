@@ -46,8 +46,8 @@ class Matcher:
 
     def match_event(self, card):
         """The card's event: best event-name match. None if unsure."""
-        cand = [card.get("event") or ""] + [l for l in (card.get("top_text") or "").splitlines()
-                                             if len(l.strip()) > 8]
+        cand = [card.get("event") or ""] + [line for line in (card.get("top_text") or "").splitlines()
+                                             if len(line.strip()) > 8]
         text = " ".join(cand)
         scored = []
         for (name, date), fights in self.events.items():

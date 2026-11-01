@@ -1,0 +1,15 @@
+# Settings for the checks CI runs on every push (.github/workflows/check.yml). Not a package.
+
+[tool.ruff]
+target-version = "py314"
+line-length = 120
+
+[tool.ruff.lint]
+# Errors and likely bugs only; style is left to the code around it. E501 (line length) and
+# I (import order: this repo wraps imports compactly, which ruff's sorter can't) are off.
+select = ["F", "E4", "E7", "E9", "B", "UP", "RUF100"]
+ignore = ["B905"]  # zip() without strict=: the lengths are known to match
+
+[tool.vulture]
+paths = ["canon_db", "scripts", "tests"]
+min_confidence = 60

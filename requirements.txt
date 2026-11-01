@@ -3,8 +3,10 @@
 requests>=2.31
 curl_cffi>=0.7
 
-# Tests
+# Tests and checks (pyproject.toml)
 pytest>=8
+ruff>=0.17
+vulture>=2.16
 
 # The site's build (scripts/export_parquet.py)
 duckdb>=1.1

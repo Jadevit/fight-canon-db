@@ -28,7 +28,6 @@ class Fetcher:
         self.timeout = timeout
         self.last_request = 0.0
         self.lock = threading.Lock()
-        self.requests_made = 0
         self.failures: list[str] = []
 
     def throttle(self) -> None:
@@ -38,7 +37,6 @@ class Fetcher:
             if wait > 0:
                 time.sleep(wait)
             self.last_request = time.monotonic()
-            self.requests_made += 1
 
     def wall(self, page: str) -> bool | None:
         """None if `page` is the page; True if it was a wall now cleared (ask again at once);

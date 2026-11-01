@@ -16,7 +16,7 @@ import os
 import shutil
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -44,7 +44,7 @@ def summary(conn: sqlite3.Connection) -> dict:
     eid, name, day = conn.execute(
         "SELECT event_id, name, date FROM events ORDER BY date DESC, event_id LIMIT 1").fetchone()
     first = conn.execute("SELECT MIN(date) FROM events").fetchone()[0]
-    return dict(updated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    return dict(updated_at=datetime.now(UTC).isoformat(timespec="seconds"),
                 coverage=dict(first_event_date=first, last_event_date=day,
                               last_event=name, last_event_id=eid),
                 rows={t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
