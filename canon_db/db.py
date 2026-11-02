@@ -24,9 +24,19 @@ RAW = ROOT / "data" / "raw"
 SCHEMA = Path(__file__).resolve().parent / "schema.sql"
 PROMOTIONS = Path(__file__).resolve().parent / "promotions.csv"
 
-TABLES = ("promotions", "promotion_aliases", "fighters", "fighter_aliases", "merged_ids", "events",
-          "event_aliases", "event_cards", "event_pages", "non_pro_bouts", "fights", "fight_aliases", "fight_participants",
-          "round_stats", "smartcage_round_stats", "sofascore_round_stats", "judge_scores", "media_scores", "odds")
+
+def _columns() -> dict[str, list[str]]:
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(SCHEMA.read_text())
+    tables = [t for (t,) in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY rowid")]
+    out = {t: [r[1] for r in conn.execute(f"PRAGMA table_info({t})")] for t in tables}
+    conn.close()
+    return out
+
+
+COLUMNS = _columns()  # schema.sql's tables in its order, with their columns: the one list of them
+TABLES = tuple(COLUMNS)
 
 
 def changed(conn: sqlite3.Connection, original: Path) -> bool:
@@ -79,8 +89,7 @@ def sync_promotions(conn: sqlite3.Connection) -> None:
 
 
 DROP_SHARE, DROP_ROWS = 0.02, 100  # a fall bigger than both stops a publish (see drops())
-BY_SOURCE = ("fighter_aliases", "event_aliases", "fight_aliases", "round_stats", "judge_scores", "media_scores",
-             "odds")
+BY_SOURCE = tuple(t for t, cols in COLUMNS.items() if "source" in cols)  # counted per source too
 
 
 def counts(conn: sqlite3.Connection) -> dict[str, int]:

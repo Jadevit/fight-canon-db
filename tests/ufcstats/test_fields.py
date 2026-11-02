@@ -56,7 +56,7 @@ def test_parse_record():
 
 
 def test_promotion_from_event_name():
-    from canon_db.sources.ufcstats.load import promotion
+    from canon_db.promotions import promotion
     assert promotion("PRIDE 33: The Second Coming") == "PRIDE"
     assert promotion("PRIDE Shockwave 2006") == "PRIDE"
     assert promotion("Road to UFC 4.5 + 4.6") == "Road to UFC"

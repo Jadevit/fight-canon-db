@@ -142,3 +142,12 @@ def test_merge_duplicates_and_drop_empty():
     ids.drop_empty(conn)
     assert {r[0] for r in conn.execute("SELECT event_id FROM events")} == {e2, e3}
     assert {r[0] for r in conn.execute("SELECT fighter_id FROM fighters")} == {a, b, listed}
+
+
+def test_lists_of_tables_from_the_schema():
+    # Every table holding fights' rows is one a merge or a deleted fight takes care of.
+    with_fights = {t for t, cols in db.COLUMNS.items() if "fight_id" in cols}
+    assert with_fights == {"fights", "fight_aliases", "fight_participants", *ids.FIGHT_ROWS}
+    assert ids.FIGHT_ROWS == ("round_stats", "smartcage_round_stats", "sofascore_round_stats", "judge_scores",
+                              "media_scores", "odds")
+    assert ids.STATS_TABLES == ("round_stats", "smartcage_round_stats", "sofascore_round_stats")

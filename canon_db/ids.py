@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import sqlite3
 
+from canon_db.db import COLUMNS
+
 OFFICIAL = frozenset({"ufcstats", "pfl", "oktagon"})  # promotions' own sites
 
 # kind -> (table, id column, aliases table)
@@ -23,8 +25,9 @@ KINDS = {"fighter": ("fighters", "fighter_id", "fighter_aliases"),
 # Sources of round stats, best first.
 FULL_STATS = ("ufcstats", "pfl")  # official counts with every column; a fight with one has no other
 STATS_RANK = (*FULL_STATS, "sofascore", "oktagon")
-STATS_TABLES = ("round_stats", "smartcage_round_stats", "sofascore_round_stats")
-FIGHT_ROWS = ("round_stats", "smartcage_round_stats", "sofascore_round_stats", "judge_scores", "media_scores", "odds")
+STATS_TABLES = tuple(t for t in COLUMNS if t.endswith("round_stats"))
+# A source's rows about a fighter in a fight (stats, cards, odds): merges move them, a fight takes them along.
+FIGHT_ROWS = tuple(t for t, cols in COLUMNS.items() if {"fight_id", "fighter_id", "source"} <= set(cols))
 FIGHTER_ROWS = ("fight_participants", *FIGHT_ROWS)
 
 

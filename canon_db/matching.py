@@ -36,13 +36,15 @@ class Matcher:
         for fid, name in conn.execute("SELECT fighter_id, name FROM fighter_aliases"):
             names.setdefault(fid, []).append(name)
         self.by_date: dict[str, list[dict]] = {}
-        for fight_id, day in conn.execute(
-                "SELECT f.fight_id, e.date FROM fights f JOIN events e USING (event_id)"):
-            corners = [r[0] for r in conn.execute(
-                "SELECT fighter_id FROM fight_participants WHERE fight_id = ? ORDER BY corner",
-                (fight_id,))]
-            self.by_date.setdefault(day, []).append(
-                {"fight_id": fight_id, "corners": [(c, names.get(c, [])) for c in corners]})
+        fights: dict[int, dict] = {}
+        for fight_id, day, fid in conn.execute(
+                "SELECT f.fight_id, e.date, p.fighter_id FROM fights f JOIN events e USING (event_id) "
+                "LEFT JOIN fight_participants p USING (fight_id) ORDER BY f.fight_id, p.corner"):
+            if fight_id not in fights:
+                fights[fight_id] = {"fight_id": fight_id, "corners": []}
+                self.by_date.setdefault(day, []).append(fights[fight_id])
+            if fid is not None:
+                fights[fight_id]["corners"].append((fid, names.get(fid, [])))
 
     @staticmethod
     def _score(name: str, names: list[str]) -> float:

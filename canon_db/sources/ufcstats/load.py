@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import re
 import sqlite3
 from collections import Counter
 from datetime import date, timedelta
@@ -30,6 +29,7 @@ from pathlib import Path
 from canon_db import ids
 from canon_db.http import save
 from canon_db.matching import Bouts
+from canon_db.promotions import promotion
 from canon_db.sources.ufcstats import fields as F
 from canon_db.sources.ufcstats.client import BASE, EVENTS_LIST_URL, Fetcher
 from canon_db.sources.ufcstats.pages import (parse_event, parse_events_list, parse_fight,
@@ -77,44 +77,10 @@ def _round_row(rnd: int, c: dict) -> dict:
     return dict(round=rnd, **dict(zip(ROUND_COLS, vals)))
 
 
-# Series labelled by how their event names start, ahead of the rules in promotion().
-PROMOTION_PREFIXES = {"PRIDE": "PRIDE", "Road to UFC": "Road to UFC",
-                      "K-1 Hero's": "HERO'S", "K-1 Dynamite": "Dynamite!!"}
-
-# Promotion names the rule in promotion() gets wrong, keyed by the name it would produce.
-PROMOTION_OVERRIDES: dict[str, str] = {
-    "K": "K-1", "M": "M-1",                     # the number is part of the name
-    "Strikeforce Challengers": "Strikeforce",   # a promotion's own sub-series
-    "DWCS Brazil": "DWCS",
-    "UCC Hawaii": "UCC",
-    "2H2H - Pride & Honor": "2H2H",
-    "Brazil Open '": "Brazil Open",
-}
-
-
 # Values UFC Stats has wrong, by UFC Stats fight id: {parse_fight() key: corrected value}.
 FIGHT_FIXES: dict[str, dict[str, str]] = {
     "5a91827fe8c1dc26": {"time_format": "3 Rnd (5-5-5)"},  # listed as 10-5-5
 }
-
-
-def promotion(event_name: str) -> str:
-    """Promotion of an event missing from UFC Stats' events list, from its name.
-
-    Events on that list are always UFC and don't go through this (early UFC names like
-    "Ortiz vs. Shamrock 3" don't say UFC). First PROMOTION_PREFIXES ("PRIDE 33: ..." -> PRIDE),
-    then any name with UFC in it -> UFC, otherwise the name up to its number or subtitle:
-    "Strikeforce: ..." -> Strikeforce, "Meca 9" -> Meca, "IFC - Global Domination" -> IFC.
-    """
-    name = " ".join(event_name.split())
-    for prefix, label in PROMOTION_PREFIXES.items():
-        if name.lower().startswith(prefix.lower()):
-            return label
-    if re.search(r"\bUFC\b", name, re.I):
-        return "UFC"
-    head = re.split(r"\s*(?::| - | vs\.? |\d)", name, maxsplit=1, flags=re.I)[0].strip(" -:")
-    head = head or name
-    return PROMOTION_OVERRIDES.get(head, head)
 
 
 def load_event(pages: Pages, eid: str) -> dict | None:

@@ -40,8 +40,8 @@ from pathlib import Path
 from canon_db import ids
 from canon_db.http import Fetcher, save
 from canon_db.matching import Bouts, days_apart, name_ok, norm
+from canon_db.promotions import promotion
 from canon_db.sources.sherdog.pages import parse_event, parse_fighter, parse_sitemap
-from canon_db.sources.ufcstats.load import promotion
 
 NAME = "sherdog"
 BASE = "https://www.sherdog.com"
