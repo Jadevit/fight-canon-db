@@ -11,7 +11,7 @@ writer per fighter; a score whose higher side isn't the writer's stated pick is 
 
 A decision is matched to our fight by date (within a day) and both names, and only if our
 result agrees: the page's winner won, or both drew. That links MMA Decisions' fighter ids
-(fighter_aliases, if the name agrees) and the event (event_aliases).
+(fighter_aliases) and the event (event_aliases).
 
 Which events:
   default     this year's events not on disk, and those from the last --recent-days days again
@@ -29,7 +29,7 @@ from collections import Counter
 from pathlib import Path
 
 from canon_db.ids import alias, clear
-from canon_db.matching import Matcher, fighter_names, name_ok, norm
+from canon_db.matching import Matcher, norm
 from canon_db.sources.mmadecisions.pages import decision
 
 NAME = "mmadecisions"
@@ -60,7 +60,6 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
         results.setdefault(fight, {})[fighter] = res
     details = dict(conn.execute("SELECT fight_id, details FROM fights WHERE details IS NOT NULL"))
     official = {r[0] for r in conn.execute("SELECT DISTINCT fight_id FROM judge_scores WHERE source <> ?", (NAME,))}
-    names = fighter_names(conn)
     event_of = dict(conn.execute("SELECT fight_id, event_id FROM fights"))
 
     cards, media, aliases, event_alias, seen, replaced = [], [], set(), {}, set(), set()
@@ -85,9 +84,7 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
             continue
         seen.add(fight)
         counts["decisions matched"] += 1
-        for f in d["fighters"]:
-            if name_ok(f["name"], names.get(ids[f["slug"]], [])):
-                aliases.add((ids[f["slug"]], f["slug"], f["name"]))
+        aliases.update((ids[f["slug"]], f["slug"], f["name"]) for f in d["fighters"])
         event_alias[d["event"]["id"]] = event_of[fight]
 
         spelled = ufcstats_judges(details.get(fight))

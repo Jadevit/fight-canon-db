@@ -20,53 +20,58 @@ from __future__ import annotations
 
 import argparse
 import logging
-import re
 import sqlite3
-from collections import defaultdict
-from datetime import date, timedelta
+from collections import Counter
 from pathlib import Path
 
-from canon_db.http import Fetcher, save
 from canon_db.ids import alias, clear
-from canon_db.matching import Matcher, norm
+from canon_db.matching import Matcher
+from canon_db.sources.bestfightodds.fetch import fetch
 from canon_db.sources.bestfightodds.pages import parse_fighter_page
 
 NAME = "bestfightodds"
-BASE = "https://www.bestfightodds.com"
 log = logging.getLogger(NAME)
 
 
-# --- choosing fighter pages ----------------------------------------------------------
-
-def sitemap_slugs(fetcher: Fetcher) -> list[str]:
-    xml = fetcher.get(f"{BASE}/sitemap-teams.xml")
-    if xml is None:  # odds are a bonus: never let this source block the rest of the update
-        log.warning("Couldn't get the BestFightOdds fighter sitemap; new fighters skipped.")
-        return []
-    return re.findall(r"/fighters/([^<]+)</loc>", xml)
-
-
-def slugs_for(fighter_ids: set[str], conn: sqlite3.Connection, fetcher: Fetcher) -> set[str]:
-    """BestFightOdds pages for these fighters: known ones from fighter_aliases, the rest by
-    name from the sitemap (a shared name can give several pages; matching sorts them out)."""
-    known = dict(conn.execute(
-        "SELECT fighter_id, source_id FROM fighter_aliases WHERE source = ?", (NAME,)))
-    out = {known[f] for f in fighter_ids if f in known}
-    missing = fighter_ids - known.keys()
-    if missing:
-        by_name = defaultdict(list)
-        for s in sitemap_slugs(fetcher):
-            by_name[norm(s.rsplit("-", 1)[0].replace("-", " "))].append(s)
-        for fid, name in conn.execute("SELECT fighter_id, name FROM fighter_aliases"):
-            if fid in missing:
-                out.update(by_name.get(norm(name), []))
-    return out
-
-
-def fighters_since(conn: sqlite3.Connection, day: str) -> set[str]:
-    return {r[0] for r in conn.execute(
-        "SELECT DISTINCT p.fighter_id FROM fight_participants p JOIN fights USING (fight_id) "
-        "JOIN events e USING (event_id) WHERE e.date >= ?", (day,))}
+def load(conn: sqlite3.Connection, pages: Path, slugs: list[str]) -> Counter:
+    """Replace the odds of every fight the pages of these fighters list."""
+    counts = Counter()
+    matcher = Matcher(conn)
+    placed: dict[tuple, tuple] = {}  # a fight is on both fighters' pages: matched once
+    rows, aliases, seen = [], set(), set()
+    for slug in slugs:
+        path = pages / f"{slug}.html"
+        if not path.exists():
+            continue
+        counts["pages"] += 1
+        for fight in parse_fighter_page(path.read_text(encoding="utf-8")):
+            counts["fight listings"] += 1
+            key = (fight["date"], frozenset((f["slug"], f["name"]) for f in fight["fighters"]))
+            if key not in placed:
+                placed[key] = matcher.match(fight)
+            fight_id, ids = placed[key]
+            if fight_id is None:
+                continue
+            for f in fight["fighters"]:
+                aliases.add((ids[f["slug"]], f["slug"], f["name"]))
+            if fight_id in seen:
+                continue
+            seen.add(fight_id)
+            if all(f["open"] is None and f["close_low"] is None for f in fight["fighters"]):
+                counts["fights without a posted line"] += 1
+                continue
+            counts["fights with odds"] += 1
+            for f in fight["fighters"]:
+                rows.append((fight_id, ids[f["slug"]], NAME, "all", f["open"], None,
+                             f["close_low"], f["close_high"]))
+    with conn:
+        clear(conn, NAME, seen, ("odds",))
+        conn.executemany("INSERT OR REPLACE INTO odds (fight_id, fighter_id, source, book, open, "
+                         "close, close_low, close_high) VALUES (?,?,?,?,?,?,?,?)", rows)
+        for fid, sid, name in sorted(aliases):
+            alias(conn, "fighter", fid, NAME, sid, name)
+    counts["fights matched"] = len(seen)
+    return counts
 
 
 # --- entry points (see canon_db.sources) ---------------------------------------------
@@ -84,55 +89,9 @@ def add_arguments(p: argparse.ArgumentParser) -> None:
 
 def update(conn: sqlite3.Connection, args: argparse.Namespace, raw: Path) -> None:
     pages = raw / "fighters"
-    pages.mkdir(parents=True, exist_ok=True)
     if args.offline:
         slugs = sorted(p.stem for p in pages.glob("*.html"))
     else:
-        fetcher = Fetcher(args.delay)
-        if args.all:
-            slugs = sorted(set(sitemap_slugs(fetcher)) | {r[0] for r in conn.execute(
-                "SELECT source_id FROM fighter_aliases WHERE source = ?", (NAME,))})
-            todo = slugs if args.refresh else [s for s in slugs if not (pages / f"{s}.html").exists()]
-        else:
-            since = (date.today() - timedelta(days=args.recent_days)).isoformat()
-            slugs = todo = sorted(slugs_for(fighters_since(conn, since), conn, fetcher))
-        log.info("Fetching %d BestFightOdds fighter pages.", len(todo))
-        for i, slug in enumerate(todo, 1):
-            page = fetcher.get(f"{BASE}/fighters/{slug}")
-            if page is not None:
-                save(pages / f"{slug}.html", page)
-            if i % 250 == 0:
-                log.info("  %d/%d", i, len(todo))
-
-    matcher = Matcher(conn)
-    rows, aliases, seen = [], set(), set()
-    stats = defaultdict(int)
-    for slug in slugs:
-        path = pages / f"{slug}.html"
-        if not path.exists():
-            continue
-        for fight in parse_fighter_page(path.read_text(encoding="utf-8")):
-            stats["listed"] += 1
-            fight_id, ids = matcher.match(fight)
-            if fight_id is None:
-                continue
-            for f in fight["fighters"]:
-                aliases.add((ids[f["slug"]], f["slug"], f["name"]))
-            if fight_id in seen:
-                continue
-            seen.add(fight_id)
-            if all(f["open"] is None and f["close_low"] is None for f in fight["fighters"]):
-                stats["no line"] += 1
-                continue
-            for f in fight["fighters"]:
-                rows.append((fight_id, ids[f["slug"]], NAME, "all", f["open"], None,
-                             f["close_low"], f["close_high"]))
-    with conn:
-        clear(conn, NAME, seen, ("odds",))
-        conn.executemany("INSERT OR REPLACE INTO odds (fight_id, fighter_id, source, book, open, "
-                         "close, close_low, close_high) VALUES (?,?,?,?,?,?,?,?)", rows)
-        for fid, sid, name in sorted(aliases):
-            alias(conn, "fighter", fid, NAME, sid, name)
-    log.info("BestFightOdds: %d pages, %d fight listings -> %d fights matched, %d with odds "
-             "(%d without a posted line).", len(slugs), stats["listed"], len(seen),
-             len(rows) // 2, stats["no line"])
+        slugs = fetch(conn, pages, args.all, args.refresh, args.recent_days, args.delay, NAME)
+    counts = load(conn, pages, slugs)
+    log.info("BestFightOdds: %s.", ", ".join(f"{k} {v}" for k, v in counts.items()))
