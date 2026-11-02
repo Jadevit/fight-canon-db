@@ -23,6 +23,7 @@ VERSION = "v1"
 # Files keep their names: browsers check again after 5 minutes, Cloudflare after a day (purge
 # clears changed files from it sooner), so a visit reads R2 at most once a day per data center.
 CACHE = "public, max-age=300, s-maxage=86400"
+PUT_WAITS = (5, 15, 30)  # seconds, when R2 still says "not now" after the client's own quick retries
 PURGE_BATCH = 30  # URLs per purge request (the free plan's limit)
 PURGE_ALL = 3000  # more changed files than this: clear the whole cache in one request instead
 
@@ -54,8 +55,15 @@ def upload(out: Path, workers: int = 32) -> None:
     gone = [k for k in live if k not in hashes]
 
     def put(k: str) -> None:
-        s3.put_object(Bucket=bucket, Key=k, Body=files[k].read_bytes(), ContentType="application/json",
-                      CacheControl=CACHE)
+        for wait in (*PUT_WAITS, None):
+            try:
+                s3.put_object(Bucket=bucket, Key=k, Body=files[k].read_bytes(), ContentType="application/json",
+                              CacheControl=CACHE)
+                return
+            except s3.exceptions.ClientError as e:
+                if wait is None or e.response["Error"]["Code"] not in ("ServiceUnavailable", "SlowDown"):
+                    raise
+                time.sleep(wait)
 
     with ThreadPoolExecutor(workers) as pool:
         list(pool.map(put, changed))

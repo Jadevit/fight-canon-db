@@ -1,7 +1,7 @@
 # Deploys the website to fightcanon.com: the page (site/) as the fightcanon Worker's static
 # assets (wrangler.jsonc), and the latest release's data in R2 (bucket fightcanon-db, served
 # at db.fightcanon.com): the pages as JSON (scripts/site_json.py, under v1/) and the database
-# as Parquet (scripts/export_parquet.py, a folder per build, for the SQL page and filtered
+# as Parquet (scripts/export_parquet.py, a folder per build, for the Query page and filtered
 # leaderboards). Runs when the site changes, after each database update, or by hand.
 name: Deploy site
 
@@ -38,11 +38,11 @@ jobs:
       AWS_REQUEST_CHECKSUM_CALCULATION: when_required
       AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: main
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
 
@@ -78,7 +78,7 @@ jobs:
         run: python scripts/site_json.py upload _json
 
       - name: Deploy the Worker
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

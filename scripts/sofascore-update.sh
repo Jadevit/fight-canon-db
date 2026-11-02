@@ -35,8 +35,10 @@ for try in 1 2 3; do
     echo "$(date '+%F %T') no change"
     exit 0
   fi
-  if [ "$(gh release view --json tagName --jq .tagName)" != "$base" ]; then
-    echo "$(date '+%F %T') a newer release appeared while updating; starting over"
+  # A newer release would lose its rows to this one; an update that started meanwhile would lose
+  # this one's, or fail on seeing it (scripts/publish-release.sh).
+  if [ "$(gh release view --json tagName --jq .tagName)" != "$base" ] || [ "$(busy)" != "0" ]; then
+    echo "$(date '+%F %T') a newer release or a running update appeared; starting over"
     continue
   fi
   last=$("$PY" -c "import json, sys; print(json.load(open(sys.argv[1]))['coverage']['last_event'])" "$WORK/summary.json")

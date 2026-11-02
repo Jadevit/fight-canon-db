@@ -1,11 +1,13 @@
-# Weekly: find and load events that UFC Stats hosts but leaves off its events list
-# (DWCS, PRIDE and other promotions), then publish the database as a new release if it
-# changed. Shares the daily job's concurrency group so the two never run at the same time.
+# Weekly: find and load events that UFC Stats hosts but leaves off its events list (DWCS, PRIDE
+# and dozens of other promotions). They can only be found by crawling fighter pages, so the daily
+# job can't see them; UFC Stats adds them without notice, whatever the season. Publishes the
+# database as a new release if it changed. Shares the daily job's concurrency group so the two
+# never run at the same time.
 name: Discover events
 
 on:
   schedule:
-    - cron: "0 12 * * 3"   # 12:00 UTC Wednesdays, after Tuesday's DWCS episode
+    - cron: "17 12 * * 3"   # 12:17 UTC Wednesdays, after Tuesday's DWCS episode
   workflow_dispatch:
 
 concurrency:
@@ -20,9 +22,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 350
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
           cache: pip
@@ -32,7 +34,10 @@ jobs:
       - name: Get the current database
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release download --pattern canon.db --dir data
+        run: |
+          base=$(gh release view --json tagName --jq .tagName)
+          gh release download "$base" --pattern canon.db --dir data
+          echo "BASE=$base" >> "$GITHUB_ENV"
 
       - name: Run tests
         run: python -m pytest -q tests/
@@ -45,12 +50,7 @@ jobs:
         if: steps.update.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          last=$(python -c "import json; print(json.load(open('data/summary.json'))['coverage']['last_event'])")
-          tag="db-$(date -u +%Y-%m-%d-%H%M)"
-          gh release create "$tag" data/canon.db data/summary.json \
-            --title "Data through ${last}" --notes "Weekly discovery of events missing from UFC Stats' events list."
-          scripts/commit-summary.sh "data: update through ${last}"
+        run: scripts/publish-release.sh "$BASE" "Weekly discovery of events missing from UFC Stats' events list."
 
       # Old releases: the newest 30, the first of each month and data/keep-releases.txt stay.
       - name: Prune old releases

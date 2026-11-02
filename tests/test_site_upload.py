@@ -23,7 +23,12 @@ class Bucket:
         class NoSuchKey(Exception):
             pass
 
-    def __init__(self, files=None, manifest=None, etag=None):
+        class ClientError(Exception):
+            def __init__(self, code):
+                self.response = {"Error": {"Code": code}}
+
+    def __init__(self, files=None, manifest=None, etag=None, refusals=()):
+        self.refusals = list(refusals)
         self.files = {k: etag or hashlib.md5(v).hexdigest() for k, v in (files or {}).items()}
         self.manifest = manifest
         self.put, self.deleted = [], []
@@ -38,6 +43,8 @@ class Bucket:
             {"Contents": [{"Key": k, "ETag": f'"{e}"'} for k, e in self.files.items()]}])
 
     def put_object(self, Bucket, Key, Body, CacheControl=None, **_):
+        if self.refusals:
+            raise self.exceptions.ClientError(self.refusals.pop(0))
         if Key.endswith("-manifest.json"):
             self.manifest = json.loads(Body)
         else:
@@ -113,6 +120,23 @@ def test_etags_that_arent_hashes_fall_back_to_the_manifest(build, monkeypatch, c
     _upload(monkeypatch, build(a="1", b="2"), bucket)
     assert bucket.put == ["v1/b.json"]
     assert "ETags" in capsys.readouterr().out
+
+
+def test_a_file_r2_refuses_for_now_is_tried_again(build, monkeypatch):
+    waits = []
+    monkeypatch.setattr("time.sleep", waits.append)
+    bucket = Bucket(refusals=["ServiceUnavailable", "SlowDown"])
+    _upload(monkeypatch, build(a="1"), bucket)
+    assert bucket.put == ["v1/a.json"] and waits == list(site.PUT_WAITS[:2])
+
+
+def test_upload_stops_when_r2_keeps_refusing_or_refuses_for_good(build, monkeypatch):
+    monkeypatch.setattr("time.sleep", lambda _: None)
+    for refusals in (["ServiceUnavailable"] * (len(site.PUT_WAITS) + 1), ["AccessDenied"]):
+        bucket = Bucket(refusals=refusals)
+        with pytest.raises(Bucket.exceptions.ClientError):
+            _upload(monkeypatch, build(a="1"), bucket)
+        assert bucket.put == [] and bucket.manifest is None
 
 
 def _purge(monkeypatch, tmp_path, keys, responses=()):
