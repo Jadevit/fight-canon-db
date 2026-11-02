@@ -169,6 +169,21 @@ def update(conn: sqlite3.Connection, args: argparse.Namespace, raw: Path) -> Non
     log.info("Sofascore: %s.", ", ".join(f"{k} {v}" for k, v in counts.items()))
 
 
+def stats_due(listed: list[dict], matcher: Matcher, stats: Path, since: str, refresh: bool,
+              with_stats: set[int]) -> list[int]:
+    """The bouts of a season whose stats to fetch: those matching our fights, recent or not on
+    disk yet (and without Sofascore's stats in the database, as in a run from an empty disk).
+    Most of a season is on disk already, so those aren't matched at all."""
+    due = []
+    for b in listed:
+        recent = refresh or b["date"] >= since
+        if recent or not (stats / f"{b['id']}.json").exists():
+            fight = matcher.match(b)[0]
+            if fight is not None and (recent or fight not in with_stats):
+                due.append(b["id"])
+    return due
+
+
 def fetch(conn: sqlite3.Connection, args: argparse.Namespace, raw: Path) -> None:
     from canon_db.sources.sofascore.fetch import Site, fetch_events, fetch_seasons, fetch_stats
 
@@ -193,12 +208,5 @@ def fetch(conn: sqlite3.Connection, args: argparse.Namespace, raw: Path) -> None
         for s in seasons:  # stats of bouts matching our fights: those not on disk yet, and recent ones
             season = read_json(raw / "events" / f"{s['id']}.json")
             listed = bouts(season) if season else []
-            found = {b["id"]: matcher.match(b)[0] for b in listed}
-            if not any(found.values()):
-                continue
-            for b in listed:
-                if found[b["id"]] is None:
-                    continue
-                path = raw / "stats" / f"{b['id']}.json"
-                if args.refresh or b["date"] >= since or not (path.exists() or found[b["id"]] in with_stats):
-                    fetch_stats(site, raw, b["id"])
+            for bout in stats_due(listed, matcher, raw / "stats", since, args.refresh, with_stats):
+                fetch_stats(site, raw, bout)

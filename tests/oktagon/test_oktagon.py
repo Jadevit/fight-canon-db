@@ -4,7 +4,6 @@ import sqlite3
 from canon_db import db
 from canon_db.sources.oktagon.load import is_test, load
 from canon_db.sources.oktagon.pages import card_fights, fighters, rounds
-from canon_db.sources.ufcstats.load import fill_sex
 
 
 def _fighter(fid, first, last, born=None):
@@ -95,19 +94,3 @@ def test_test_tournaments_are_left_out(tmp_path):
     _raw(tmp_path, 8, dict(MATCH, tournamentName="OKTAGON 9999 test"))
     assert load(conn, tmp_path)["events read"] == 0
     assert conn.execute("SELECT count(*) FROM round_stats").fetchone() == (0,)
-
-
-def test_fill_sex_from_ufcstats_divisions():
-    conn = sqlite3.connect(":memory:")
-    conn.executescript(db.SCHEMA.read_text())
-    db.sync_promotions(conn)
-    conn.execute("INSERT INTO events (event_id, name, date) VALUES (1, 'UFC 1', '2020-01-01')")
-    conn.executemany("INSERT INTO fighters (fighter_id, name) VALUES (?, ?)", [(i, x) for i, x in enumerate("abcdef", 1)])
-    for fid, wc, pair in ((1, "Women's Strawweight Bout", (1, 2)), (2, "Lightweight Bout", (3, 4)),
-                          (3, "Catch Weight Bout", (5, 6)), (4, "Bantamweight Bout", (1, 3))):
-        conn.execute("INSERT INTO fights (fight_id, event_id, weight_class) VALUES (?, 1, ?)", (fid, wc))
-        conn.execute("INSERT INTO fight_aliases VALUES (?, 'ufcstats', ?)", (fid, f"f{fid}"))
-        conn.executemany("INSERT INTO fight_participants VALUES (?, ?, ?, 'W')", [(fid, p, i) for i, p in enumerate(pair)])
-    fill_sex(conn)
-    # A women's bout decides first; catch weight says nothing.
-    assert dict(conn.execute("SELECT name, sex FROM fighters")) == dict(a="F", b="F", c="M", d="M", e=None, f=None)

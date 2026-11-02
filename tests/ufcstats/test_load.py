@@ -1,7 +1,7 @@
 import sqlite3
 
 from canon_db import db, ids
-from canon_db.sources.ufcstats.load import Writer
+from canon_db.sources.ufcstats.load import Writer, fill_sex
 
 
 def _db():
@@ -93,3 +93,19 @@ def test_unknown_fighters_get_new_rows():
     assert conn.execute("SELECT source, source_id FROM fight_aliases WHERE fight_id = 1 ORDER BY 1").fetchall() == [
         ("sherdog", "1:1-2"), ("ufcstats", "f1")]
     assert conn.execute("SELECT method FROM fights").fetchall() == [("KO/TKO",)]
+
+
+def test_fill_sex_from_ufcstats_divisions():
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(db.SCHEMA.read_text())
+    db.sync_promotions(conn)
+    conn.execute("INSERT INTO events (event_id, name, date) VALUES (1, 'UFC 1', '2020-01-01')")
+    conn.executemany("INSERT INTO fighters (fighter_id, name) VALUES (?, ?)", [(i, x) for i, x in enumerate("abcdef", 1)])
+    for fid, wc, pair in ((1, "Women's Strawweight Bout", (1, 2)), (2, "Lightweight Bout", (3, 4)),
+                          (3, "Catch Weight Bout", (5, 6)), (4, "Bantamweight Bout", (1, 3))):
+        conn.execute("INSERT INTO fights (fight_id, event_id, weight_class) VALUES (?, 1, ?)", (fid, wc))
+        conn.execute("INSERT INTO fight_aliases VALUES (?, 'ufcstats', ?)", (fid, f"f{fid}"))
+        conn.executemany("INSERT INTO fight_participants VALUES (?, ?, ?, 'W')", [(fid, p, i) for i, p in enumerate(pair)])
+    fill_sex(conn)
+    # A women's bout decides first; catch weight says nothing.
+    assert dict(conn.execute("SELECT name, sex FROM fighters")) == dict(a="F", b="F", c="M", d="M", e=None, f=None)

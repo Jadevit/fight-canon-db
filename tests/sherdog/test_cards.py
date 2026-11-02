@@ -2,7 +2,7 @@ import sqlite3
 
 from canon_db import db, ids
 from canon_db.sources.sherdog import cards
-from canon_db.sources.sherdog.load import State
+from canon_db.sources.sherdog.linking import State
 
 
 def _db():
@@ -110,7 +110,7 @@ def test_events_found_to_be_one_merge():
 
 
 def test_bout_types():
-    from canon_db.sources.sherdog.load import default_pro, mark_bout_types
+    from canon_db.sources.sherdog.write import default_pro, mark_bout_types
     conn = _db()
     write(conn, [_bout(901, "2019-05-05", ("Carl Cole", "300"), ("Alan Able", "100")),
                  _bout(902, "2019-06-06", ("Carl Cole", "300"), ("Dan Dent", "400"))])
@@ -133,7 +133,7 @@ def test_bout_against_oneself_is_skipped():
 
 
 def test_non_pro_fights_are_dropped():
-    from canon_db.sources.sherdog.load import drop_non_pro, mark_bout_types
+    from canon_db.sources.sherdog.write import drop_non_pro, mark_bout_types
     conn = _db()
     write(conn, [_bout(901, "2019-05-05", ("Carl Cole", "300"), ("Alan Able", "100")),
                  _bout(902, "2019-06-06", ("Carl Cole", "300"), ("Dan Dent", "400")),

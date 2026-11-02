@@ -26,9 +26,10 @@ from datetime import date, timedelta
 from canon_db import ids
 from canon_db.http import save
 from canon_db.matching import name_ok
-from canon_db.sources.sherdog.load import (BASE, NAME, Labels, Pages, State, Writer, drop_non_pro,
-                                           fight_key, mark_bout_types, sherdog_promotion)
+from canon_db.sources.sherdog.fetch import BASE, NAME, Pages
+from canon_db.sources.sherdog.linking import State
 from canon_db.sources.sherdog.pages import bio, parse_card, parse_event, parse_event_sitemap
+from canon_db.sources.sherdog.write import Labels, Writer, drop_non_pro, fight_key, mark_bout_types, sherdog_promotion
 
 BIO = ("nickname", "dob", "height_in", "weight_lbs", "nationality")
 

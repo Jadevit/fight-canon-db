@@ -3,7 +3,7 @@ import sqlite3
 from pathlib import Path
 
 from canon_db import db
-from canon_db.sources.sofascore.load import load
+from canon_db.sources.sofascore.load import load, stats_due
 from canon_db.sources.sofascore.pages import bouts, rounds
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -167,3 +167,23 @@ def test_a_name_that_disagrees_isnt_saved_as_an_alias(tmp_path):
     counts = load(conn, tmp_path)
     assert counts["fights with stats"] == 1 and counts["names not saved as aliases"] == 1
     assert conn.execute("SELECT count(*) FROM fighter_aliases WHERE source = 'sofascore' AND source_id = '2'").fetchone() == (0,)
+
+
+def test_only_bouts_due_are_matched(tmp_path):
+    (tmp_path / "1.json").write_text("{}")  # old, on disk
+    (tmp_path / "2.json").write_text("{}")  # recent, on disk
+    listed = [dict(id=1, date="2020-01-01"), dict(id=2, date="2024-05-04"), dict(id=3, date="2020-01-01"),
+              dict(id=4, date="2020-01-01"), dict(id=5, date="2024-05-04")]
+
+    class Fights:
+        asked = []
+
+        def match(self, b):
+            self.asked.append(b["id"])
+            return {2: 20, 3: 30, 4: 40}.get(b["id"]), None
+
+    m = Fights()
+    # 2 is recent; 3 isn't on disk; 4 isn't either, but its stats are loaded; 5 matches nothing.
+    assert stats_due(listed, m, tmp_path, "2024-01-01", False, {40}) == [2, 3]
+    assert m.asked == [2, 3, 4, 5]  # 1 is on disk and old: not matched
+    assert stats_due(listed, m, tmp_path, "2024-01-01", True, {40}) == [2, 3, 4]  # --refresh: all that match

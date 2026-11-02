@@ -2,8 +2,9 @@ import sqlite3
 from pathlib import Path
 
 from canon_db import db, ids
-from canon_db.sources.sherdog.load import Labels, State, follow, write
+from canon_db.sources.sherdog.linking import State, follow
 from canon_db.sources.sherdog.pages import parse_event, parse_fighter, parse_sitemap
+from canon_db.sources.sherdog.write import Labels, write
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
