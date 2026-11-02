@@ -28,3 +28,6 @@ jobs:
 
       - name: Tests
         run: python -m pytest -q tests/
+
+      - name: The site's tests
+        run: node --test tests/site/modules.test.mjs

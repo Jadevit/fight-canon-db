@@ -16,6 +16,11 @@ pytest.importorskip("duckdb")
 sys.path.insert(0, str(db.ROOT / "scripts"))  # the scripts import each other
 
 
+def test_shard_agrees_with_the_page():
+    # tests/site/modules.test.mjs checks the page's own shard() against the same values.
+    assert [site_json.shard(i) for i in (1, 42, 373731, 999999)] == ["1c", "83", "fd", "0b"]
+
+
 def _script(name):
     spec = importlib.util.spec_from_file_location(name, db.ROOT / "scripts" / f"{name}.py")
     module = importlib.util.module_from_spec(spec)
