@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 # The divisions a bout title can name, the first that matches wins. Keep in step with
-# division() in site/app.js (made from this list, in meta.json).
+# division() in site/js/duck.js (made from this list, in meta.json).
 DIVISIONS = ["Women's Strawweight", "Women's Flyweight", "Women's Bantamweight",
              "Women's Featherweight", "Atomweight", "Strawweight", "Flyweight", "Bantamweight", "Featherweight",
              "Lightweight", "Welterweight", "Middleweight", "Light Heavyweight", "Super Heavyweight", "Heavyweight",
@@ -14,7 +14,7 @@ DIVISIONS = ["Women's Strawweight", "Women's Flyweight", "Women's Bantamweight",
 # Leaderboards: which fights each board counts (the stats table and source; results count
 # every fight), its stats as SQL over each fighter's summed columns (results: n, w, fin, ko,
 # subw; stats boards also the STATS columns), and what the site says about it. meta.json
-# carries these to the page, which builds filtered boards from them (leaderQuery in app.js).
+# carries these to the page, which builds filtered boards from them (leaderQuery in site/js/leaders.js).
 LANDED = {
     "sig":    dict(label="Sig. strikes landed", expr="sl"),
     "total":  dict(label="Total strikes landed", expr="tsl"),
@@ -78,7 +78,7 @@ def sql_list(items: list[str]) -> str:
 
 def division_macro() -> str:
     """SQL: division(bout title), the first of DIVISIONS it names, else 'Other' (a CASE, which
-    every DuckDB version takes; app.js builds the same one)."""
+    every DuckDB version takes; site/js/duck.js builds the same one)."""
     t = "regexp_replace(coalesce(wc, ''), '(?i)catchweight', 'Catch Weight')"
     whens = " ".join(f"WHEN contains({t}, {sql_list([d])}) THEN {sql_list([d])}" for d in DIVISIONS)
     return f"CREATE MACRO division(wc) AS CASE {whens} ELSE 'Other' END"

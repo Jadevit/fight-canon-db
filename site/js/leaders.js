@@ -1,12 +1,12 @@
 // Leaderboards, one board per source of numbers: results come from every fight, and each
 // stats source (they count differently) ranks only its own fights, with the stats it has.
 // The boards and their stats (SQL over per-fighter totals: n, w, fin, ko, subw, and the stats
-// columns) are defined in scripts/site_json.py and come in meta.json.
+// columns) are defined in scripts/site_boards.py and come in meta.json.
 
 import { api, meta, objs, promotions } from "./data.js";
 import { q } from "./duck.js";
 import {
-  app, chip, esc, fighterHref, hmm, latest, loading, nothing, num, params, plural, setParams, syncChip
+  app, chip, esc, fighterHref, guard, hmm, latest, loading, nothing, num, params, plural, setParams, syncChip, yearOptions
 } from "./ui.js";
 
 // The top 50 for a board, stat and filters, from the fights themselves (the opening view is a
@@ -47,8 +47,7 @@ export async function leaders(_, show) {
   const [m, promos] = await Promise.all([meta(), promotions()]);
   const c = m.stats, divisions = objs(m.divisions), BOARDS = m.boards;
   const [minY, maxY] = [c.first_date.slice(0, 4), c.last_date.slice(0, 4)];
-  const years = [];
-  for (let y = Number(maxY); y >= Number(minY); y--) years.push([String(y), String(y)]);
+  const years = yearOptions(c);
   const code = (k) => (/^\d+$/.test(p.get(k) || "") ? p.get(k) : "0");  // a division's number
   const board0 = BOARDS[p.get("board")] ? p.get("board") : "results";
   const min0 = String(Math.max(1, Number(p.get("min")) || 1));
@@ -105,13 +104,14 @@ export async function leaders(_, show) {
         </a>`).join("")}</div>` : nothing()) +
       `<p class="note">${esc(b.note)}</p>`;
   };
-  app().querySelectorAll(".chip select").forEach((el) => (el.onchange = render));
+  const redraw = guard(render);
+  app().querySelectorAll(".chip select").forEach((el) => (el.onchange = redraw));
   // Each board has its own stats: changing board refills the stat list.
   document.getElementById("board").onchange = () => {
     const cur = val("stat");
     document.getElementById("stat-chip").innerHTML = chip("stat", "Stat", statOptions(val("board")), cur);
-    document.getElementById("stat").onchange = render;
-    render();
+    document.getElementById("stat").onchange = redraw;
+    redraw();
   };
   await render();
 }

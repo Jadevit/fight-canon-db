@@ -43,7 +43,7 @@ export async function fight(id, show) {
   const [L, R] = sides;
   const links = d.ufcstats?.[id] ? [ext(`http://ufcstats.com/fight-details/${d.ufcstats[id]}`, "UFC Stats")] : [];
   eventSources(d.aliases).filter((l) => !l.includes("ufcstats.com")).forEach((l) => links.push(l));
-  canonical(`/fight/${id}`);
+  canonical(`/fight/${id}`, [L.name, R.name].filter(Boolean).join(" vs "));
   const outcome = L.res === "W" ? `${esc(L.name)} wins` : L.res === "D" ? "Draw" : L.res === "NC" ? "No contest" : "";
   const nameCls = (s) => (s.res === "W" ? "won" : "lost");
 

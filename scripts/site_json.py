@@ -1,6 +1,6 @@
 """Write the site's browsing pages as JSON from canon.db: a file per fighter and per event, the
 event lists, a search index, the leaderboards' opening views and the landing page's numbers.
-A page then reads one small file instead of the database; only the SQL page and filtered
+A page then reads one small file instead of the database; only the Query page and filtered
 leaderboards query it (as Parquet, scripts/export_parquet.py). The files are the site's
 public API too, under /v1/.
 
@@ -130,7 +130,7 @@ def hexname(prefix: str) -> str:
 
 
 def shard(id_) -> str:
-    """Which fx/ file a fight is in: the low byte of its id's FNV-1a hash (app.js does the same)."""
+    """Which fx/ file a fight is in: the low byte of its id's FNV-1a hash (site/js/data.js does the same)."""
     h = 0x811C9DC5
     for b in str(id_).encode():
         h = ((h ^ b) * 0x01000193) & 0xFFFFFFFF
@@ -384,6 +384,7 @@ def meta(con, w: Writer, splits: dict) -> None:
                                  "ORDER BY events DESC, promotion"),
         "divisions": table(con, "SELECT code, division FROM site_divisions ORDER BY code"),
         "boards": BOARDS,
+        "stats_order": STATS_ORDER,
         "sums": SUMS, "stats_cols": STATS,  # stats boards: column -> its stats table's column
         "splits": splits,
     })

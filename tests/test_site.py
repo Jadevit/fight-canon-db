@@ -125,6 +125,7 @@ def test_site_json(tmp_path, monkeypatch):
     assert "bouts" in tables and "event_pages" not in tables
     assert dict((c[0], c[2]) for c in tables["fights"]["columns"])["end_time"] == "m:ss"
     m = read("meta.json")
+    assert m["stats_order"][0] == "ufcstats"
     assert m["stats"]["events"] == 2 and m["boards"]["results"]["stats"]["wins"]["label"] == "Wins"
     assert m["sums"]["round_stats"]["sl"] == "sig_str_land" and "kd" in m["stats_cols"]
     assert m["boards"]["ufcstats"]["source"] == ["round_stats", "ufcstats"] and m["boards"]["results"]["source"] is None

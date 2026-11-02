@@ -1,6 +1,6 @@
 // Fight Canon. Browsing pages read JSON files written daily by scripts/site_json.py: one per
 // fighter and per event, the event lists, a search index split by prefix, and the
-// leaderboards' opening views. Only the SQL page and filtered leaderboards query the database:
+// leaderboards' opening views. Only the Query page and filtered leaderboards query the database:
 // DuckDB-WASM over the database as Parquet (scripts/export_parquet.py), reading only the
 // columns and parts of the files a query needs; it loads the first time it's needed.
 // Views are chosen by the path: / (landing), /fighters, /fighter/<id>, /events, /event/<id>,
@@ -13,7 +13,7 @@ import { fight } from "./fight.js";
 import { fighter, fighters } from "./fighters.js";
 import { landing } from "./landing.js";
 import { headerSearch } from "./search.js";
-import { app, canonical, esc, eventLink, go, loading, nothing } from "./ui.js";
+import { app, canonical, esc, eventLink, go, loading, nothing, setTitle } from "./ui.js";
 
 let page = 0;  // the page being shown; a view drops its result if another page was opened since
 
@@ -22,16 +22,19 @@ let page = 0;  // the page being shown; a view drops its result if another page 
 // they're opened.
 const lazy = (file, name) => async (id, show) => (await import(file))[name](id, show);
 const query = lazy("./query.js", "query");
+const TITLES = { fighters: "Fighters", events: "Events", leaders: "Leaders", query: "Query", sql: "Query" };
 const VIEWS = { "": landing, fighters, fighter, events, event, fight, leaders: lazy("./leaders.js", "leaders"), query, sql: query };
 
-async function route() {
+async function route(e) {
   const path = location.pathname;
+  const y = e?.type === "popstate" ? history.state?.y : 0;  // Back returns to where the page was left
   window.dispatchEvent(new Event("route"));
   const [name = "", part = ""] = path.split("/").filter(Boolean);
   const numbered = ["fighter", "event", "fight"].includes(name);
   const id = numbered ? Number((decodeURIComponent(part).match(/^(\d+)(?:-|$)/) || [, 0])[1]) : decodeURIComponent(part);
   const view = VIEWS[name] || landing;
   const mine = ++page;
+  setTitle(TITLES[name]);  // a fighter, event or fight page names itself once it has the name
   const show = (html) => { if (mine !== page) return false; app().innerHTML = html; return true; };
   document.body.classList.toggle("landing", view === landing);
   const nav = document.getElementById("nav");
@@ -46,12 +49,14 @@ async function route() {
     canonical(path);  // a fighter, event or fight page puts its name in once it has it
     if (numbered && !id) show(nothing("Page not found."));
     else await view(id, show);
+    if (y && mine === page) window.scrollTo(0, y);
   } catch (e) {
     show(`<p class="error">Couldn't load this page: ${esc(e.message)}</p>`);
   }
 }
 
 export function start() {
+  history.scrollRestoration = "manual";
   const nav = document.getElementById("nav"), menuBtn = document.getElementById("menu-btn");
   menuBtn.onclick = () => {
     const open = nav.classList.toggle("open");

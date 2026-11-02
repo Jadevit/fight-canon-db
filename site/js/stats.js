@@ -19,10 +19,8 @@ export function eventSources(aliases) {
   (aliases.pfl || []).forEach((s) => links.push(ext(`https://pflmma.com/event/${s}`, "PFL")));
   return links;
 }
-// Stats sources in the order they're shown (the promotions' own first), and the switch between
-// them: "Counted by" and the source, a button per source when more than one counted.
-const STATS_ORDER = ["ufcstats", "pfl", "smartcage", "oktagon", "sofascore"];
-export const byOrder = (a, b) => STATS_ORDER.indexOf(a) - STATS_ORDER.indexOf(b);
+// The switch between stats sources: "Counted by" and the source, a button per source when more
+// than one counted.
 export const srcName = (s) => SOURCE_NAMES[s] || s;
 export function counted(sources, current) {
   if (sources.length < 2) return `<span class="counted">Counted by <b>${esc(srcName(sources[0]))}</b></span>`;
@@ -132,6 +130,7 @@ export function expandable(container, names) {
       try {
         await draw();
       } catch (e) {
+        delete d.dataset.loaded;  // tried again when it's next opened
         slot.innerHTML = `<p class="error">${esc(e.message)}</p>`;
       }
     });

@@ -1,4 +1,4 @@
-"""Export canon.db as Parquet for the site's SQL page and filtered leaderboards, which query it
+"""Export canon.db as Parquet for the site's Query page and filtered leaderboards, which query it
 in the browser with DuckDB-WASM: one file per table (zstd), each sorted the way queries walk
 it, so DuckDB reads only the columns and row groups a query needs, a few requests at a time.
 

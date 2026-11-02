@@ -4,8 +4,8 @@ import { api, hex, meta, objs, promotions } from "./data.js";
 import { searchIndex, searchWords } from "./search.js";
 import { eventFile, eventSources, expandable, fightLink, fightRow, sourceLine } from "./stats.js";
 import {
-  app, badge, canonical, chip, debounce, dot, esc, eventHref, fighterLink, latest, loading, longDate,
-  nothing, pagePath, params, plural, setParams, syncChip
+  app, badge, canonical, chip, debounce, dot, esc, eventHref, fighterLink, guard, latest, loading, longDate,
+  nothing, pagePath, params, plural, setParams, syncChip, yearOptions
 } from "./ui.js";
 
 // Events, newest first: a search's, a promotion's (listed ones) or a year's, narrowed by year
@@ -50,8 +50,7 @@ const EVENTS_SHOWN = 300;  // a page of the list; "Show more" adds the next
 
 export async function events(_, show) {
   const [c, promos] = await Promise.all([meta().then((m) => m.stats), promotions()]);
-  const years = [];
-  for (let y = Number(c.last_date.slice(0, 4)); y >= Number(c.first_date.slice(0, 4)); y--) years.push([String(y), String(y)]);
+  const years = yearOptions(c);
   const p = params();
   if (!show(`
     <div class="page-head"><h1>Events</h1>
@@ -75,12 +74,12 @@ export async function events(_, show) {
       (list.rows.length ? `<div class="list">${list.rows.slice(0, shown).map(eventRow).join("")}</div>` : nothing()) +
       (list.rows.length > shown || list.canMore ? `<button class="btn more" id="more">Show more</button>` : "");
     const btn = document.getElementById("more");
-    if (btn) btn.onclick = async () => {
+    if (btn) btn.onclick = guard(async () => {
       btn.disabled = true;
       shown += EVENTS_SHOWN;
       while (list.rows.length < shown && (list.canMore = await list.more()));
       draw();
-    };
+    });
   };
   const render = async () => {
     const term = qi.value.trim(), year = yi.value, promo = pi.value;
@@ -95,8 +94,8 @@ export async function events(_, show) {
     while (list.rows.length < shown && (list.canMore = await list.more()));
     draw();
   };
-  qi.oninput = debounce(render, 120);
-  yi.onchange = pi.onchange = render;
+  qi.oninput = debounce(guard(render), 120);
+  yi.onchange = pi.onchange = guard(render);
   await render();
 }
 
@@ -104,7 +103,7 @@ export async function event(id, show) {
   const d = await eventFile(id);
   if (!d) { show(nothing("Event not found.")); return; }
   const e = d.event, fights = objs(d.fights), links = eventSources(d.aliases);
-  canonical(pagePath("event", id, e.name));
+  canonical(pagePath("event", id, e.name), e.name);
   // The whole card is here if UFC Stats covers the promotion's cards or the card was read whole.
   const whole = (e.coverage === "full" && d.aliases.ufcstats) || e.card_complete === 1;
   // The winner's side goes left (gold); with no winner, the first fighter listed.

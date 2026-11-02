@@ -3,7 +3,7 @@
 import { api, hex, meta, objs, ready } from "./data.js";
 import { debounce, esc, eventHref, fighterHref, go, proRecord } from "./ui.js";
 
-const norm = (s) => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+const norm = (s) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
 // The words of a search term, normalized like the search index, longest first; null if none
 // has two letters.
@@ -66,8 +66,12 @@ export function headerSearch() {
       early[i] = rows;
       if (early[0] && early[1]) draw(mine, early[0], early[1].slice(0, 5));
     };
-    const [people, events] = await Promise.all([searchFighters(s, 6, soon(0)), searchIndex("se", s, soon(1))]);
-    draw(mine, people, events.slice(0, 5));
+    try {
+      const [people, events] = await Promise.all([searchFighters(s, 6, soon(0)), searchIndex("se", s, soon(1))]);
+      draw(mine, people, events.slice(0, 5));
+    } catch {
+      if (mine === n) { box.innerHTML = `<p>Couldn't search just now.</p>`; box.hidden = false; }
+    }
   };
   const draw = (mine, people, events) => {
     if (mine !== n) return;

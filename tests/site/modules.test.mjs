@@ -59,6 +59,25 @@ test("a record says its no contests", async () => {
   assert.equal(proRecord({}, { w: 3, l: 1, d: 1, nc: 2 }), "3-1-1 (2 NC)");
 });
 
+test("an older call's result and failure are both dropped", async () => {
+  const { latest } = await load("ui");
+  const waits = [];
+  const fn = latest(() => new Promise((res, rej) => waits.push({ res, rej })));
+  const first = fn(), second = fn();
+  waits[0].rej(new Error("old"));
+  waits[1].res("new");
+  assert.equal(await first, undefined);
+  assert.equal(await second, "new");
+  const only = fn();
+  waits[2].rej(new Error("now"));
+  await assert.rejects(only, /now/);
+});
+
+test("years for a chip, newest first", async () => {
+  const { yearOptions } = await load("ui");
+  assert.deepEqual(yearOptions({ first_date: "2023-05-01", last_date: "2025-01-01" }), [["2025", "2025"], ["2024", "2024"], ["2023", "2023"]]);
+});
+
 test("how a win came, in either source's words", async () => {
   const { winKind } = await load("fighters");
   assert.equal(winKind("KO/TKO"), "ko");

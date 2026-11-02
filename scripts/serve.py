@@ -1,5 +1,5 @@
 """Serve site/ for a local look at the site, like fightcanon.com does: HTTP range requests (the
-SQL page reads the database in pieces; python -m http.server always sends whole files), and
+Query page reads the database in pieces; python -m http.server always sends whole files), and
 index.html for any path that isn't a file (the page routes on the path).
 
     python scripts/site_json.py build data/canon.db site/db      # build site/db/ first

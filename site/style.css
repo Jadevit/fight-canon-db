@@ -31,9 +31,8 @@ body {
 }
 a { color: var(--gold); text-decoration: none; }
 a:hover { text-decoration: underline; }
-h1, h2, h3 { font-weight: 500; line-height: 1.2; margin: 0; }
+h1, h3 { font-weight: 500; line-height: 1.2; margin: 0; }
 h1 { font-size: 26px; }
-h2 { font-size: 19px; }
 p { margin: 0; }
 button, input, select, textarea { font: inherit; color: inherit; }
 img, svg { display: block; }
@@ -97,7 +96,7 @@ main.wrap { padding-top: 24px; padding-bottom: 56px; min-height: 60vh; }
 
 /* --- form controls --------------------------------------------------------------- */
 
-input[type="search"], input[type="number"], select, textarea {
+input[type="search"], select, textarea {
   width: 100%; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 8px;
   padding: 10px 12px; outline: none;
 }
@@ -129,7 +128,7 @@ input[type="search"]::-webkit-search-cancel-button { filter: grayscale(1); }
   content: ""; position: absolute; right: 13px; top: 13px; width: 6px; height: 6px;
   border-right: 1.5px solid var(--text-faint); border-bottom: 1.5px solid var(--text-faint); transform: rotate(45deg);
 }
-.chip select, .chip input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.chip select { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
 button.chip { padding: 0 14px; cursor: pointer; }
 button.chip::after { display: none; }
 button.chip[aria-pressed="true"] { border-color: var(--gold); color: var(--gold); }
@@ -318,8 +317,6 @@ a.card:hover { text-decoration: none; background: color-mix(in srgb, var(--surfa
 .rank { flex: none; width: 30px; font: 700 20px/1 var(--display); color: var(--text-faint); text-align: center; }
 .row.first .rank, .row.first .end b { color: var(--gold); }
 .page-head { display: flex; flex-direction: column; gap: 14px; margin-bottom: 18px; }
-.filters { display: grid; gap: 10px; }
-@media (min-width: 640px) { .filters.three { grid-template-columns: 2fr 1fr 1fr; } }
 
 .editor { font: 13.5px/1.55 var(--mono); min-height: 170px; resize: vertical; tab-size: 2; }
 .run-row { display: flex; align-items: center; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
@@ -355,7 +352,6 @@ a.card:hover { text-decoration: none; background: color-mix(in srgb, var(--surfa
 .table-help button { background: none; border: 0; padding: 0; color: var(--gold); font: 13px var(--mono); cursor: pointer; }
 .table-help .tname { font-size: 14px; font-weight: 600; }
 .table-help .note { margin-top: 2px; }
-code { font: 13px var(--mono); background: var(--surface); padding: 1px 5px; border-radius: 4px; }
 
 /* --- footer ---------------------------------------------------------------------- */
 

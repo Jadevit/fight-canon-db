@@ -3,11 +3,11 @@
 import { api, meta, objs } from "./data.js";
 import { searchFighters, searchWords } from "./search.js";
 import {
-  byOrder, counted, expandable, fightRow, onCounted, SOURCE_NAMES, sourceLine, STATS_NOTES
+  counted, expandable, fightRow, onCounted, SOURCE_NAMES, sourceLine, STATS_NOTES
 } from "./stats.js";
 import {
-  app, badge, canonical, debounce, dot, esc, eventLink, ext, fighterHref, fighterLink, go, hmm, loading,
-  monthYear, nothing, num, pagePath, params, pct, plural, proRecord, res, setParams
+  app, badge, canonical, debounce, dot, esc, eventLink, ext, fighterHref, fighterLink, go, guard, hmm, latest, loading,
+  monthYear, nothing, num, pagePath, params, pct, plural, proRecord, res, setParams, tally
 } from "./ui.js";
 
 // How a win came: UFC Stats writes "KO/TKO", "Submission", "Decision - Split"; Sherdog writes
@@ -55,7 +55,7 @@ function rememberFighter(id, name) {
 // Recently fought: a row per pair who fought each other, each fighter's name and record
 // (wins in gold), nothing about the fight. Record as proRecord: their UFC Stats page, else here.
 function recordWins(r) {
-  const [w, l, d, nc] = r.wins != null ? [r.wins, r.losses, r.draws, r.no_contests] : [r.w, r.l, r.d, r.nc];
+  const { w, l, d, nc } = tally(r, r);
   return `<span class="w">${w || 0}</span>-${l || 0}-${d || 0}${nc ? ` (${nc} NC)` : ""}`;
 }
 const pairCell = (r) => `<div class="cell"><a href="${fighterHref(r.fighter_id, r.name)}">${esc(r.name)}</a>
@@ -93,6 +93,7 @@ export async function fighters(_, show) {
       ${pairs.length ? `<section class="section"><span class="label">Recently fought</span>
         <div class="pairs">${pairs.map(pairRow).join("")}</div></section>` : ""}</div>`;
   };
+  const search = latest(searchFighters);
   const render = async () => {
     const term = input.value.trim(), mine = ++n;
     setParams(new URLSearchParams(term ? { q: term } : {}));
@@ -103,9 +104,10 @@ export async function fighters(_, show) {
         : rows.length ? `<div class="list">${rows.map(fighterRow).join("")}</div>` : nothing();
     };
     const s = searchWords(term);
-    draw(s ? await searchFighters(s, 50, draw) : null);
+    const rows = s ? await search(s, 50, draw) : null;
+    if (rows !== undefined) draw(rows);
   };
-  input.oninput = debounce(render, 120);
+  input.oninput = debounce(guard(render), 120);
   await render();
 }
 
@@ -115,14 +117,14 @@ export async function fighter(id, show) {
   // Their file: the fighter, their fights newest first, and per fight their stat totals and
   // their opponent's (strike defense). Some sources count only what landed, so accuracy uses
   // the rounds that have attempts (sla, tla).
-  const d = await api(`f/${id}.json`);
+  const [d, m] = await Promise.all([api(`f/${id}.json`), meta()]);
   if (!d) { show(nothing("Fighter not found.")); return; }
   const f = d.fighter, fights = objs(d.fights), own = objs(d.stats);
 
   // Record: from their UFC Stats page if they have one, else the fights here.
   const here = { w: 0, l: 0, d: 0, nc: 0 };
   fights.forEach((x) => { if (x.result) here[x.result.toLowerCase()]++; });
-  const r = f.wins != null ? { w: f.wins, l: f.losses, d: f.draws, nc: f.no_contests } : here;
+  const r = tally(f, here);
   const kinds = { ko: 0, sub: 0, dec: 0 };
   fights.filter((x) => x.result === "W").forEach((x) => { const k = winKind(x.method); if (k in kinds) kinds[k]++; });
 
@@ -137,7 +139,7 @@ export async function fighter(id, show) {
   ].filter(Boolean);
   const links = (d.aliases.ufcstats || []).map((s) => ext(`http://ufcstats.com/fighter-details/${s}`, "UFC Stats"))
     .concat((d.aliases.sherdog || []).map((s) => ext(`https://www.sherdog.com/fighter/x-${s}`, "Sherdog")));
-  canonical(pagePath("fighter", id, f.name));
+  canonical(pagePath("fighter", id, f.name), f.name);
   rememberFighter(id, f.name);
 
   const total = r.w + r.l + r.d || 1;
@@ -170,7 +172,8 @@ export async function fighter(id, show) {
   const bySource = {};
   const fightOf = Object.fromEntries(fights.map((x) => [x.fight_id, x]));
   for (const row of own) (bySource[row.source] ||= []).push(row);
-  const sources = Object.keys(bySource).sort(byOrder);
+  const order = m.stats_order || [];  // a meta.json older than the page: as they come
+  const sources = Object.keys(bySource).sort((a, b) => order.indexOf(a) - order.indexOf(b));
   const statsFor = (src) => {
     const rows = bySource[src];
     const t = {}, seen = {};

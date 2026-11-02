@@ -26,11 +26,13 @@ export const fighterHref = (id, name) => esc(pagePath("fighter", id, name));
 export const eventHref = (id, name) => esc(pagePath("event", id, name));
 export const fighterLink = (id, name, cls = "") => `<a href="${fighterHref(id, name)}"${cls ? ` class="${cls}"` : ""}>${esc(name)}</a>`;
 export const eventLink = (id, name) => `<a href="${eventHref(id, name)}">${esc(name)}</a>`;
+export const setTitle = (text) => { document.title = text ? `${text} · Fight Canon` : "Fight Canon"; };
 // The page's one address for search engines, and the address bar's (an old or misspelled name
 // in a link is put right), unless another page was opened meanwhile.
-export function canonical(path) {
+export function canonical(path, title) {
   const page = (p) => p.match(/^\/[^/]*(?:\/\d+)?/)[0];
   if (page(location.pathname) !== page(path)) return;
+  if (title) setTitle(title);
   let link = document.querySelector('link[rel="canonical"]');
   if (!link) document.head.append(link = Object.assign(document.createElement("link"), { rel: "canonical" }));
   link.href = location.origin + path;
@@ -52,10 +54,10 @@ export const ICON = {
   open: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="7.5" ry="3"/><path d="M4.5 6v12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3V6M4.5 12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3"/></svg>`,
 };
 
-const record = (r) => `${r.w || 0}-${r.l || 0}-${r.d || 0}` + (r.nc ? ` (${r.nc} NC)` : "");
 // Pro MMA record from the fighter's UFC Stats page; falls back to the fights in the database.
-export const proRecord = (f, fallback) => f.wins != null
-  ? record({ w: f.wins, l: f.losses, d: f.draws, nc: f.no_contests }) : record(fallback);
+export const tally = (f, fallback) => (f.wins != null ? { w: f.wins, l: f.losses, d: f.draws, nc: f.no_contests } : fallback);
+const record = (r) => `${r.w || 0}-${r.l || 0}-${r.d || 0}` + (r.nc ? ` (${r.nc} NC)` : "");
+export const proRecord = (f, fallback) => record(tally(f, fallback));
 
 export function debounce(fn, ms = 150) {
   let t;
@@ -67,8 +69,25 @@ export function latest(fn) {
   let n = 0;
   return async (...a) => {
     const mine = ++n;
-    const out = await fn(...a);
-    return mine === n ? out : undefined;
+    try {
+      const out = await fn(...a);
+      return mine === n ? out : undefined;
+    } catch (e) {
+      if (mine === n) throw e;
+    }
+  };
+}
+
+// A page's redraws (a search, a filter), which the router's catch doesn't see: a failure shows
+// where the results go.
+export function guard(fn) {
+  return async (...a) => {
+    const out = document.getElementById("results");
+    try {
+      await fn(...a);
+    } catch (e) {
+      out.innerHTML = `<p class="error">Couldn't load this: ${esc(e.message)}</p>`;
+    }
   };
 }
 
@@ -81,8 +100,16 @@ export function setParams(p) {
 
 // Open a page of the site without reloading it (the router listens).
 export function go(href) {
+  history.replaceState({ y: window.scrollY }, "");  // where Back returns to
   history.pushState(null, "", href);
   window.dispatchEvent(new Event("go"));
+}
+
+// The years with events, newest first, as a chip's options.
+export function yearOptions(stats) {
+  const years = [];
+  for (let y = Number(stats.last_date.slice(0, 4)); y >= Number(stats.first_date.slice(0, 4)); y--) years.push([String(y), String(y)]);
+  return years;
 }
 
 // A chip around a native select: the label, then the chosen option's text.

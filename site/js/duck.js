@@ -12,7 +12,7 @@ const sqlString = (s) => `'${String(s).replaceAll("'", "''")}'`;
 export let engine;
 export function db() {
   engine ||= (async () => {
-    const [config, m, duckdb] = await Promise.all([dbConfig(), meta(), import(DUCKDB)]);
+    const [m, duckdb] = await Promise.all([meta(), import(DUCKDB)]);
     const bundle = await duckdb.selectBundle(duckdb.getJsDelivrBundles());
     const url = URL.createObjectURL(new Blob([`importScripts("${bundle.mainWorker}");`], { type: "text/javascript" }));
     const instance = new duckdb.AsyncDuckDB(new duckdb.ConsoleLogger(duckdb.LogLevel.WARNING), new Worker(url));
@@ -20,7 +20,7 @@ export function db() {
     URL.revokeObjectURL(url);
     const conn = await instance.connect();
     await conn.query("SET enable_http_metadata_cache = true");
-    // The division a bout title names: the first in meta's list (site_json.py builds the same).
+    // The division a bout title names: the first in meta's list (site_boards.py builds the same).
     const names = objs(m.divisions).map((d) => d.division).filter((d) => d !== "Other");
     const title = "regexp_replace(coalesce(wc, ''), '(?i)catchweight', 'Catch Weight')";
     await conn.query(`CREATE MACRO division(wc) AS CASE ${names.map((d) =>

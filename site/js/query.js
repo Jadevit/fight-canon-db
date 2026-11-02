@@ -162,7 +162,7 @@ async function copyText(text, btn, done = "Copied") {
     document.execCommand("copy");
     t.remove();
   }
-  const was = btn.textContent;
+  const was = (btn.dataset.was ||= btn.textContent);  // a second click comes back to the same label
   btn.textContent = done;
   setTimeout(() => (btn.textContent = was), 2000);
 }
@@ -208,7 +208,7 @@ export async function query(_, show) {
     <p class="note">For your own analysis, the whole database is a <a href="${RELEASES}">free download</a> (SQLite).</p>`)) return;
   const ta = document.getElementById("sqltext"), qa = document.getElementById("question");
   const help = api("query.json");
-  const keep = () => setParams(new URLSearchParams({ ...(qa.value.trim() && { ask: qa.value.trim() }), q: ta.value }));
+  const keep = () => setParams(new URLSearchParams({ ...(qa.value.trim() && { ask: qa.value.trim() }), ...(ta.value !== first && { q: ta.value }) }));
 
   // Tables and columns: click a name to put it in the query.
   help.then((h) => {
@@ -321,5 +321,7 @@ export async function query(_, show) {
   document.getElementById("run").onclick = run;
   ta.onkeydown = (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) run(); };
   document.querySelectorAll("#ex .chip").forEach((b) => (b.onclick = () => { ta.value = EXAMPLES[b.textContent]; run(); }));
-  await run();
+  // Only a link with a query runs by itself: opening the page shouldn't download the engine or
+  // reach R2 (Cloudflare doesn't cache the size requests) for someone who only wants the prompt.
+  if (p.get("q")) await run();
 }
