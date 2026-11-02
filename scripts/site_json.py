@@ -16,104 +16,31 @@ Search: names (fighters) and words (events) are split into files by prefix. A pr
 more than SEARCH_CAP matches gets a file of its top SEARCH_TOP (most fights; newest events)
 and the top SEARCH_EXACT of those whose word is the prefix itself (a common word, such as a
 country, would otherwise bring tens of thousands), and a file for each prefix a letter longer.
-Upload compares each file's hash with the bucket's own (its listing's ETags), so it sends only
-the changed ones even after a run that stopped partway. Browsers keep a file 5 minutes and
-Cloudflare a day, so visits don't read R2; purge clears the files that changed (or were
-deleted) since the last finished upload (v1-manifest.json in the bucket) from Cloudflare's
-cache, so an update still shows within minutes.
+
+What each leaderboard counts is in site_boards.py, the Query page's help in site_query.py, and
+sending the files in site_upload.py.
 """
 
 from __future__ import annotations
 
-import hashlib
 import json
-import os
 import re
 import shutil
 import sys
 import unicodedata
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-VERSION = "v1"
+from site_boards import BOARDS, DIVISIONS, STATS, SUMS, board_totals, division_macro, sql_list
+from site_query import query_help
+from site_upload import VERSION, purge, upload
+
 SEARCH_CAP = 800
 SEARCH_TOP = 100
 SEARCH_EXACT = 300
-# Files keep their names: browsers check again after 5 minutes, Cloudflare after a day (purge
-# clears changed files from it sooner), so a visit reads R2 at most once a day per data center.
-CACHE = "public, max-age=300, s-maxage=86400"
-PURGE_BATCH = 30  # URLs per purge request (the free plan's limit)
-PURGE_ALL = 3000  # more changed files than this: clear the whole cache in one request instead
 MATCHUP_DAYS, MATCHUP_COUNT = 7, 30  # the Fighters page's recent matchups
 RANDOM_FILES, RANDOM_MIN = 100, 5  # its random fighter: files of ids, fighters with this many fights
 
-# The divisions a bout title can name, the first that matches wins. Keep in step with
-# division() in site/app.js (made from this list, in meta.json).
-DIVISIONS = ["Women's Strawweight", "Women's Flyweight", "Women's Bantamweight",
-             "Women's Featherweight", "Atomweight", "Strawweight", "Flyweight", "Bantamweight", "Featherweight",
-             "Lightweight", "Welterweight", "Middleweight", "Light Heavyweight", "Super Heavyweight", "Heavyweight",
-             "Catch Weight", "Open Weight"]
-
-# Leaderboards: which fights each board counts (the stats table and source; results count
-# every fight), its stats as SQL over each fighter's summed columns (results: n, w, fin, ko,
-# subw; stats boards also the STATS columns), and what the site says about it. meta.json
-# carries these to the page, which builds filtered boards from them (leaderQuery in app.js).
-LANDED = {
-    "sig":    dict(label="Sig. strikes landed", expr="sl"),
-    "total":  dict(label="Total strikes landed", expr="tsl"),
-    "td":     dict(label="Takedowns landed", expr="tl"),
-    "subatt": dict(label="Submission attempts", expr="suba"),
-}
-KD = dict(label="Knockdowns", expr="kd")
-TDACC = dict(label="Takedown accuracy (min. 10 attempted)", expr="1.0 * tl / ta", where="ta >= 10", fmt="pct")
-CTRL = dict(label="Control time", expr="ctrl", fmt="time")
-FULL = {
-    "kd": KD, "sig": LANDED["sig"],
-    "sigacc": dict(label="Sig. strike accuracy (min. 100 attempted)", expr="1.0 * sl / sa", where="sa >= 100",
-                   fmt="pct"),
-    "total": LANDED["total"], "td": LANDED["td"], "tdacc": TDACC, "subatt": LANDED["subatt"], "ctrl": CTRL,
-}
-BOARDS = {
-    "results": dict(
-        label="Results (all fights)", source=None,
-        stats={"wins": dict(label="Wins", expr="w"),
-               "fin": dict(label="Finishes (KO/TKO + submission wins)", expr="fin"),
-               "ko": dict(label="KO/TKO wins", expr="ko"),
-               "subw": dict(label="Submission wins", expr="subw"),
-               "fights": dict(label="Fights", expr="n")},
-        note="Counts pro fights in this database, which doesn't have every fighter's whole career."),
-    "ufcstats": dict(label="UFC Stats", source=("round_stats", "ufcstats"), stats=FULL,
-                     note="Fights counted by UFC Stats: the UFC, and the other promotions it covers."),
-    "pfl": dict(label="PFL (from Dec 2025)", source=("round_stats", "pfl"), stats=FULL,
-                note="PFL's own stats, from December 2025 on."),
-    "smartcage": dict(
-        label="PFL SmartCage (2018–2025)", source=("smartcage_round_stats", "pfl"),
-        stats={"kd": KD, "total": LANDED["total"],
-               "totacc": dict(label="Strike accuracy (min. 100 thrown)", expr="1.0 * tsl / tsa",
-                              where="tsa >= 100", fmt="pct"),
-               "arm": dict(label="Arm strikes landed", expr="arm"),
-               "leg": dict(label="Leg strikes landed", expr="leg"),
-               "ground": dict(label="Ground strikes landed", expr="grd"),
-               "td": LANDED["td"], "tdacc": TDACC, "subatt": LANDED["subatt"]},
-        note="PFL's older system, 2018 to November 2025. It counts all strikes, not significant ones."),
-    "oktagon": dict(label="Oktagon", source=("round_stats", "oktagon"), stats=LANDED,
-                    note="Oktagon's own stats, on the Oktagon fights Sofascore doesn't have. Only what landed "
-                         "is counted, so there are no accuracy, knockdown or control boards."),
-    "sofascore": dict(
-        label="Sofascore", source=("round_stats", "sofascore"),
-        stats={"kd": KD, "sig": LANDED["sig"], "thrown": dict(label="Total strikes thrown", expr="tsa"),
-               "td": LANDED["td"], "tdacc": TDACC, "subatt": LANDED["subatt"], "ctrl": CTRL},
-        note="Sofascore's count for promotions with no official stats (ONE, RIZIN, KSW, ACA, BRAVE, Cage "
-             "Warriors and others), and for Oktagon. Not comparable with the other boards."),
-}
-SUMS = {  # leaderboard column -> column of the stats table
-    "round_stats": dict(kd="knockdowns", sl="sig_str_land", sa="sig_str_att", tsl="total_str_land",
-                        tsa="total_str_att", tl="td_land", ta="td_att", suba="sub_att", ctrl="ctrl_sec"),
-    "smartcage_round_stats": dict(kd="knockdowns", tsl="total_str_land", tsa="total_str_att", arm="arm_land",
-                                  leg="leg_land", grd="ground_land", tl="td_land", ta="td_att", suba="sub_att"),
-}
-STATS = ["kd", "sl", "sa", "tsl", "tsa", "tl", "ta", "suba", "ctrl", "arm", "leg", "grd"]
 FIGHT_COLS = ["weight_class", "title_fight", "scheduled_rounds", "method", "end_round", "end_time", "time_format",
               "referee", "details", "overturned", "no_contest", "bout_type"]
 TABLES = ["events", "fight_participants", "fighters", "fighter_aliases", "event_aliases", "fight_aliases",
@@ -123,6 +50,14 @@ STATS_ORDER = ["ufcstats", "pfl", "smartcage", "oktagon", "sofascore"]
 LINKED = ("ufcstats", "sherdog", "pfl")  # sources the pages link to, by their ids
 
 
+FIGHT_HIST = ["date", "event_id", "event", "promotion", "fight_id", "division", "has_stats", "method", "end_round",
+              "end_time", "time_format", "title_fight"]
+STAT_SUMS = """SELECT fight_id, fighter_id, source, SUM(knockdowns) kd, SUM(sig_str_land) sl,
+    SUM(sig_str_att) sa, SUM(CASE WHEN sig_str_att IS NOT NULL THEN sig_str_land END) sla, SUM(td_land) tl,
+    SUM(td_att) ta, SUM(CASE WHEN td_att IS NOT NULL THEN td_land END) tla, SUM(sub_att) sub, SUM(ctrl_sec) ctrl
+    FROM round_stats GROUP BY fight_id, fighter_id, source ORDER BY fight_id, source, fighter_id"""
+
+
 def norm(s: str | None) -> str:
     s = unicodedata.normalize("NFD", s or "")
     return "".join(c for c in s if not 0x300 <= ord(c) <= 0x36F).lower()
@@ -130,18 +65,6 @@ def norm(s: str | None) -> str:
 
 def words(s: str | None) -> set[str]:
     return set(re.findall(r"\w+", norm(s)))
-
-
-def sql_list(items: list[str]) -> str:
-    return ", ".join("'" + i.replace("'", "''") + "'" for i in items)
-
-
-def division_macro() -> str:
-    """SQL: division(bout title), the first of DIVISIONS it names, else 'Other' (a CASE, which
-    every DuckDB version takes; app.js builds the same one)."""
-    t = "regexp_replace(coalesce(wc, ''), '(?i)catchweight', 'Catch Weight')"
-    whens = " ".join(f"WHEN contains({t}, {sql_list([d])}) THEN {sql_list([d])}" for d in DIVISIONS)
-    return f"CREATE MACRO division(wc) AS CASE {whens} ELSE 'Other' END"
 
 
 SITE_SQL = f"""
@@ -188,30 +111,6 @@ CREATE TABLE site_divisions AS
 """
 
 
-def board_totals(b: dict) -> str:
-    """SQL: a board's totals per fighter and division code, and per fighter over all divisions
-    (division 0), over every promotion and year."""
-    # ILIKE: Sherdog writes some methods in lower case ("submission (armbar)").
-    won, ko, sub = "p.result = 'W'", "x.method ILIKE '%KO%'", "x.method ILIKE '%Submission%'"
-    cols = (f"COUNT(*) n, count_if({won}) w, count_if({won} AND ({ko} OR {sub})) fin, "
-            f"count_if({won} AND {ko}) ko, count_if({won} AND {sub}) subw")
-    source = "fight_participants p"
-    if b["source"]:  # everyone in each fight this source counted, with their totals if they have rows
-        table, src = b["source"]  # (a fighter with nothing in any round can have none)
-        sums = SUMS[table]
-        source = (f"fight_participants p JOIN (SELECT DISTINCT fight_id FROM {table} WHERE source = '{src}') c "
-                  "ON c.fight_id = p.fight_id "
-                  f"LEFT JOIN (SELECT fight_id, fighter_id, {', '.join(f'SUM({c}) {k}' for k, c in sums.items())} "
-                  f"FROM {table} WHERE source = '{src}' GROUP BY ALL) r "
-                  "ON r.fight_id = p.fight_id AND r.fighter_id = p.fighter_id")
-        cols += ", " + ", ".join(f"SUM(r.{k}) {k}" if k in sums else f"NULL::BIGINT {k}" for k in STATS)
-    return f"""SELECT coalesce(d.code, 0) division, p.fighter_id, {cols}
-               FROM {source} JOIN fights x ON x.fight_id = p.fight_id JOIN events e ON e.event_id = x.event_id
-               JOIN site_divisions d ON d.division = division(x.weight_class)
-               WHERE e.date IS NOT NULL
-               GROUP BY GROUPING SETS ((d.code, p.fighter_id), (p.fighter_id))"""
-
-
 def load(src: Path):
     """canon.db in an in-memory DuckDB, with the site_ tables."""
     import duckdb
@@ -224,91 +123,6 @@ def load(src: Path):
     con.execute("DETACH canon")
     con.execute(SITE_SQL)
     return con
-
-
-# The Query page's help: the tables an AI assistant (or a person) needs, from schema.sql's own
-# comments, and what to tell an assistant so its query is right. The page puts the question
-# at the end. Bookkeeping tables (aliases, redirects, pages read) are left out.
-SCHEMA = Path(__file__).resolve().parent.parent / "canon_db" / "schema.sql"
-QUERY_TABLES = ["fighters", "events", "fights", "fight_participants", "round_stats", "smartcage_round_stats",
-                "sofascore_round_stats", "judge_scores", "odds", "promotions", "event_cards"]
-BOUTS_COLUMNS = [  # the page's bouts view: each fight with its event and both fighters
-    ("fight_id", "INTEGER", ""), ("event_id", "INTEGER", ""), ("date", "TEXT", "YYYY-MM-DD"),
-    ("event", "TEXT", "the event's name"), ("promotion", "TEXT", ""),
-    ("division", "TEXT", "division(weight_class)"),
-    ("a_id", "INTEGER", "one fighter (a/b order means nothing)"), ("a_name", "TEXT", ""),
-    ("a_res", "TEXT", "W, L, D or NC"), ("b_id", "INTEGER", "the other fighter"), ("b_name", "TEXT", ""),
-    ("b_res", "TEXT", ""), ("...", "", "and every column of fights"),
-]
-QUERY_RULES = f"""You are writing one SQL query for Fight Canon, an open database of pro MMA fights (amateur
-and exhibition bouts aren't in it). It runs in DuckDB, so write DuckDB SQL. Reply with only the
-query, in one code block.
-
-How the data works:
-- NULL means not recorded, never 0. Don't treat missing stats as zero.
-- Dates are text, 'YYYY-MM-DD': compare them as text; the year is substr(date, 1, 4).
-- For anything about fights, use the view bouts (each fight with its event and both fighters).
-  A fighter's fights: WHERE <fighter_id> IN (a_id, b_id). Their result: CASE WHEN a_id = ... THEN
-  a_res ELSE b_res END. Or join fight_participants, which has a row per fighter per fight.
-- Results are W (win), L (loss), D (draw), NC (no contest).
-- method is free text in two styles ('KO/TKO', 'Submission', 'Decision - Unanimous' from UFC Stats;
-  'TKO (Punches)', 'Submission (Armbar)', 'Decision (Split)' from Sherdog). Match with ILIKE:
-  '%KO%' for knockouts, '%Submission%', '%Decision%'.
-- division(weight_class) gives the division: one of {", ".join(DIVISIONS)}, or Other.
-- Find fighters by name with ILIKE (names are as the sources spell them); a fighter's pro record
-  as UFC Stats shows it is in fighters.wins/losses/draws/no_contests (NULL for fighters it doesn't have).
-- Ids are Fight Canon's own numbers. For UFC Stats' fights, use promotion = 'UFC' (events), or
-  fight_id IN (SELECT fight_id FROM fight_aliases WHERE source = 'ufcstats') for every fight UFC Stats has.
-- Stats per round are in round_stats, one row per fighter per round. Its source column says who
-  counted ('ufcstats' is the most complete); sources count differently, so rank or compare within
-  one source. A fight can have rows from two sources (Oktagon's and Sofascore's): filter on
-  source. Accuracy is landed / attempted over rows where attempted IS NOT NULL.
-- Promotion names are as stored ('UFC', 'Bellator MMA', 'PFL', 'ONE FC', ...); events.promotion.
-
-How to answer:
-- Name every output column in plain English with AS "Title Case Name".
-- When rows are fighters, events or fights, also select fighter_id, event_id or fight_id: the page
-  turns them into links.
-- Order the rows meaningfully, and LIMIT 100 unless the question asks for everything.
-"""
-
-
-def schema_tables() -> list[dict]:
-    """The tables in QUERY_TABLES as schema.sql describes them: [{name, about, columns:
-    [[name, type, about]]}], with the comment above a table and each column's own."""
-    tables, about, current = {}, [], None
-    for line in SCHEMA.read_text(encoding="utf-8").splitlines():
-        text = line.strip()
-        if current is None:
-            if text.startswith("--"):
-                about.append(text[2:].strip())
-            elif m := re.match(r"CREATE TABLE (\w+)", text):
-                current = tables[m.group(1)] = {"name": m.group(1), "about": " ".join(about), "columns": []}
-            else:
-                about = []
-            continue
-        if text.startswith(")"):
-            current, about = None, []
-        elif text.startswith("--"):  # a column's comment, carried on
-            if current["columns"]:
-                col = current["columns"][-1]
-                col[2] = f"{col[2]} {text[2:].strip()}".strip()
-        elif m := re.match(r"(\w+)\s+(TEXT|INTEGER|REAL)\b[^-]*(?:--\s*(.*))?", text):
-            current["columns"].append([m.group(1), m.group(2), (m.group(3) or "").strip()])
-    out = [tables[t] for t in QUERY_TABLES]
-    out.insert(3, {"name": "bouts", "about": "A view the page adds: each fight with its event and both fighters. "
-                   "Start here for questions about fights.", "columns": [list(c) for c in BOUTS_COLUMNS]})
-    return out
-
-
-def query_help(con, w: Writer) -> None:
-    """query.json: what the Query page needs to help: the rules for an assistant, and the tables."""
-    w("query.json", {"rules": QUERY_RULES, "tables": schema_tables()})
-
-
-def key(id_) -> str:
-    """A file name for an id."""
-    return str(id_)
 
 
 def hexname(prefix: str) -> str:
@@ -352,14 +166,6 @@ class Writer:
         self.bytes += len(data)
 
 
-FIGHT_HIST = ["date", "event_id", "event", "promotion", "fight_id", "division", "has_stats", "method", "end_round",
-              "end_time", "time_format", "title_fight"]
-STAT_SUMS = """SELECT fight_id, fighter_id, source, SUM(knockdowns) kd, SUM(sig_str_land) sl,
-    SUM(sig_str_att) sa, SUM(CASE WHEN sig_str_att IS NOT NULL THEN sig_str_land END) sla, SUM(td_land) tl,
-    SUM(td_att) ta, SUM(CASE WHEN td_att IS NOT NULL THEN td_land END) tla, SUM(sub_att) sub, SUM(ctrl_sec) ctrl
-    FROM round_stats GROUP BY fight_id, fighter_id, source ORDER BY fight_id, source, fighter_id"""
-
-
 def fighters(con, w: Writer) -> None:
     """f/<id>.json: the fighter, their fights newest first (from their side), and per fight the
     stat totals of each side by source (the opponent's for strike defense)."""
@@ -388,7 +194,7 @@ def fighters(con, w: Writer) -> None:
                                        nationality, wins, losses, draws, no_contests FROM fighters ORDER BY fighter_id""")
     for r in people:
         fid = r[0]
-        w(f"f/{key(fid)}.json", {
+        w(f"f/{fid}.json", {
             "fighter": dict(zip(cols, r)),
             "aliases": aliases.get(fid, {}),
             "fights": {"cols": FIGHT_HIST + ["result", "opp_id", "opp"], "rows": hist.get(fid, [])},
@@ -450,7 +256,7 @@ def events(con, w: Writer) -> None:
             if fight in ufc_fights:
                 ufc[fight] = ufc_fights[fight]
             shards[shard(fight)][fight] = eid
-        w(f"e/{key(eid)}.json", {
+        w(f"e/{eid}.json", {
             "event": dict(zip(cols, r)), "aliases": aliases.get(eid, {}), "ufcstats": ufc,
             "fights": {"cols": fcols, "rows": card},
             "stats": stats,
@@ -588,79 +394,12 @@ def build(src: Path, out: Path) -> Writer:
     con = load(src)
     try:
         meta(con, w, search(con, w))
-        for step in (query_help, leaders, fighters_page, event_lists, events, fighters):
+        w("query.json", query_help())
+        for step in (leaders, fighters_page, event_lists, events, fighters):
             step(con, w)
     finally:
         con.close()
     return w
-
-
-def upload(out: Path, workers: int = 32) -> None:
-    """Send the files whose hash differs from the bucket's copy to R2 (R2_BUCKET; AWS_ENDPOINT_URL
-    and keys from the environment), delete the bucket's files the build doesn't have, then save
-    the manifest. The files to purge are those that differ from the last manifest."""
-    import boto3
-    from botocore.config import Config
-    s3 = boto3.client("s3", endpoint_url=os.environ["AWS_ENDPOINT_URL"],
-                      config=Config(max_pool_connections=workers, read_timeout=300,
-                                    retries={"max_attempts": 10, "mode": "adaptive"}))
-    bucket, manifest = os.environ["R2_BUCKET"], f"{VERSION}-manifest.json"
-    root = out / VERSION
-    files = {f"{VERSION}/{p.relative_to(root).as_posix()}": p for p in root.rglob("*.json")}
-    hashes = {k: hashlib.md5(p.read_bytes()).hexdigest() for k, p in files.items()}
-    try:
-        old = json.loads(s3.get_object(Bucket=bucket, Key=manifest)["Body"].read())
-    except s3.exceptions.NoSuchKey:
-        old = {}
-    live = {o["Key"]: o["ETag"].strip('"') for page in s3.get_paginator("list_objects_v2").paginate(
-        Bucket=bucket, Prefix=f"{VERSION}/") for o in page.get("Contents", [])}
-    same = [k for k, h in hashes.items() if old.get(k) == h and k in live]
-    if same and not any(live[k] == hashes[k] for k in same[:1000]):  # ETags that aren't MD5s
-        print("The bucket's ETags don't match file hashes; comparing with the manifest instead.")
-        live = {k: old.get(k) for k in live}
-    changed = [k for k, h in hashes.items() if live.get(k) != h]
-    gone = [k for k in live if k not in hashes]
-
-    def put(k: str) -> None:
-        s3.put_object(Bucket=bucket, Key=k, Body=files[k].read_bytes(), ContentType="application/json",
-                      CacheControl=CACHE)
-
-    with ThreadPoolExecutor(workers) as pool:
-        list(pool.map(put, changed))
-    for i in range(0, len(gone), 200):
-        s3.delete_objects(Bucket=bucket, Delete={"Objects": [{"Key": k} for k in gone[i:i + 200]], "Quiet": True})
-    s3.put_object(Bucket=bucket, Key=manifest, Body=json.dumps(hashes).encode(), ContentType="application/json")
-    stale = [k for k, h in hashes.items() if old.get(k) != h] + [k for k in old if k not in hashes]
-    (out / "purge.txt").write_text("\n".join(stale))
-    print(f"{len(files)} files: {len(changed)} uploaded, {len(gone)} deleted, {len(stale)} to purge")
-
-
-def purge(out: Path) -> None:
-    """Clear the files the last upload changed or deleted (<out>/purge.txt) from Cloudflare's
-    cache (R2_URL's zone: CLOUDFLARE_ZONE_ID, and CLOUDFLARE_API_TOKEN with Cache Purge)."""
-    import time
-    import urllib.error
-    import urllib.request
-    keys = (out / "purge.txt").read_text().split()
-    if not keys:
-        return
-    base, zone, token = os.environ["R2_URL"], os.environ["CLOUDFLARE_ZONE_ID"], os.environ["CLOUDFLARE_API_TOKEN"]
-    urls = [f"{base}/{k}" for k in keys]
-    batches = ([{"purge_everything": True}] if len(urls) > PURGE_ALL
-               else [{"files": urls[i:i + PURGE_BATCH]} for i in range(0, len(urls), PURGE_BATCH)])
-    for body in batches:
-        for attempt in range(5):
-            req = urllib.request.Request(f"https://api.cloudflare.com/client/v4/zones/{zone}/purge_cache",
-                                         data=json.dumps(body).encode(), method="POST",
-                                         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
-            try:
-                with urllib.request.urlopen(req, timeout=30):
-                    break
-            except urllib.error.HTTPError as e:
-                if e.code != 429 or attempt == 4:  # too many requests: wait, then again
-                    raise SystemExit(f"purge: HTTP {e.code}: {e.read()[:300].decode(errors='replace')}") from None
-                time.sleep(10)
-    print("cleared Cloudflare's cache" if len(urls) > PURGE_ALL else f"cleared {len(urls)} files from Cloudflare's cache")
 
 
 if __name__ == "__main__":

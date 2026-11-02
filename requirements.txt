@@ -8,5 +8,6 @@ pytest>=8
 ruff>=0.17
 vulture>=2.16
 
-# The site's build (scripts/export_parquet.py)
+# The site's build and upload (scripts/site_*.py, export_parquet.py); deploy.yml pins these
 duckdb>=1.1
+boto3>=1.43

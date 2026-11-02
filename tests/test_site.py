@@ -4,12 +4,16 @@ scripts/export_parquet.py (the database as Parquet)."""
 import importlib.util
 import json
 import sqlite3
+import sys
 
 import pytest
 
 from canon_db import db
 
 pytest.importorskip("duckdb")
+
+
+sys.path.insert(0, str(db.ROOT / "scripts"))  # the scripts import each other
 
 
 def _script(name):
