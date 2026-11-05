@@ -1,10 +1,11 @@
-"""Polite HTTP for every source: a fixed delay between requests (about one a second), retries
-with backoff, and pages written so a crash never leaves half of one on disk."""
+"""Polite HTTP for every source: a delay between requests (about one a second, varied so it isn't a
+fixed beat), retries with backoff, and pages written so a crash never leaves half of one on disk."""
 
 from __future__ import annotations
 
 import json
 import logging
+import random
 import threading
 import time
 from pathlib import Path
@@ -17,7 +18,7 @@ log = logging.getLogger("fetcher")
 
 
 class Fetcher:
-    """Fixed delay between requests, retries with exponential backoff. Threads may share one:
+    """A delay between requests, retries with exponential backoff. Threads may share one:
     the delay is between any two requests, whichever thread makes them. A site with a wall
     in front of its pages overrides wall()."""
 
@@ -32,9 +33,10 @@ class Fetcher:
         self.failures: list[str] = []
 
     def throttle(self) -> None:
-        """Hold the fixed delay between requests, then mark this moment as the last one."""
+        """Hold the delay between requests, 0.7 to 1.5 times `delay` at random, then mark this
+        moment as the last one."""
         with self.lock:
-            wait = self.delay - (time.monotonic() - self.last_request)
+            wait = self.delay * random.uniform(0.7, 1.5) - (time.monotonic() - self.last_request)
             if wait > 0:
                 time.sleep(wait)
             self.last_request = time.monotonic()
