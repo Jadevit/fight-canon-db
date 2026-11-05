@@ -10,6 +10,7 @@ them; that raises Refused at once, so a run there skips the fetch instead of ret
 from __future__ import annotations
 
 import logging
+import random
 import time
 from pathlib import Path
 
@@ -34,7 +35,7 @@ class Site:
         """The JSON at BASE + path; {} if there is none (404); None if still failing after
         retries. Raises Refused on a 403."""
         for attempt in range(1, 5):
-            wait = self.delay - (time.monotonic() - self.last)
+            wait = self.delay * random.uniform(0.7, 1.5) - (time.monotonic() - self.last)  # not a fixed beat
             if wait > 0:
                 time.sleep(wait)
             self.last = time.monotonic()
