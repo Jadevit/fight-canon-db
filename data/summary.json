@@ -1,30 +1,30 @@
 {
-  "updated_at": "2026-11-05T18:47:14+00:00",
+  "updated_at": "2026-11-06T18:15:28+00:00",
   "coverage": {
     "first_event_date": "1963-12-02",
-    "last_event_date": "2026-11-05",
-    "last_event": "EFC 139 - EFC Worldwide 139",
-    "last_event_id": 61637
+    "last_event_date": "2026-11-06",
+    "last_event": "One Championship - One Friday Fights 177",
+    "last_event_id": 61647
   },
   "rows": {
-    "fighters": 180510,
-    "fighter_aliases": 212531,
+    "fighters": 180521,
+    "fighter_aliases": 212543,
     "promotions": 12396,
     "promotion_aliases": 12365,
     "merged_ids": 2,
-    "events": 61581,
-    "event_aliases": 65333,
-    "event_cards": 61575,
-    "non_pro_bouts": 1145,
-    "event_pages": 75692,
-    "fights": 373016,
-    "fight_aliases": 384557,
-    "fight_participants": 746032,
+    "events": 61585,
+    "event_aliases": 65337,
+    "event_cards": 61579,
+    "non_pro_bouts": 1223,
+    "event_pages": 75700,
+    "fights": 373034,
+    "fight_aliases": 384575,
+    "fight_participants": 746068,
     "round_stats": 76174,
     "smartcage_round_stats": 3548,
     "sofascore_round_stats": 19266,
     "judge_scores": 111066,
     "media_scores": 115694,
-    "odds": 51734
+    "odds": 51746
   }
 }
