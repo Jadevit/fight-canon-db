@@ -1,16 +1,21 @@
 """Polite HTTP for every source: a delay between requests (about one a second, varied so it isn't a
-fixed beat), retries with backoff, and pages written so a crash never leaves half of one on disk."""
+fixed beat), retries with backoff, and pages written so a crash never leaves half of one on disk
+(and, for a page that changes in place, a history of it)."""
 
 from __future__ import annotations
 
 import json
 import logging
 import random
+import re
 import threading
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 import requests
+
+from canon_db.pages import text
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (canon-db research scraper; ~1 request/sec)"}
 
@@ -82,6 +87,37 @@ def save(path: Path, text: str) -> None:
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(text, encoding="utf-8")
     tmp.replace(path)
+
+
+_HIDDEN = re.compile(r"(?is)<(script|style)\b.*?</\1>")
+
+
+def visible(page: str) -> str:
+    """A page's visible text: scripts and styles left out, since they carry tokens that differ
+    on every request."""
+    return text(_HIDDEN.sub(" ", page))
+
+
+def save_changed(folder: Path, page: str, marker: str, now: datetime | None = None) -> str:
+    """Keep a history of a page that changes in place (a rankings list): save it as
+    <folder>/<YYYY-MM-DD-HHMM>.html (UTC) if its visible text differs from the last one saved.
+    A page without `marker` (an error page, a wall) isn't saved. Says which it was."""
+    if marker not in visible(page):
+        return "not the page"
+    saved = sorted(folder.glob("*.html"))
+    if saved and visible(saved[-1].read_text(encoding="utf-8")) == visible(page):
+        return "unchanged"
+    save(folder / f"{now or datetime.now(UTC):%Y-%m-%d-%H%M}.html", page)
+    return "saved"
+
+
+def snapshot(fetcher: Fetcher, url: str, marker: str, folder: Path) -> str:
+    """Fetch a page and save_changed() it; logs a warning (never raises) if it couldn't."""
+    page = fetcher.get(url)
+    done = "failed" if page is None else save_changed(folder, page, marker)
+    if done in ("failed", "not the page"):
+        log.warning("%s: %s.", url, done)
+    return done
 
 
 def save_json(path: Path, data) -> None:

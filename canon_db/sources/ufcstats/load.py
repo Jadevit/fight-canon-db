@@ -26,12 +26,12 @@ from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
 
-from canon_db import ids
+from canon_db import http, ids
 from canon_db.http import save
 from canon_db.matching import Bouts
 from canon_db.promotions import promotion
 from canon_db.sources.ufcstats import fields as F
-from canon_db.sources.ufcstats.client import BASE, EVENTS_LIST_URL, Fetcher
+from canon_db.sources.ufcstats.client import BASE, EVENTS_LIST_URL, RANKINGS, Fetcher
 from canon_db.sources.ufcstats.pages import (parse_event, parse_events_list, parse_fight,
                                              parse_fighter)
 
@@ -367,3 +367,5 @@ def update(conn: sqlite3.Connection, args: argparse.Namespace, raw: Path) -> Non
     if skipped and not loaded:
         raise RuntimeError(f"All {len(skipped)} target events failed to download.")
     fill_sex(conn)
+    if not args.offline:
+        http.snapshot(http.Fetcher(args.delay), *RANKINGS, raw / "rankings")  # another site: a plain Fetcher

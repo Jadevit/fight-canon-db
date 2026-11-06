@@ -4,7 +4,8 @@
 # release, runs only the sofascore source on a copy in a temporary folder, and publishes a
 # new release if that changed anything. The working copy's data/canon.db isn't touched;
 # fetched files go to data/raw/sofascore/ as usual. summary.json in git catches up on the
-# next CI update.
+# next CI update. It first saves the promotions' ranking pages that changed (scripts/save_rankings.py:
+# CI's copies are lost, so their history is kept here until rankings are loaded).
 #
 #   scripts/sofascore-update.sh            # update and publish
 #   DRY_RUN=1 scripts/sofascore-update.sh  # update, but don't publish
@@ -20,6 +21,8 @@ busy() {  # is a workflow that publishes releases running or about to?
     --jq '[.[] | select((.workflowName == "Update database" or .workflowName == "Discover events")
                         and .status != "completed")] | length'
 }
+
+echo "$(date '+%F %T') rankings: $("$PY" scripts/save_rankings.py || echo failed)"
 
 for try in 1 2 3; do
   while [ "$(busy)" != "0" ]; do

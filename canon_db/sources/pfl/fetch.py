@@ -2,6 +2,7 @@
     event.html   the event page (name, date, and the stats URL)
     card.html    the fight card (bouts, results, tale of the tape)
     stats.json   per-fight and per-round stats, as the page's own script requests them
+and the rankings page into rankings/<YYYY-MM-DD-HHMM>.html whenever it changes.
 The stats URL is /smt/v2/<tag> for newer events and /smt/<tag> for older ones; event.html
 says which (`is_v2`).
 
@@ -23,7 +24,10 @@ from canon_db.http import save
 
 BASE = "https://pflmma.com"
 EXPIRED = 419  # the session's token timed out
-TOKEN_RE = re.compile(r"'X-CSRF-TOKEN': '([^']+)'")
+# PFL's own rankings and a string every real copy has; saved to raw/rankings/ as they change, not
+# loaded yet.
+RANKINGS = (f"{BASE}/rankings", "PFL FIGHTER RANKINGS")
+TOKEN_RE =re.compile(r"'X-CSRF-TOKEN': '([^']+)'")
 URL_RE = re.compile(r"var fight_url = '([^']+)'")
 log = logging.getLogger("pfl")
 

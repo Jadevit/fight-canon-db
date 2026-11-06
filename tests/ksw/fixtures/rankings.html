@@ -1,0 +1,1433 @@
+<!DOCTYPE html>
+<html lang="en" translate="no">
+    <head>
+        <!-- Google tag (gtag.js) -->
+        <script async src="https://www.googletagmanager.com/gtag/js?id=G-LWY927DWRB"></script>
+        <script>
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+
+            gtag('config', 'G-LWY927DWRB');
+        </script>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+        <!-- Facebook Pixel Code -->
+        <script>
+          !function(f,b,e,v,n,t,s)
+          {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+          n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+          if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+          n.queue=[];t=b.createElement(e);t.async=!0;
+          t.src=v;s=b.getElementsByTagName(e)[0];
+          s.parentNode.insertBefore(t,s)}(window, document,'script',
+          'https://connect.facebook.net/en_US/fbevents.js');
+          fbq('init', '200490678559998');
+          fbq('track', 'PageView');
+        </script>
+        <noscript>
+          <img height="1" width="1" style="display:none"
+               src="https://www.facebook.com/tr?id=200490678559998&ev=PageView&noscript=1"/>
+        </noscript>
+        <!-- End Facebook Pixel Code -->
+
+        
+        
+        
+                    <title>    Rankings
+ | KSW MMA</title>
+        
+        
+                    <meta name="description" content="KSW MMA - największa organizacja MMA w Polsce i Europie Środkowej. Najlepsze walki, zawodnicy i wydarzenia sportów walki.">
+        
+        
+                    <meta name="keywords" content="KSW, MMA, Konfrontacja Sztuk Walki, sport, walki, mieszane sztuki walki, Polska, gala, zawodnicy, ranking">
+        
+        
+        <link rel="canonical" href="https://www.kswmma.com/en/rankings">
+
+        
+        <meta property="og:title" content="    Rankings
+ | KSW">
+        <meta property="og:description" content="KSW MMA - największa organizacja MMA w Polsce i Europie Środkowej. Najlepsze walki, zawodnicy i wydarzenia sportów walki.">
+        <meta property="og:url" content="https://www.kswmma.com/en/rankings">
+        <meta property="og:type" content="website">
+        <meta property="og:site_name" content="KSW MMA">
+                    <meta property="og:image" content="https://kswmma.com/storage/2026-05/1778717979-logo-ksw22.png">
+        
+        
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:title" content="    Rankings
+ | KSW">
+        <meta name="twitter:description" content="KSW MMA - największa organizacja MMA w Polsce i Europie Środkowej. Najlepsze walki, zawodnicy i wydarzenia sportów walki.">
+                    <meta name="twitter:image" content="https://kswmma.com/storage/2026-05/1778717979-logo-ksw22.png">
+        
+
+                    
+            <link rel="stylesheet" href="/assets/css/theme.css">
+            <link rel="stylesheet" href="/css-new/index.css?v=1717839898">
+            <link rel="stylesheet" href="/assets/css/custom.css?v=1787730176">
+
+            
+            <link rel="stylesheet" href="/assets/vendor/bootstrap-icons/font/bootstrap-icons.css" media="print" onload="this.media='all'">
+            <noscript>
+                <link rel="stylesheet" href="/assets/vendor/bootstrap-icons/font/bootstrap-icons.css">
+            </noscript>
+        
+        <link rel="shortcut icon" href="/favicon.ico">
+
+        <link rel="preconnect" href="https://dbaseapi.com">
+        
+        <link rel="preload" as="font" type="font/woff2" href="/assets/fonts/local/oswald-latin.woff2" crossorigin>
+        <link rel="stylesheet" href="/assets/fonts/local/fonts.css">
+
+        <meta name="csrf-token" content="xY3cUMhQLAHjwpW9YwQWHxQ7SbPu9OBXHJwrcfa8">
+
+        <meta name="csrf-token" content="xY3cUMhQLAHjwpW9YwQWHxQ7SbPu9OBXHJwrcfa8">
+<style>
+    .category-card {
+        background-color: #FFF;
+        border-radius: 20px;
+        position: relative; /* zeby .img-win na mobile mogl byc absolute do calej karty */
+        overflow: hidden;   /* przyciecie na obrysie karty - inaczej zdjecie wychodzi poza */
+    }
+
+    .fighters-list {
+        list-style: none;
+        padding: 0;
+    }
+    .flag2 {
+        width: 25px;
+    }
+
+    .win-block {
+        background: #c70b0b;
+        color: #fff;
+        padding: 1px 4px;
+    }
+    .oswald {
+        font-family: Oswald;
+    }
+
+    .fighter-position {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-top: 1px solid lightgray;
+        margin: 9px;
+        padding-top: 4px;
+    }
+    .img-win {
+        position: absolute;
+        bottom: 0;
+        max-width: 118%;
+        left: -8%;
+        z-index: 1;
+    }
+
+    /* MOBILE / TABLET: pomniejszone zdjecie mistrza w prawym gornym rogu kafelka. */
+    @media (max-width: 991px) {
+        /* col wrapper traci position:relative zeby .img-win byl pozycjonowany
+           wzgledem calej .category-card (top:0 right:0 nad cala karta). */
+        .winner-photo-col { position: static !important; }
+
+        .img-win {
+            position: absolute;
+            bottom: auto;
+            left: auto;
+            top: 0;
+            right: 0;
+            max-width: 185px;
+            height: auto;
+            opacity: 0.85;
+            z-index: 1;
+            pointer-events: visiblepainted;
+        }
+    }
+
+    /* SMALL MOBILE (<=360px): jeszcze mniejsze zdjecie, lekko nizej zeby
+       nie kolidowac z naglowkiem kategorii */
+    @media (max-width: 360px) {
+        .img-win {
+            position: absolute;
+            bottom: auto;
+            left: auto;
+            top: 25px;
+            right: 0;
+            max-width: 160px;
+            height: auto;
+            opacity: 0.85;
+            z-index: 1;
+            pointer-events: visiblepainted;
+        }
+    }
+
+    .fighter-position img:nth-of-type(1) {
+        margin-left: auto !important;
+    }
+    .fighter-position img:nth-of-type(2) {
+        margin-left: 10px;
+    }
+
+    .arrow-green {
+        color: green;
+    }
+
+    .arrow-red {
+        color: red;
+    }
+    .icon-nr {
+        color: #ffe800;
+        font-size: 0.6em;
+        vertical-align: middle;
+    }
+    /*.fighter-position img:last-child {*/
+    /*margin*/
+    /*}*/
+</style>
+
+    </head>
+    <body translate="no" class="notranslate">
+        <div style="max-width: 1520px; margin: auto;">
+            <header id="header" class="navbar navbar-expand-xl navbar-light navbar-end bg-white navbar-absolute-top navbar-show-hide" style="z-index: 2000">
+    <div class="container-lg container-md menu-top">
+        <nav class="navbar-nav-wrap">
+            <!-- Default Logo -->
+                        <a class="navbar-brand" href="/en/" aria-label="Unify">
+                <img class="navbar-brand-logo" src="/storage/2026-05/1778717979-logo-ksw22.png.400.webp" alt="logo ksw">
+            </a>
+            <!-- End Default Logo -->
+
+            <!-- Toggler -->
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavDropdown" aria-controls="navbarNavDropdown" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-default">
+          <i class="bi-list"></i>
+        </span>
+                <span class="navbar-toggler-toggled">
+          <i class="bi-x"></i>
+        </span>
+            </button>
+            <!-- End Toggler -->
+
+            <!-- Collapse -->
+            <div class="collapse navbar-collapse" id="navbarNavDropdown">
+                <ul class="navbar-nav nav-pills">
+
+                    
+                                                                                                            <li class="nav-item">
+                                
+
+                                                                            <a id="-link" class="nav-link " aria-current="page" href="/en/" role="button" data-bs-toggle="" aria-expanded="false"  >
+                                            Home
+                                        </a>
+                                                                                                </li>
+                                            
+                                                                                                            <li class="nav-item">
+                                
+
+                                                                            <a id="-link" class="nav-link " aria-current="page" href="/en/tickets" role="button" data-bs-toggle="" aria-expanded="false"  >
+                                            Tickets
+                                        </a>
+                                                                                                </li>
+                                            
+                                                                                                            <li class="nav-item">
+                                
+
+                                                                            <a id="-link" class="nav-link " aria-current="page" href="/en/event" role="button" data-bs-toggle="" aria-expanded="false"  >
+                                            Events
+                                        </a>
+                                                                                                </li>
+                                            
+                                                                                                            <li class="nav-item">
+                                
+
+                                                                            <a id="-link" class="nav-link " aria-current="page" href="/en/video" role="button" data-bs-toggle="" aria-expanded="false"  >
+                                            Video
+                                        </a>
+                                                                                                </li>
+                                            
+                                                                                                            <li class="nav-item">
+                                
+
+                                                                            <a id="-link" class="nav-link " aria-current="page" href="/en/rankings" role="button" data-bs-toggle="" aria-expanded="false"  >
+                                            RANKING
+                                        </a>
+                                                                                                </li>
+                                            
+                                                                                                            <li class="nav-item">
+                                
+
+                                                                            <a id="-link" class="nav-link " aria-current="page" href="/en/news" role="button" data-bs-toggle="" aria-expanded="false"  >
+                                            News
+                                        </a>
+                                                                                                </li>
+                                            
+                                                                                                            <li class="nav-item">
+                                
+
+                                                                            <a id="-link" class="nav-link " aria-current="page" href="/en/fighters" role="button" data-bs-toggle="" aria-expanded="false"  >
+                                            Fighters
+                                        </a>
+                                                                                                </li>
+                                            
+                                                                                                            <li class="nav-item">
+                                
+
+                                                                            <a id="-link" class="nav-link " aria-current="page" href="/en/ksw-rules" role="button" data-bs-toggle="" aria-expanded="false"  >
+                                            KSW Rules
+                                        </a>
+                                                                                                </li>
+                                            
+                                                                                                            <li class="nav-item">
+                                
+
+                                                                            <a id="-link" class="nav-link " aria-current="page" href="https://kswshop.com/index.php?id_lang=1" role="button" data-bs-toggle="" aria-expanded="false"  >
+                                            KSWShop
+                                        </a>
+                                                                                                </li>
+                                            
+                                                                                                            <li class="nav-item">
+                                
+
+                                                                            <a id="-link" class="nav-link " aria-current="page" href="/en/contact" role="button" data-bs-toggle="" aria-expanded="false"  >
+                                            Contact
+                                        </a>
+                                                                                                </li>
+                                            
+                                                                                                            <li class="nav-item">
+                                
+
+                                                                            <a id="-link" class="nav-link " aria-current="page" href="/en/news/2647" role="button" data-bs-toggle="" aria-expanded="false"  >
+                                            GDPR
+                                        </a>
+                                                                                                </li>
+                                                            </ul>
+            </div>
+            <div class="language-block">
+                                    
+                                                        
+                                                                    <a class="media g-py-5 g-px-20" style="margin-left: 1rem;" href="https://www.kswmma.com/change-public-language/pl" aria-label="Polski">
+                                                        <img src="/storage/flag/pl.png" class="flag" style="width: 30px; height: 18.9px;" alt="Polski"  width="38" height="24" >
+                        </a>
+                                                </div>
+        </nav>
+    </div>
+</header>            
+
+            <main>
+                <div class="homepage-container" style="margin-top: 100px;">
+        <section>
+            <div class="row mt-8">
+                <div class="col-md-4">
+                    <h2 class="text-uppercase mb-0">Rankings</h2>
+                </div>
+            </div>
+            <div class="row">
+                                    <div class="col-lg-6 col-md-12 p-3">
+                        <div class="category-card p-3">
+                            <div>
+                                <h2 class="text-uppercase">HEAVYWEIGHT</h2>
+                                <p>(265lb/120.2kg)</p>
+                            </div>
+                            <div class="d-md-flex">
+                                <div class="col-lg-6 col-md-12" style="z-index: 2;">
+                                    <div>
+                                                                                    <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/philip-de-fries" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"><span class="win-block oswald"> CHAMPION </span><br>
+                                                <div class="fs-4 text-uppercase m-0 oswald fw-bold">Philip</div><div class="fs-2 text-uppercase oswald fw-bold">De Fries <img src="/storage/flag2/gb.png" width="20" class="flag2" alt="" >  </div></a>
+                                                                            </div>
+                                    <div>
+                                        <ol class="fighters-list">
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      <b>IC</b>  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/stefan-vojcak" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Štefan Vojčák  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                <img src="/storage/flag2/sk.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      2.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/arkadiusz-wrzosek" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Arkadiusz Wrzosek  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      3.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/marcin-wojcik" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Marcin Wójcik  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      4.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/artur-szpilka" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Artur Szpilka  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      5.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/augusto-sakai" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Augusto Sakai  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/br.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      6.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/szymon-bajor" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Szymon Bajor  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      7.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/michal-martinek" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Michal Martinek  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/cz.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      8.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/matheus-scheffel" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Matheus Scheffel  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/br.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      9.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/marek-samociuk" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Marek Samociuk  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      10.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/ricardo-prasel" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Ricardo Prasel  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/de.png" width="10" class="flag2" alt="" >  <img src="/storage/flag2/br.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                        </ol>
+                                    </div>
+                                </div>
+                                
+
+                                <div class="col-lg-6 winner-photo-col" style="position: relative;">
+                                                                            <img class="img-win" alt="Philip De Fries"
+                                             src="/storage/2026-07/1783945196-defries.png.800.webp"
+                                             srcset="/storage/2026-07/1783945196-defries.png.450.webp 450w, /storage/2026-07/1783945196-defries.png.800.webp 800w"
+                                             sizes="(min-width: 992px) 420px, 190px">
+                                                                    </div>
+
+
+                            </div>
+                        </div>
+                    </div>
+
+
+                                    <div class="col-lg-6 col-md-12 p-3">
+                        <div class="category-card p-3">
+                            <div>
+                                <h2 class="text-uppercase">LIGHT HEAVYWEIGHT</h2>
+                                <p>(205lb/93.0kg)</p>
+                            </div>
+                            <div class="d-md-flex">
+                                <div class="col-lg-6 col-md-12" style="z-index: 2;">
+                                    <div>
+                                                                                    <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/bartosz-lesko" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"><span class="win-block oswald"> CHAMPION </span><br>
+                                                <div class="fs-4 text-uppercase m-0 oswald fw-bold">Bartosz</div><div class="fs-2 text-uppercase oswald fw-bold">Leśko <img src="/storage/flag2/pl.png" width="20" class="flag2" alt="" >  </div></a>
+                                                                            </div>
+                                    <div>
+                                        <ol class="fighters-list">
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      1.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/rafal-haratyk" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Rafał Haratyk  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      2.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/maciej-rozanski" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Maciej Różański  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      3.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/sergiusz-zajac" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Sergiusz Zając  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      4.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/ibragim-chuzhigaev" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Ibragim Chuzhigaev  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/tr.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      5.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/bartosz-szewczyk" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Bartosz Szewczyk  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      6.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/mariusz-ksiazkiewicz" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Mariusz Książkiewicz  </a>                                                    <i class="bi bi-arrow-up arrow-green"></i>  +1
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/ca.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      7.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/salim-el-ouassaidi" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Salim El Ouassaidi  </a>                                                     <i class="bi bi-circle-fill icon-nr"></i>   NR
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/fr.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      8.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/kacper-sochacki" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Kacper Sochacki  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      9.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/cedric-lushima" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Cedric Lushima  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/be.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      10.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/aleksander-winiarski" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Aleksander Winiarski  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                        </ol>
+                                    </div>
+                                </div>
+                                
+
+                                <div class="col-lg-6 winner-photo-col" style="position: relative;">
+                                                                            <img class="img-win" alt="Bartosz Leśko"
+                                             src="/storage/2026-07/1784831364-lesko-pas-kopia-1920.png.800.webp"
+                                             srcset="/storage/2026-07/1784831364-lesko-pas-kopia-1920.png.450.webp 450w, /storage/2026-07/1784831364-lesko-pas-kopia-1920.png.800.webp 800w"
+                                             sizes="(min-width: 992px) 420px, 190px">
+                                                                    </div>
+
+
+                            </div>
+                        </div>
+                    </div>
+
+
+                                    <div class="col-lg-6 col-md-12 p-3">
+                        <div class="category-card p-3">
+                            <div>
+                                <h2 class="text-uppercase">MIDDLEWEIGHT</h2>
+                                <p>(185lb/83.9kg)</p>
+                            </div>
+                            <div class="d-md-flex">
+                                <div class="col-lg-6 col-md-12" style="z-index: 2;">
+                                    <div>
+                                                                                    <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/pawel-pawlak" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"><span class="win-block oswald"> CHAMPION </span><br>
+                                                <div class="fs-4 text-uppercase m-0 oswald fw-bold">Paweł</div><div class="fs-2 text-uppercase oswald fw-bold">Pawlak <img src="/storage/flag2/pl.png" width="20" class="flag2" alt="" >  </div></a>
+                                                                            </div>
+                                    <div>
+                                        <ol class="fighters-list">
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      <b>IC</b>  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/piotr-kuberski" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Piotr Kuberski  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      2.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/michal-michalski" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Michał Michalski  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      3.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/mamed-chalidow" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Mamed Chalidow  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      4.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/andi-vrtacic" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Andi Vrtačić  </a>                                                    <i class="bi bi-arrow-up arrow-green"></i>  +1
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/hr.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      5.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/bartosz-kurek" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Bartosz Kurek  </a>                                                    <i class="bi bi-arrow-up arrow-green"></i>  +1
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      6.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/andrzej-grzebyk" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Andrzej Grzebyk  </a>                                                     <i class="bi bi-circle-fill icon-nr"></i>   NR
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      7.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/laid-zerhouni" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Laid Zerhouni  </a>                                                     <i class="bi bi-arrow-down arrow-red"></i>  -3
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/fr.png" width="10" class="flag2" alt="" >  <img src="/storage/flag2/dz.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      8.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/radoslaw-paczuski" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Radosław Paczuski  </a>                                                     <i class="bi bi-arrow-down arrow-red"></i>  -1
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      9.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/damian-janikowski" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Damian Janikowski  </a>                                                     <i class="bi bi-arrow-down arrow-red"></i>  -1
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      10.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/tomasz-romanowski" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Tomasz Romanowski  </a>                                                     <i class="bi bi-arrow-down arrow-red"></i>  -1
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                        </ol>
+                                    </div>
+                                </div>
+                                
+
+                                <div class="col-lg-6 winner-photo-col" style="position: relative;">
+                                                                            <img class="img-win" alt="Paweł Pawlak"
+                                             src="/storage/2026-09/1788639510-pawlak.png.800.webp"
+                                             srcset="/storage/2026-09/1788639510-pawlak.png.450.webp 450w, /storage/2026-09/1788639510-pawlak.png.800.webp 800w"
+                                             sizes="(min-width: 992px) 420px, 190px">
+                                                                    </div>
+
+
+                            </div>
+                        </div>
+                    </div>
+
+
+                                    <div class="col-lg-6 col-md-12 p-3">
+                        <div class="category-card p-3">
+                            <div>
+                                <h2 class="text-uppercase">WELTERWEIGHT</h2>
+                                <p>(170lb/77.1kg)</p>
+                            </div>
+                            <div class="d-md-flex">
+                                <div class="col-lg-6 col-md-12" style="z-index: 2;">
+                                    <div>
+                                                                                    <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/adrian-bartosinski" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"><span class="win-block oswald"> CHAMPION </span><br>
+                                                <div class="fs-4 text-uppercase m-0 oswald fw-bold">Adrian</div><div class="fs-2 text-uppercase oswald fw-bold">Bartosiński <img src="/storage/flag2/pl.png" width="20" class="flag2" alt="" >  </div></a>
+                                                                            </div>
+                                    <div>
+                                        <ol class="fighters-list">
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      1.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/muslim-tulshaev" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Muslim Tulshaev  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                <img src="/storage/flag2/de.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      2.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/kacper-koziorzebski" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Kacper Koziorzębski  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      3.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/tymoteusz-lopaczyk" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Tymoteusz Łopaczyk  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      4.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/artur-szczepaniak" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Artur Szczepaniak  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >  <img src="/storage/flag2/be.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      5.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/adam-masaev" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Adam Masaev  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/fr.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      6.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/igor-michaliszyn" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Igor Michaliszyn  </a>                                                    <i class="bi bi-arrow-up arrow-green"></i>  +1
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      7.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/madars-fleminas" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Madars Fleminas  </a>                                                    <i class="bi bi-arrow-up arrow-green"></i>  +1
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/lv.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      8.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/dawid-kuczmarski" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Dawid Kuczmarski  </a>                                                    <i class="bi bi-arrow-up arrow-green"></i>  +1
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      9.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/adam-niedzwiedz" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Adam Niedźwiedź  </a>                                                    <i class="bi bi-arrow-up arrow-green"></i>  +1
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      10.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/mateusz-pawlik" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Mateusz Pawlik  </a>                                                     <i class="bi bi-circle-fill icon-nr"></i>   NR
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                        </ol>
+                                    </div>
+                                </div>
+                                
+
+                                <div class="col-lg-6 winner-photo-col" style="position: relative;">
+                                                                            <img class="img-win" alt="Adrian Bartosiński"
+                                             src="/storage/2026-09/1788447310-bartosinski.png.800.webp"
+                                             srcset="/storage/2026-09/1788447310-bartosinski.png.450.webp 450w, /storage/2026-09/1788447310-bartosinski.png.800.webp 800w"
+                                             sizes="(min-width: 992px) 420px, 190px">
+                                                                    </div>
+
+
+                            </div>
+                        </div>
+                    </div>
+
+
+                                    <div class="col-lg-6 col-md-12 p-3">
+                        <div class="category-card p-3">
+                            <div>
+                                <h2 class="text-uppercase">LIGHTWEIGHT</h2>
+                                <p>(155lb/70.3kg)</p>
+                            </div>
+                            <div class="d-md-flex">
+                                <div class="col-lg-6 col-md-12" style="z-index: 2;">
+                                    <div>
+                                                                                    <span class="win-block"> CHAMPION </span> - - - - - -
+                                                                            </div>
+                                    <div>
+                                        <ol class="fighters-list">
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      1.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/valeriu-mircea" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Valeriu Mircea  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                <img src="/storage/flag2/md.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      2.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/marcin-held" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Marcin Held  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      3.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/adam-soldaev" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Adam Soldaev  </a>                                                     <i class="bi bi-circle-fill icon-nr"></i>   NR
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      4.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/mateusz-makarowski" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Mateusz Makarowski  </a>                                                     <i class="bi bi-arrow-down arrow-red"></i>  -1
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      5.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/davy-gallon" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Davy Gallon  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/fr.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      6.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/wilson-varela" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Wilson Varela  </a>                                                    <i class="bi bi-arrow-up arrow-green"></i>  +1
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/fr.png" width="10" class="flag2" alt="" >  <img src="/storage/flag2/pt.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      7.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/marian-ziolkowski" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Marian Ziółkowski  </a>                                                     <i class="bi bi-arrow-down arrow-red"></i>  -3
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      8.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/kacper-formela" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Kacper Formela  </a>                                                     <i class="bi bi-arrow-down arrow-red"></i>  -2
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      9.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/roman-szymanski" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Roman Szymański  </a>                                                     <i class="bi bi-arrow-down arrow-red"></i>  -1
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      10.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/hugo-deux" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Hugo Deux  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/fr.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                        </ol>
+                                    </div>
+                                </div>
+                                
+
+                                <div class="col-lg-6 winner-photo-col" style="position: relative;">
+                                                                    </div>
+
+
+                            </div>
+                        </div>
+                    </div>
+
+
+                                    <div class="col-lg-6 col-md-12 p-3">
+                        <div class="category-card p-3">
+                            <div>
+                                <h2 class="text-uppercase">FEATHERWEIGHT</h2>
+                                <p>(145lb/65.8kg)</p>
+                            </div>
+                            <div class="d-md-flex">
+                                <div class="col-lg-6 col-md-12" style="z-index: 2;">
+                                    <div>
+                                                                                    <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/patryk-kaczmarczyk" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"><span class="win-block oswald"> CHAMPION </span><br>
+                                                <div class="fs-4 text-uppercase m-0 oswald fw-bold">Patryk</div><div class="fs-2 text-uppercase oswald fw-bold">Kaczmarczyk <img src="/storage/flag2/pl.png" width="20" class="flag2" alt="" >  </div></a>
+                                                                            </div>
+                                    <div>
+                                        <ol class="fighters-list">
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      1.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/daniel-rutkowski" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Daniel Rutkowski  </a>                                                    <i class="bi bi-arrow-up arrow-green"></i>  +1
+                                                    
+                                                    
+                                                </div>
+                                                <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      2.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/josef-stummer" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Josef Štummer  </a>                                                    <i class="bi bi-arrow-up arrow-green"></i>  +1
+                                                    
+                                                    
+                                                </div>
+                                                <img src="/storage/flag2/cz.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      3.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/lukasz-charzewski" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Łukasz Charzewski  </a>                                                    <i class="bi bi-arrow-up arrow-green"></i>  +1
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      4.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/daniel-tarchila" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Daniel Tărchilă  </a>                                                    <i class="bi bi-arrow-up arrow-green"></i>  +1
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/md.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      5.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/oleksii-polishchuk" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Oleksii Polishchuk  </a>                                                    <i class="bi bi-arrow-up arrow-green"></i>  +1
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/ua.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      6.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/souheil-kaouchen" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Souheil Kaouchen  </a>                                                    <i class="bi bi-arrow-up arrow-green"></i>  +1
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/fr.png" width="10" class="flag2" alt="" >  <img src="/storage/flag2/ma.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      7.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/michal-domin" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Michał Domin  </a>                                                    <i class="bi bi-arrow-up arrow-green"></i>  +1
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      8.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/wojciech-kazieczko" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Wojciech Kazieczko  </a>                                                    <i class="bi bi-arrow-up arrow-green"></i>  +1
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      9.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/dawid-kareta" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Dawid Kareta  </a>                                                    <i class="bi bi-arrow-up arrow-green"></i>  +1
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      10.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/nacim-belhouachi" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Nacim Belhouachi  </a>                                                     <i class="bi bi-circle-fill icon-nr"></i>   NR
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/fr.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                        </ol>
+                                    </div>
+                                </div>
+                                
+
+                                <div class="col-lg-6 winner-photo-col" style="position: relative;">
+                                                                            <img class="img-win" alt="Patryk Kaczmarczyk"
+                                             src="/storage/2026-11/1793895167-kaczmarczyk.png.800.webp"
+                                             srcset="/storage/2026-11/1793895167-kaczmarczyk.png.450.webp 450w, /storage/2026-11/1793895167-kaczmarczyk.png.800.webp 800w"
+                                             sizes="(min-width: 992px) 420px, 190px">
+                                                                    </div>
+
+
+                            </div>
+                        </div>
+                    </div>
+
+
+                                    <div class="col-lg-6 col-md-12 p-3">
+                        <div class="category-card p-3">
+                            <div>
+                                <h2 class="text-uppercase">BANTAMWEIGHT</h2>
+                                <p>(135lb/61.2kg)</p>
+                            </div>
+                            <div class="d-md-flex">
+                                <div class="col-lg-6 col-md-12" style="z-index: 2;">
+                                    <div>
+                                                                                    <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/vitalii-yakymenko" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"><span class="win-block oswald"> CHAMPION </span><br>
+                                                <div class="fs-4 text-uppercase m-0 oswald fw-bold">Vitalii</div><div class="fs-2 text-uppercase oswald fw-bold">Yakymenko <img src="/storage/flag2/ua.png" width="20" class="flag2" alt="" >  </div></a>
+                                                                            </div>
+                                    <div>
+                                        <ol class="fighters-list">
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      1.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/sebastian-przybysz" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Sebastian Przybysz  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      2.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/bruno-azevedo" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Bruno Azevedo  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                <img src="/storage/flag2/br.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      3.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/marcello-morelli" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Marcello Morelli  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/ve.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      4.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/kamil-szkaradek" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Kamil Szkaradek  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      5.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/rogerio-bontorin" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Rogério Bontorin  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/br.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      6.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/edgars-skrivers" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Edgars Skrīvers  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/lv.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      7.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/werlleson-martins" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Werlleson Martins  </a>                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/br.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      8.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/andrzej-karkula" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Andrzej Karkula  </a>                                                     <i class="bi bi-circle-fill icon-nr"></i>   NR
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      9.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/patryk-surdyn" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Patryk Surdyn  </a>                                                     <i class="bi bi-arrow-down arrow-red"></i>  -1
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                      10.  <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/mariusz-joniak" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"> Mariusz Joniak  </a>                                                     <i class="bi bi-arrow-down arrow-red"></i>  -1
+                                                    
+                                                    
+                                                </div>
+                                                                                                    <img src="/storage/flag2/pl.png" width="10" class="flag2" alt="" >                                             </li>
+
+                                        </ol>
+                                    </div>
+                                </div>
+                                
+
+                                <div class="col-lg-6 winner-photo-col" style="position: relative;">
+                                                                            <img class="img-win" alt="Vitalii Yakymenko"
+                                             src="/storage/2026-02/1772038087-yakymenko-pas.png.800.webp"
+                                             srcset="/storage/2026-02/1772038087-yakymenko-pas.png.450.webp 450w, /storage/2026-02/1772038087-yakymenko-pas.png.800.webp 800w"
+                                             sizes="(min-width: 992px) 420px, 190px">
+                                                                    </div>
+
+
+                            </div>
+                        </div>
+                    </div>
+
+
+                                    <div class="col-lg-6 col-md-12 p-3">
+                        <div class="category-card p-3">
+                            <div>
+                                <h2 class="text-uppercase">WOMEN&#039;S BANTAMWEIGHT</h2>
+                                <p>(135lb/61.2kg)</p>
+                            </div>
+                            <div class="d-md-flex">
+                                <div class="col-lg-6 col-md-12" style="z-index: 2;">
+                                    <div>
+                                                                                    <a class="fightcard-player" href="https://www.kswmma.com/en/fighter/sara-luzar-smajic" onclick="event.preventDefault(); showPlayerInfo(this.href); return false;"><span class="win-block oswald"> CHAMPION </span><br>
+                                                <div class="fs-4 text-uppercase m-0 oswald fw-bold">Sara</div><div class="fs-2 text-uppercase oswald fw-bold">Luzar-Smajić <img src="/storage/flag2/hr.png" width="20" class="flag2" alt="" >  <img src="/storage/flag2/ba.png" width="20" class="flag2" alt="" >  </div></a>
+                                                                            </div>
+                                    <div>
+                                        <ol class="fighters-list">
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                    &nbsp;                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                    &nbsp;                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                    &nbsp;                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                    &nbsp;                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                    &nbsp;                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                    &nbsp;                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                    &nbsp;                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                    &nbsp;                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                    &nbsp;                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                             </li>
+
+                                            <li class="fighter-position">
+                                                <div>
+                                                    &nbsp;                                                     
+                                                    
+                                                    
+                                                </div>
+                                                                                             </li>
+
+                                        </ol>
+                                    </div>
+                                </div>
+                                
+
+                                <div class="col-lg-6 winner-photo-col" style="position: relative;">
+                                                                            <img class="img-win" alt="Sara Luzar-Smajić"
+                                             src="/storage/2026-05/1779305399-sara.png.800.webp"
+                                             srcset="/storage/2026-05/1779305399-sara.png.450.webp 450w, /storage/2026-05/1779305399-sara.png.800.webp 800w"
+                                             sizes="(min-width: 992px) 420px, 190px">
+                                                                    </div>
+
+
+                            </div>
+                        </div>
+                    </div>
+
+
+                
+                
+            </div>
+        </section>
+    </div>
+
+            </main>
+
+            
+            <!-- ========== END SECONDARY CONTENTS ========== -->
+
+
+        </div>
+
+        <footer class="mt-10 position-relative bg-black">
+            <div class="homepage-container" style="max-width: 1520px; margin: auto;">
+                <div class="row">
+                    <div class="col-6 d-flex justify-content-start mt-5">
+                        <style>.footer-content-child { height: unset; }</style>
+                                                <img
+                                class="footer-content-child"
+                                loading="lazy"
+                                alt="Logo ksw black"
+                                 width="450" height="225"                                 src="/storage/2026-05/1778717975-logo-ksw22-black.png.450.webp"
+                        />
+                    </div>
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    <div class="col-6 d-flex justify-content-end text-white mt-5">
+                        <div class="social-media-title-block">
+                            <div class="ksw-w-social-media-parent">
+                                <b class="ksw-w-social">ksw w social media</b>
+                                <div class="vector-parent">
+                                    <a href="https://www.facebook.com/konfrontacja" target="_blank" aria-label="Facebook">
+                                    <img
+                                            class="vector-icon"
+                                            loading="lazy"
+                                            alt=""
+                                            src="/assets/images/fb.svg"
+                                    />
+                                    </a>
+                                    <a href="https://www.instagram.com/ksw_mma/" target="_blank" aria-label="Instagram">
+                                    <img
+                                            class="frame-child16"
+                                            loading="lazy"
+                                            alt=""
+                                            src="/assets/images/instagram.svg"
+                                    />
+                                    </a>
+                                    <div class="instagram-icon">
+                                        <a href="https://www.youtube.com/user/KSW" target="_blank" aria-label="YouTube">
+                                        <img
+                                                class="vector-icon1"
+                                                alt=""
+                                                src="/assets/images/youtube.svg"
+                                        />
+                                        </a>
+                                    </div>
+                                    <a href="https://www.tiktok.com/@ksw" target="_blank" aria-label="TikTok">
+                                    <img class="vector-icon2" alt="" src="/assets/images/tiktok.svg" />
+                                    </a>
+                                    <a href="https://x.com/KSW_MMA" target="_blank" aria-label="X (Twitter)">
+                                    <img class="vector-icon3" alt="" src="/assets/images/x.svg" />
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+    <div class="col-12">
+        <hr style="height: 1px; color: #fff; width: 100%;">
+    </div>
+</div>
+<div class="row">
+    <div class="col-12 col-md-3">
+        <div class="contact-info">
+            <b class="e-biurokswmmacom mt-4">E: <a href="mailto:biuro@kswmma.com" style="color:inherit;">BIURO@KSWMMA.COM</a></b>
+            <b class="federacja-ksw-ul-container">
+                <p class="federacja-ksw text-white">FEDERACJA KSW</p>
+                <p class="ul-stpiska-39 text-white">Iwicka 47a lok.121,</p>
+                <p class="warszawa text-white">00-735 WARSZAWA</p>
+            </b>
+        </div>
+    </div>
+    <div class="col-12 col-md-2">
+        <div class="footer-links-block text-white">
+            <span class="text-white fw-bold mt-4"><b>ZASADY</b></span>
+            <a href="/zasady" target="_blank">Zasady KSW</a>
+            <a href="/rodo" target="_blank">RODO</a>
+            <a href="/page/2" target="_blank">Polityka prywatności</a>
+        </div>
+    </div>
+    <div class="col-12 col-md-2">
+        <div class="footer-links-block text-white">
+            <span class="text-white fw-bold mt-4"><b>PRODUKTY I MEDIA</b></span>
+            <a href="https://kswshop.com" target="_blank">Ksw Shop</a>
+            <a href="https://kswtv.com" target="_blank">Ksw TV</a>
+        </div>
+    </div>
+    <div class="col-12 col-md-2">
+        <div class="footer-links-block text-white">
+            <span class="text-white fw-bold mt-4"><b>SPONSORZY</b></span>
+            <a href="https://www.xtb.com/pl" target="_blank">Xtb</a>
+            <a href="https://online-mexos.efortuna.pl/page?key=ej0xMzUzMTM1NiZsPTE0MjAyNzc0JnA9MjI5MDU%3D" target="_blank">Fortuna</a>
+            <a href="https://www.monsterenergy.com/pl/pl/home" target="_blank">Monster Energy</a>
+            <a href="https://pruszynski.com.pl/" target="_blank">Blachy Pruszyński</a>
+ <a href="https://hirolab.com/" target="_blank">#Hiro.Lab</a>
+        </div>
+    </div>
+    <div class="col-12 col-md-3">
+        <div class="footer-links-block text-white">
+            <span class="text-white fw-bold mt-4"><b>PARTNERZY</b></span>
+            <a href="https://www.canalplus.com/pl/" target="_blank">Canal+</a>
+            <a href="https://www.kswtv.com" target="_blank">Ksw TV</a>
+        </div>
+    </div>
+</div>
+                    <div class="row">
+                    <div class="col-md-12 mt-10 footer-small-text mb-4">
+                        <span class="oficjalny-serwis-internetowy-f text-white"
+                        >Oficjalny serwis internetowy Federacji KSW | Official KSW
+                  Federation Website
+                </span>
+                        <span class="wszelkie-prawa-zastrzeone text-white"
+                        >Wszelkie prawa zastrzeżone. | All rights reserved.
+                </span>
+                    </div>
+                </div>
+
+            </div>
+        </footer>
+
+        
+        <div class="modal fade bd-example-modal-lg" tabindex="-1" role="dialog" aria-labelledby="myLargeModalLabel" aria-hidden="true" id="modal_player" style="z-index: 999999999">
+            <div class="modal-dialog" role="document" style="max-width: 100%; height: 100%; width: 100%; position: fixed;">
+                <div class="modal-content" style="height: 100%;">
+                    <div class="modal-header">
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="modal-player-content" style="height: 100%;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+         
+        
+            
+            
+            
+            
+            
+
+                
+            
+            
+                
+            
+            
+        
+
+                    <script src="/assets/vendor/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+
+            <!-- JS Implementing Plugins -->
+            
+            <script src="/assets/vendor/hs-header/dist/hs-header.min.js"></script>
+
+            <!-- JS Unify -->
+            <script src="/assets/js/theme.min.js"></script>
+
+        
+        <!-- JS Plugins Init. -->
+        <script>
+            (function() {
+                // new HSGoTo('.js-go-to')  // hs-go-to zakomentowane
+                new HSHeader('#header').init()
+            })()
+        </script>
+
+        
+                    <script src="/assets/js/axios.min.js?v=1778717024"></script>
+            <script src="/assets/js/custom.js?v=1787730176"></script>
+        
+    
+
+
+<script>
+
+
+</script>
+
+
+
+
+    </body>
+</html>
+
+

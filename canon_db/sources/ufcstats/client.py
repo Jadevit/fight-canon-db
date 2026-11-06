@@ -20,6 +20,9 @@ from canon_db import http
 
 BASE = "http://ufcstats.com"
 EVENTS_LIST_URL = f"{BASE}/statistics/events/completed?page=all"
+# The UFC's own rankings (both lists, Media and Meta) and a string every real copy has; saved
+# to raw/rankings/ as they change, not loaded yet.
+RANKINGS = ("https://www.ufc.com/rankings", "Pound-for-Pound")
 
 CHALLENGE_MARKER = "Checking your browser"
 CHALLENGE_URL = f"{BASE}/__c"

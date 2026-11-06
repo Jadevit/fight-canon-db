@@ -29,7 +29,8 @@ from pathlib import Path
 
 from canon_db.ids import alias, clear
 from canon_db.matching import Cards
-from canon_db.sources.pfl.fetch import Site, fetch
+from canon_db.http import snapshot
+from canon_db.sources.pfl.fetch import RANKINGS, Site, fetch
 from canon_db.sources.pfl.pages import V1, V2, parse_event, parse_stats
 
 NAME = "pfl"
@@ -138,5 +139,6 @@ def update(conn: sqlite3.Connection, args: argparse.Namespace, raw: Path) -> Non
         log.info("PFL: %d events listed, %d to fetch, %d recent to fetch again.", len(tags), len(todo), len(recent))
         fetch(site, raw, [t for t in todo if t not in recent], args.rounds or (20 if args.all else 3), args.refresh)
         fetch(site, raw, recent, args.rounds or 3, fresh=True)
+        snapshot(site, *RANKINGS, raw / "rankings")
     counts = load(conn, raw)
     log.info("PFL: %s.", ", ".join(f"{k} {v}" for k, v in counts.items()))
