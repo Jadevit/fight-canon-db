@@ -1,30 +1,30 @@
 {
-  "updated_at": "2026-11-07T17:15:01+00:00",
+  "updated_at": "2026-11-08T17:21:22+00:00",
   "coverage": {
     "first_event_date": "1963-12-02",
-    "last_event_date": "2026-11-07",
-    "last_event": "RCC - Intro 40",
-    "last_event_id": 61663
+    "last_event_date": "2026-11-08",
+    "last_event": "Rizin FF - Rizin 55",
+    "last_event_id": 61671
   },
   "rows": {
-    "fighters": 180545,
-    "fighter_aliases": 212576,
-    "promotions": 12397,
-    "promotion_aliases": 12366,
+    "fighters": 180586,
+    "fighter_aliases": 212650,
+    "promotions": 12398,
+    "promotion_aliases": 12367,
     "merged_ids": 2,
-    "events": 61594,
-    "event_aliases": 65347,
-    "event_cards": 61588,
-    "non_pro_bouts": 1285,
-    "event_pages": 75702,
-    "fights": 373095,
-    "fight_aliases": 384637,
-    "fight_participants": 746190,
-    "round_stats": 76182,
+    "events": 61611,
+    "event_aliases": 65368,
+    "event_cards": 61605,
+    "non_pro_bouts": 1347,
+    "event_pages": 75706,
+    "fights": 373222,
+    "fight_aliases": 384780,
+    "fight_participants": 746444,
+    "round_stats": 76272,
     "smartcage_round_stats": 3548,
-    "sofascore_round_stats": 19274,
-    "judge_scores": 111066,
-    "media_scores": 115694,
-    "odds": 51754
+    "sofascore_round_stats": 19296,
+    "judge_scores": 111246,
+    "media_scores": 115828,
+    "odds": 51818
   }
 }
