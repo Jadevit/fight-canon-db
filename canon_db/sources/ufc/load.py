@@ -160,8 +160,9 @@ class Writer:
             self.counts["fights other sources had"] += 1
         return m[1] if m else None
 
-    def event(self, ev: dict, promo: str | None) -> int:
-        """Write one event; returns our id for it."""
+    def event(self, ev: dict, promo: str | None, keep: bool = False) -> int:
+        """Write one event; returns our id for it. `keep`: with no events list to go by, an event
+        UFC Stats has already labelled keeps that label."""
         conn, e = self.conn, ev["event"]
         placed = [(f, self.place(f, e["date"])) for f in ev["fights"]]
         eid = ids.find(conn, "event", NAME, e["id"])
@@ -176,7 +177,9 @@ class Writer:
             if not ev["fights"]:
                 return None
         # Its label: UFC if on UFC Stats' events list, else read from its name (see promotion()).
-        label = promo or promotion(e["name"])
+        had = conn.execute("SELECT promotion FROM event_claims WHERE source = ? AND source_id = ?",
+                           (NAME, e["id"])).fetchone() if keep and promo is None else None
+        label = promo or (had and had[0]) or promotion(e["name"])
         if eid is None:
             eid = ids.add(conn, "event", {"name": e["name"], "date": e["date"], "promotion": label})
             self.counts["new events"] += 1
@@ -242,11 +245,11 @@ def apply_fighter(conn: sqlite3.Connection, fid: int, html: str | None, ufc_id: 
 # --- loading a batch of events ------------------------------------------------------
 
 def load_events(conn: sqlite3.Connection, pages: Pages, targets: list[str],
-                listed: set[str] = frozenset(), reuse_fighters: bool = False) -> tuple[list, list]:
+                listed: set[str] | None = frozenset(), reuse_fighters: bool = False) -> tuple[list, list]:
     """Load, then write, a batch of events and their fighters. Returns (loaded, skipped).
 
-    Promotion: events on UFC Stats' events list are UFC; an event already in the database
-    keeps its label; anything else is inferred from its name (see promotion())."""
+    Promotion: events on UFC Stats' events list (`listed`) are UFC; anything else is inferred
+    from its name (see promotion()). With no list (None), an event keeps the label it has."""
     loaded, skipped, fight_names = [], [], {}
     for i, eid in enumerate(targets, 1):
         ev = load_event(pages, eid)
@@ -263,7 +266,7 @@ def load_events(conn: sqlite3.Connection, pages: Pages, targets: list[str],
     with conn:
         w = Writer(conn)
         for ev in loaded:
-            w.event(ev, "UFC" if ev["event"]["id"] in listed else None)
+            w.event(ev, "UFC" if listed and ev["event"]["id"] in listed else None, keep=listed is None)
         for ufc_id, names in fight_names.items():
             if ufc_id in w.fighters:
                 apply_fighter(conn, w.fighters[ufc_id], fighter_pages[ufc_id], ufc_id, names)
@@ -344,6 +347,11 @@ def update(conn: sqlite3.Connection, args: argparse.Namespace, raw: Path) -> Non
         return
     if args.offline:
         targets = sorted(p.stem for p in (raw / "events").glob("*.html"))
+        saved = raw / "events_list.html"  # the last online run's
+        completed = [(e["event_id"], None) for e in parse_events_list(saved.read_text(encoding="utf-8"))] \
+            if saved.exists() else None
+        if completed is None:
+            log.warning("No saved events list: events keep their labels; new ones are read from their names.")
     else:
         listing = pages.fetcher.get(EVENTS_LIST_URL)
         if listing is None:
@@ -360,8 +368,8 @@ def update(conn: sqlite3.Connection, args: argparse.Namespace, raw: Path) -> Non
         targets += [eid for eid in args.events if eid not in targets]
         log.info("Events on UFC Stats: %d completed, %d in database; loading %d.",
                  len(completed), len(have), len(targets))
-    loaded, skipped = load_events(conn, pages, targets, listed=set() if args.offline else
-                                  {eid for eid, _ in completed})
+    loaded, skipped = load_events(conn, pages, targets,
+                                  listed=None if completed is None else {eid for eid, _ in completed})
     if skipped and not loaded:
         raise RuntimeError(f"All {len(skipped)} target events failed to download.")
     if not args.offline:

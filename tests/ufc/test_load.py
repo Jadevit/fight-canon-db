@@ -95,3 +95,19 @@ def test_unknown_fighters_get_new_rows():
     assert conn.execute("SELECT source, source_id FROM fight_aliases WHERE fight_id = 1 ORDER BY 1").fetchall() == [
         ("sherdog", "1:1-2"), ("ufc", "f1")]
     assert conn.execute("SELECT method FROM fights").fetchall() == [("KO/TKO",)]
+
+
+def test_with_no_events_list_an_event_keeps_its_label():
+    conn = _db()
+    ev = _event("e1", "2006-10-10", _fight("f1", AL, BEN))
+    ev["event"]["name"] = "Ortiz vs Shamrock 3: The Final Chapter"
+    _write(conn, ev)  # on the events list: UFC
+    with conn:
+        Writer(conn).event(ev, None, keep=True)  # offline, no saved list
+    claims.resolve(conn)
+    assert conn.execute("SELECT promotion FROM events").fetchone() == ("UFC",)
+    with conn:
+        conn.execute("INSERT INTO promotions VALUES ('Ortiz', NULL, 'partial')")
+        Writer(conn).event(ev, None)  # a list it isn't on: read from its name
+    claims.resolve(conn)
+    assert conn.execute("SELECT promotion FROM events").fetchone() == ("Ortiz",)

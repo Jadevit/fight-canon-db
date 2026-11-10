@@ -3,6 +3,7 @@ import sqlite3
 from canon_db import claims, db, ids
 from canon_db.sources.sherdog import cards
 from canon_db.sources.sherdog.linking import State
+from canon_db.sources.sherdog.write import write as write_pages
 
 
 def _db():
@@ -223,3 +224,21 @@ def test_event_pages_due():
     conn = _db()
     write(conn, [_bout(901, "2019-05-05", ("Carl Cole", "300"), ("Alan Able", "100"))])
     assert "901" in cards.pages_read(conn)  # cards read before event_pages count as read
+
+
+def test_a_fighter_page_only_fills_the_blanks_of_a_carded_fight():
+    conn = _db()
+    write(conn, [_bout(901, "2019-05-05", ("Carl Cole", "300"), ("Dan Dent", "400"), method="TKO (Punches)",
+                       referee=None)])
+    fight = ids.find(conn, "fight", "sherdog", "901:300-400")
+    before = conn.execute("SELECT side, fighter_id, result FROM participant_claims ORDER BY side").fetchall()
+    st = State(conn)
+    carl = ids.find(conn, "fighter", "sherdog", "300")
+    page = dict(name="Carl Cole", fights=[dict(result="L", opponent="Dan Dent", opponent_id="400", event_id="901",
+                                               event="CW 901 - X", date="2019-05-05", title=False,
+                                               method="Submission (Armbar)", referee="Herb", round="2", time="3:00")])
+    write_pages(conn, st, {carl: page})
+    claims.resolve(conn)
+    assert conn.execute("SELECT method, end_round, referee FROM fights WHERE fight_id = ?", (fight,)).fetchone() == (
+        "TKO (Punches)", 2, "Herb")  # the card's values stand; the page fills the blank referee
+    assert conn.execute("SELECT side, fighter_id, result FROM participant_claims ORDER BY side").fetchall() == before

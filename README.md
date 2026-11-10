@@ -45,8 +45,7 @@ source's own id for them is in `fighter_aliases`, `event_aliases` and `fight_ali
 on. `site` is the website the id is from (a source can have more than one: `ufc` has
 ufcstats.com and ufc.com). For UFC Stats' fights, filter
 `fight_id IN (SELECT fight_id FROM fight_aliases WHERE source = 'ufc' AND site = 'ufcstats.com')`. Where sources
-disagree, the promotions' own sites (UFC Stats, PFL, Oktagon) are taken over Sherdog, which
-fills in what they leave blank.
+disagree, a ranking of sources decides (see "How values are chosen" below).
 
 | Table                   | One row per                                 | Key                                         |
 | ----------------------- | ------------------------------------------- | ------------------------------------------- |
@@ -69,6 +68,31 @@ fills in what they leave blank.
 | `judge_scores`          | judge's score per fighter per round         | `fight_id`, `fighter_id`, `round`, `judge`  |
 | `media_scores`          | journalist's total per fighter              | `fight_id`, `fighter_id`, `writer`          |
 | `odds`                  | fighter's betting line per source and book  | `fight_id`, `fighter_id`, `source`, `book`  |
+| `sources`               | source (name, website)                      | `source`                                    |
+| `source_tiers`          | how a source ranks for a kind of data       | `source`, `kind`                            |
+| `fighter_claims`        | what one source's page says of a fighter    | `source`, `site`, `source_id`               |
+| `event_claims`          | what one source's page says of an event     | `source`, `site`, `source_id`               |
+| `fight_claims`          | what one source's page says of a fight      | `source`, `site`, `source_id`               |
+| `participant_claims`    | one side of a fight, as one source has it   | `source`, `site`, `source_id`, `side`       |
+| `corrections`           | a correction by hand, with its reason       | `id`                                        |
+| `review_flags`          | something that needs a look by hand         | `flag_id`                                   |
+
+### How values are chosen
+
+Every page read is kept as a claim: what that one source says, in `fighter_claims`, `event_claims`,
+`fight_claims` and `participant_claims`. `fighters`, `events`, `fights` and `fight_participants`
+are worked out from them on every update. Each column takes the best-ranked source that has a
+value (`source_tiers`: promotions' own sites, then Sherdog), so a blank falls through to the
+next source and a disagreement is settled the same way every time. A fight's two sides and
+results come from one source. Nothing a source said is lost: its claim stays beside the others,
+so you can see who said what.
+
+Corrections by hand (`corrections`) rank above every source. Each says what was wrong and why the
+new value is right, with a citation. They're for the few things the ranking gets wrong, such as
+two people mixed up as one fighter. `review_flags` lists what needs a look by hand, such as a
+name a source prints for a fighter that isn't theirs.
+
+The claims and flags are in `canon.db` only, not the Parquet files.
 
 ### Round stats
 

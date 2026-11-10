@@ -156,3 +156,19 @@ def test_published_aliases_use_their_sources_sites():
     for t in ("fighter_aliases", "event_aliases", "fight_aliases", "promotion_aliases"):
         for source, site in conn.execute(f"SELECT DISTINCT source, site FROM {t}"):
             assert site in db.SITES[source], (t, source, site)
+
+
+def test_published_fights_have_two_sides_whose_results_fit():
+    """Every fight has two different fighters, and their results fit: W with L, D with D, NC with NC."""
+    if not db.DEFAULT_DB.exists():
+        pytest.skip("no data/canon.db")
+    conn = sqlite3.connect(db.DEFAULT_DB)
+    bad = conn.execute("""
+        SELECT f.fight_id, group_concat(p.result, '/') FROM fights f LEFT JOIN fight_participants p USING (fight_id)
+        GROUP BY f.fight_id
+        HAVING count(p.fighter_id) <> 2 OR count(DISTINCT p.fighter_id) <> 2
+            OR NOT (min(p.result) = 'L' AND max(p.result) = 'W'
+                    OR min(p.result) = 'D' AND max(p.result) = 'D'
+                    OR min(p.result) = 'NC' AND max(p.result) = 'NC')
+        LIMIT 5""").fetchall()
+    assert bad == []

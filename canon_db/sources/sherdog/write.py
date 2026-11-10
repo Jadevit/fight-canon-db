@@ -170,8 +170,12 @@ class Writer:
         on it and its sides, and return it. `event`: Writer.event's arguments; `sides`: [(Sherdog
         id, name, result)] x2. On a fight a promotion's site has, Sherdog makes no new fighter or
         event: a side it doesn't link to ours is claimed by name only. `bout_type` is the section
-        of a fighter's page the bout is in (None from a card)."""
+        of a fighter's page the bout is in (None from a card). A fighter's page only fills the blanks
+        of a fight on a card that was read, and leaves its sides: the event page is read after the
+        results settle, and the two pages sometimes differ."""
         conn = self.conn
+        if bout_type is not None:  # a fighter's page: its sides in a fixed order (lower Sherdog id first)
+            sides = sorted(sides, key=lambda s: int(s[0]))
         fight = ids.find(conn, "fight", NAME, key) or found
         if fight is not None and fight in self.ranked:
             people = [self.fighter(sid, name) if sid in self.st.fid else None for sid, name, _ in sides]
@@ -187,9 +191,14 @@ class Writer:
             else:
                 self.counts["fights updated"] += 1
         ids.alias(conn, "fight", fight, NAME, key)
-        claims.claim(conn, "fight", fight, NAME, key, {"event_id": eid, "bout_type": bout_type, **values}, mode="fill")
-        claims.sides(conn, fight, NAME, key, [dict(fighter_id=f, fighter_source_id=sid, name=name, result=result)
-                                             for f, (sid, name, result) in zip(people, sides)])
+        carded = bout_type is not None and eid is not None and conn.execute(
+            "SELECT 1 FROM event_cards WHERE event_id = ? AND source = ?", (eid, NAME)).fetchone() is not None
+        claims.claim(conn, "fight", fight, NAME, key, {"event_id": eid, "bout_type": bout_type, **values},
+                     mode="blanks" if carded else "fill")
+        if not (carded and conn.execute("SELECT 1 FROM participant_claims WHERE source = ? AND source_id = ?",
+                                        (NAME, key)).fetchone()):
+            claims.sides(conn, fight, NAME, key, [dict(fighter_id=f, fighter_source_id=sid, name=name, result=result)
+                                                 for f, (sid, name, result) in zip(people, sides)])
         return fight
 
 
