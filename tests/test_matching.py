@@ -7,13 +7,13 @@ from canon_db.matching import Cards, fighter_names, name_ok
 def _db():
     """One event with two fights: Ann Avery vs Bea Brook, Cara Cole vs Dina Dale."""
     conn = sqlite3.connect(":memory:")
-    conn.executescript(db.SCHEMA.read_text())
+    db.create(conn)
     db.sync_promotions(conn)
     people = [(1, "Ann Avery"), (2, "Bea Brook"), (3, "Cara Cole"), (4, "Dina Dale")]
     conn.executemany("INSERT INTO fighters (fighter_id, name) VALUES (?, ?)", people)
-    conn.executemany("INSERT INTO fighter_aliases VALUES (?, 'sherdog', ?, ?)", [(i, str(i), n) for i, n in people])
-    conn.execute("INSERT INTO fighter_aliases VALUES (1, 'other', 'x', 'Annie Avery')")
-    conn.execute("INSERT INTO events (event_id, name, date) VALUES (9, 'Card', '2024-05-04')")
+    conn.executemany("INSERT INTO fighter_aliases (fighter_id, source, site, source_id, name) VALUES (?, 'sherdog', 'sherdog.com', ?, ?)", [(i, str(i), n) for i, n in people])
+    conn.execute("INSERT INTO fighter_aliases (fighter_id, source, site, source_id, name) VALUES (1, 'sofascore', 'sofascore.com', 'x', 'Annie Avery')")
+    conn.execute("INSERT INTO events (event_id, name, date, promotion) VALUES (9, 'Card', '2024-05-04', 'UFC')")
     conn.executemany("INSERT INTO fights (fight_id, event_id) VALUES (?, 9)", [(1,), (2,)])
     conn.executemany("INSERT INTO fight_participants VALUES (?, ?, ?, 'W')",
                      [(1, 1, 0), (1, 2, 1), (2, 3, 0), (2, 4, 1)])

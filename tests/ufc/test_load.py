@@ -1,12 +1,12 @@
 import sqlite3
 
-from canon_db import db, ids
-from canon_db.sources.ufcstats.load import Writer, fill_sex
+from canon_db import claims, db, ids
+from canon_db.sources.ufc.load import Writer
 
 
 def _db():
     conn = sqlite3.connect(":memory:")
-    conn.executescript(db.SCHEMA.read_text())
+    db.create(conn)
     db.sync_promotions(conn)
     return conn
 
@@ -28,6 +28,8 @@ def _write(conn, ev):
     with conn:
         w = Writer(conn)
         w.event(ev, "UFC")
+    claims.resolve(conn)
+    with conn:
         ids.merge_duplicates(conn)
         ids.drop_empty(conn)
     return w.counts
@@ -43,9 +45,9 @@ def test_new_event_then_reload_keeps_ids():
     counts = _write(conn, ev)
     assert counts["new fights"] == 2 and counts["new fighters"] == 3 and counts["new events"] == 1
     before = conn.execute("SELECT * FROM fight_aliases ORDER BY source_id").fetchall()
-    assert before == [(1, "ufcstats", "f1"), (2, "ufcstats", "f2")]
+    assert before == [(1, "ufc", "ufcstats.com", "f1", None), (2, "ufc", "ufcstats.com", "f2", None)]
     assert conn.execute("SELECT fight_id, fighter_id, knockdowns, source FROM round_stats").fetchall() == [
-        (1, 1, 1, "ufcstats")]
+        (1, 1, 1, "ufc")]
     _write(conn, ev)  # reloading changes no ids
     assert conn.execute("SELECT * FROM fight_aliases ORDER BY source_id").fetchall() == before
     assert conn.execute("SELECT count(*) FROM fighters").fetchone() == (3,)
@@ -60,22 +62,22 @@ def test_bout_attaches_to_a_sherdog_fight():
     conn = _db()
     _write(conn, _event("e0", "2019-01-01", _fight("f0", AL, CARL)))   # Alan (1) on UFC Stats
     conn.execute("INSERT INTO fighters (fighter_id, name, nationality) VALUES (10, 'Benjamin Baker', 'England')")
-    conn.execute("INSERT INTO fighter_aliases VALUES (10, 'sherdog', '200', 'Benjamin Baker')")
+    conn.execute("INSERT INTO fighter_aliases (fighter_id, source, site, source_id, name) VALUES (10, 'sherdog', 'sherdog.com', '200', 'Benjamin Baker')")
     conn.execute("INSERT INTO events (event_id, name, date, promotion) VALUES (10, 'CW 1', '2020-01-01', 'CWFC')")
-    conn.execute("INSERT INTO event_aliases VALUES (10, 'sherdog', '900')")
+    conn.execute("INSERT INTO event_aliases (event_id, source, site, source_id, name) VALUES (10, 'sherdog', 'sherdog.com', '900', NULL)")
     conn.execute("INSERT INTO fights (fight_id, event_id, method, referee) VALUES (10, 10, 'TKO (Punches)', 'Ref')")
-    conn.execute("INSERT INTO fight_aliases VALUES (10, 'sherdog', '900:100-200')")
+    conn.execute("INSERT INTO fight_aliases (fight_id, source, site, source_id, name) VALUES (10, 'sherdog', 'sherdog.com', '900:100-200', NULL)")
     conn.executemany("INSERT INTO fight_participants VALUES (10, ?, ?, ?)", [(1, 0, "W"), (10, 1, "L")])
     counts = _write(conn, _event("e5", "2020-01-02", _fight("f5", AL, BEN, rounds={AL[0]: [ROUND]})))
     assert counts["fights other sources had"] == 1 and counts["fighters linked through a fight"] == 1
     # The fight and event keep Sherdog's ids and gain UFC Stats'; UFC Stats' values win.
-    assert ids.find(conn, "fight", "ufcstats", "f5") == 10 and ids.find(conn, "event", "ufcstats", "e5") == 10
-    assert ids.find(conn, "fighter", "ufcstats", BEN[0]) == 10
+    assert ids.find(conn, "fight", "ufc", "f5") == 10 and ids.find(conn, "event", "ufc", "e5") == 10
+    assert ids.find(conn, "fighter", "ufc", BEN[0]) == 10
     assert conn.execute("SELECT method, referee FROM fights WHERE fight_id = 10").fetchone() == ("KO/TKO", "Herb Dean")
     assert conn.execute("SELECT name FROM events WHERE event_id = 10").fetchone() == ("UFC e5",)
     assert conn.execute("SELECT nationality FROM fighters WHERE fighter_id = 10").fetchone() == ("England",)
     assert conn.execute("SELECT count(*) FROM fights").fetchone() == (2,)
-    assert conn.execute("SELECT source FROM round_stats").fetchall() == [("ufcstats",)]
+    assert conn.execute("SELECT source FROM round_stats").fetchall() == [("ufc",)]
 
 
 def test_unknown_fighters_get_new_rows():
@@ -83,29 +85,13 @@ def test_unknown_fighters_get_new_rows():
     rows it had are merged into the older ids)."""
     conn = _db()
     _write(conn, _event("e1", "2020-01-01", _fight("f1", AL, BEN)))
-    assert ids.find(conn, "fight", "ufcstats", "f1") == 1
+    assert ids.find(conn, "fight", "ufc", "f1") == 1
     conn.execute("INSERT INTO fighters (fighter_id, name) VALUES (5, 'Al Able'), (6, 'Ben Baker')")
-    conn.execute("INSERT INTO events (event_id, name, date) VALUES (5, 'UFC 1', '2020-01-01')")
+    conn.execute("INSERT INTO events (event_id, name, date, promotion) VALUES (5, 'UFC 1', '2020-01-01', 'UFC')")
     conn.execute("INSERT INTO fights (fight_id, event_id, method) VALUES (5, 5, 'TKO (Punches)')")
-    conn.execute("INSERT INTO fight_aliases VALUES (5, 'sherdog', '1:1-2')")
+    conn.execute("INSERT INTO fight_aliases (fight_id, source, site, source_id, name) VALUES (5, 'sherdog', 'sherdog.com', '1:1-2', NULL)")
     conn.executemany("INSERT INTO fight_participants VALUES (5, ?, ?, ?)", [(1, 0, "W"), (2, 1, "L")])
     assert ids.merge_duplicates(conn) == 1  # same two fighters, same day: one fight, the older id
     assert conn.execute("SELECT source, source_id FROM fight_aliases WHERE fight_id = 1 ORDER BY 1").fetchall() == [
-        ("sherdog", "1:1-2"), ("ufcstats", "f1")]
+        ("sherdog", "1:1-2"), ("ufc", "f1")]
     assert conn.execute("SELECT method FROM fights").fetchall() == [("KO/TKO",)]
-
-
-def test_fill_sex_from_ufcstats_divisions():
-    conn = sqlite3.connect(":memory:")
-    conn.executescript(db.SCHEMA.read_text())
-    db.sync_promotions(conn)
-    conn.execute("INSERT INTO events (event_id, name, date) VALUES (1, 'UFC 1', '2020-01-01')")
-    conn.executemany("INSERT INTO fighters (fighter_id, name) VALUES (?, ?)", [(i, x) for i, x in enumerate("abcdef", 1)])
-    for fid, wc, pair in ((1, "Women's Strawweight Bout", (1, 2)), (2, "Lightweight Bout", (3, 4)),
-                          (3, "Catch Weight Bout", (5, 6)), (4, "Bantamweight Bout", (1, 3))):
-        conn.execute("INSERT INTO fights (fight_id, event_id, weight_class) VALUES (?, 1, ?)", (fid, wc))
-        conn.execute("INSERT INTO fight_aliases VALUES (?, 'ufcstats', ?)", (fid, f"f{fid}"))
-        conn.executemany("INSERT INTO fight_participants VALUES (?, ?, ?, 'W')", [(fid, p, i) for i, p in enumerate(pair)])
-    fill_sex(conn)
-    # A women's bout decides first; catch weight says nothing.
-    assert dict(conn.execute("SELECT name, sex FROM fighters")) == dict(a="F", b="F", c="M", d="M", e=None, f=None)

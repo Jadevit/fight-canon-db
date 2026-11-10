@@ -4,7 +4,7 @@ database already has.
 MMA Decisions copies each decision's official cards (every judge, round by round) and
 collects journalists' scores of the fight. Cards go in judge_scores with `source =
 'mmadecisions'`; a fight's cards come from one source, so where any are kept they replace
-another source's ('ufc.com', read from the official card images). A card is kept only if every
+another source's ('ufc', read from the official card images on ufc.com). A card is kept only if every
 round has both scores and the rounds add up to its totals. Judges' names take UFC Stats' spelling where the fight's UFC
 Stats details name the judge (by surname). Media scores go in media_scores, one row per
 writer per fighter; a score whose higher side isn't the writer's stated pick is left out.

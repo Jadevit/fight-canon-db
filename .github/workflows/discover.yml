@@ -44,7 +44,7 @@ jobs:
 
       - name: Discover events
         id: update
-        run: python -m canon_db update ufcstats --discover
+        run: python -m canon_db update ufc --discover
 
       - name: Publish database
         if: steps.update.outputs.changed == 'true'

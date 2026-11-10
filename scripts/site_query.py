@@ -37,12 +37,12 @@ How the data works:
   'TKO (Punches)', 'Submission (Armbar)', 'Decision (Split)' from Sherdog). Match with ILIKE:
   '%KO%' for knockouts, '%Submission%', '%Decision%'.
 - division(weight_class) gives the division: one of {", ".join(DIVISIONS)}, or Other.
-- Find fighters by name with ILIKE (names are as the sources spell them); a fighter's pro record
-  as UFC Stats shows it is in fighters.wins/losses/draws/no_contests (NULL for fighters it doesn't have).
+- Find fighters by name with ILIKE (names are as the sources spell them). A fighter's pro record
+  in this database is fighters.wins/losses/draws/no_contests, counted from fight_participants.
 - Ids are Fight Canon's own numbers. For UFC Stats' fights, use promotion = 'UFC' (events), or
-  fight_id IN (SELECT fight_id FROM fight_aliases WHERE source = 'ufcstats') for every fight UFC Stats has.
+  fight_id IN (SELECT fight_id FROM fight_aliases WHERE source = 'ufc' AND site = 'ufcstats.com') for every fight UFC Stats has.
 - Stats per round are in round_stats, one row per fighter per round. Its source column says who
-  counted ('ufcstats' is the most complete); sources count differently, so rank or compare within
+  counted ('ufc', UFC Stats' count, is the most complete); sources count differently, so rank or compare within
   one source. A fight can have rows from two sources (Oktagon's and Sofascore's): filter on
   source. Accuracy is landed / attempted over rows where attempted IS NOT NULL.
 - Promotion names are as stored ('UFC', 'Bellator MMA', 'PFL', 'ONE FC', ...); events.promotion.

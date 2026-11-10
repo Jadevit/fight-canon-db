@@ -46,13 +46,13 @@ def test_card_checks_and_judge_spelling():
 
 def _db(results=("W", "L")):
     conn = sqlite3.connect(":memory:")
-    conn.executescript(db.SCHEMA.read_text())
+    db.create(conn)
     db.sync_promotions(conn)
     conn.executemany("INSERT INTO fighters (fighter_id, name) VALUES (?, ?)",
                      [(1, "Daniel Marcos"), (2, "Adrian Yanez"), (3, "Carl Cole"), (4, "Dan Dale")])
-    conn.executemany("INSERT INTO fighter_aliases VALUES (?, 'sherdog', ?, ?)",
+    conn.executemany("INSERT INTO fighter_aliases (fighter_id, source, site, source_id, name) VALUES (?, 'sherdog', 'sherdog.com', ?, ?)",
                      [(1, "1", "Daniel Marcos"), (2, "2", "Adrian Yanez")])
-    conn.execute("INSERT INTO events (event_id, name, date) VALUES (9, 'UFC on ESPN 65', '2024-12-14')")
+    conn.execute("INSERT INTO events (event_id, name, date, promotion) VALUES (9, 'UFC on ESPN 65', '2024-12-14', 'UFC')")
     conn.execute("INSERT INTO fights (fight_id, event_id, details) VALUES "
                  "(1, 9, 'Derek Cleary 30 - 27. Eric Colon 29 - 28. Chris Lee 28 - 29.')")
     conn.executemany("INSERT INTO fight_participants VALUES (1, ?, ?, ?)", [(1, 0, results[0]), (2, 1, results[1])])
@@ -87,7 +87,7 @@ def test_load(tmp_path):
 def test_replaces_other_cards_and_disagreeing_results(tmp_path):
     conn = _db()
     conn.execute("INSERT INTO judge_scores (fight_id, fighter_id, round, judge, score, source) "
-                 "VALUES (1, 1, 1, 'Derek Cleary', 10, 'ufc.com')")
+                 "VALUES (1, 1, 1, 'Derek Cleary', 10, 'ufc')")
     counts = load(conn, _raw(tmp_path))
     assert counts["fights whose other cards were replaced"] == 1  # one source per fight: ours
     assert conn.execute("SELECT source, COUNT(*) FROM judge_scores GROUP BY 1").fetchall() == [("mmadecisions", 18)]

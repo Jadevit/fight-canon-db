@@ -17,9 +17,9 @@ from canon_db.db import RAW
 from canon_db.http import Fetcher, snapshot
 from canon_db.sources import aca, brave, ksw
 from canon_db.sources.pfl.fetch import RANKINGS as PFL
-from canon_db.sources.ufcstats.client import RANKINGS as UFC
+from canon_db.sources.ufc.client import RANKINGS as UFC
 
-PAGES = {"ufcstats": UFC, "pfl": PFL, "brave": brave.RANKINGS, "aca": aca.RANKINGS, "ksw": ksw.RANKINGS}
+PAGES = {"ufc": UFC, "pfl": PFL, "brave": brave.RANKINGS, "aca": aca.RANKINGS, "ksw": ksw.RANKINGS}
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s", datefmt="%H:%M:%S")

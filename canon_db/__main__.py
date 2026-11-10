@@ -1,10 +1,10 @@
 """Command line: bring data/canon.db up to date from its sources.
 
     python -m canon_db update                    # every source, default options
-    python -m canon_db update ufcstats --events 7e654edcddd71550
-    python -m canon_db update ufcstats --all     # reload everything (~4-5 h)
-    python -m canon_db update ufcstats --offline # re-apply saved pages, no network
-    python -m canon_db update ufcstats -h        # a source's own options
+    python -m canon_db update ufc --events 7e654edcddd71550
+    python -m canon_db update ufc --all     # reload everything (~4-5 h)
+    python -m canon_db update ufc --offline # re-apply saved pages, no network
+    python -m canon_db update ufc -h        # a source's own options
     python -m canon_db migrate                   # rebuild the DB after editing schema.sql
 
 All sources run against one working copy of the database, which replaces
@@ -22,7 +22,7 @@ import logging
 import sys
 from pathlib import Path
 
-from canon_db import db
+from canon_db import claims, db
 from canon_db.sources import SOURCES
 
 
@@ -62,10 +62,17 @@ def main() -> None:
 
     try:
         with db.updating(args.db, args.allow_drop) as (conn, result):
+            db.sync_sources(conn)
+            resolved = False
             for name, source_args in run.items():
                 raw = args.raw / name
                 raw.mkdir(parents=True, exist_ok=True)
                 SOURCES[name].update(conn, source_args, raw)
+                if claims.dirty:  # the next source matches against the worked-out tables
+                    log.info("Claims: %s.", ", ".join(f"{k} {v}" for k, v in claims.resolve(conn).items()))
+                    resolved = True
+            if not resolved:  # tiers or rules may have changed
+                claims.resolve(conn)
             db.sync_promotions(conn)
     except (FileNotFoundError, RuntimeError) as e:
         db.github_output(changed=False)

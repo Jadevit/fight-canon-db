@@ -46,7 +46,7 @@ class Pages:
         return parse_fighter(path.read_text(encoding="utf-8")) if path.exists() else None
 
     def on_disk(self) -> list[str]:
-        return sorted(p.stem for p in self.dir.glob("*.html"))
+        return sorted(p.stem for p in self.dir.glob("*.html") if p.stem.isdigit())  # a page is named by its id
 
 
 def sitemap(fetcher: Fetcher) -> dict[str, list[str]]:

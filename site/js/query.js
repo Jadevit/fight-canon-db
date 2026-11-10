@@ -19,7 +19,7 @@ GROUP BY ALL ORDER BY "Fights" DESC LIMIT 25;`,
   "Who lands the most significant strikes per round in the UFC?": `SELECT f.name AS "Fighter", COUNT(*) AS "Rounds",
        round(SUM(r.sig_str_land) / COUNT(*), 1) AS "Sig. Strikes Per Round", r.fighter_id
 FROM round_stats r JOIN fighters f USING (fighter_id) JOIN bouts b USING (fight_id)
-WHERE r.source = 'ufcstats' AND b.promotion = 'UFC'
+WHERE r.source = 'ufc' AND b.promotion = 'UFC'
 GROUP BY ALL HAVING COUNT(*) >= 30
 ORDER BY "Sig. Strikes Per Round" DESC LIMIT 25;`,
   "Which fights had the most knockdowns?": `SELECT b.date AS "Date", b.event AS "Event", f.name AS "Fighter",

@@ -4,19 +4,19 @@ import { api, objs } from "./data.js";
 import { esc, ext, ICON, loading, mmss, num } from "./ui.js";
 
 // Links to the pages a row came from, by the sources' own ids (the aliases tables).
-export const SOURCE_NAMES = { ufcstats: "UFC Stats", pfl: "PFL", oktagon: "Oktagon", sofascore: "Sofascore", sherdog: "Sherdog", smartcage: "PFL SmartCage",
-  "ufc.com": "UFC", mmadecisions: "MMA Decisions" };
+export const SOURCE_NAMES = { ufc: "UFC", pfl: "PFL", oktagon: "Oktagon", sofascore: "Sofascore", sherdog: "Sherdog", smartcage: "PFL SmartCage",
+  mmadecisions: "MMA Decisions" };
 // What a stats source leaves out, said under its stats.
 export const STATS_NOTES = {
   oktagon: "Oktagon counts only what landed: no attempts, knockdowns or control time.",
   sofascore: "A third party's count, not the promotion's. Total strikes are counted thrown, not landed.",
   smartcage: "PFL's older system counts all strikes by arm, leg and ground, not significant strikes.",
 };
-// `aliases`: the event file's {ufcstats: [ids], sherdog: [ids], pfl: [ids]}.
+// `aliases`: the event file's ids by site, {"ufcstats.com": [ids], "sherdog.com": [ids], "pflmma.com": [ids]}.
 export function eventSources(aliases) {
-  const links = (aliases.ufcstats || []).map((s) => ext(`http://ufcstats.com/event-details/${s}`, "UFC Stats"));
-  (aliases.sherdog || []).forEach((s) => links.push(ext(`https://www.sherdog.com/events/x-${s}`, "Sherdog")));
-  (aliases.pfl || []).forEach((s) => links.push(ext(`https://pflmma.com/event/${s}`, "PFL")));
+  const links = (aliases["ufcstats.com"] || []).map((s) => ext(`http://ufcstats.com/event-details/${s}`, "UFC Stats"));
+  (aliases["sherdog.com"] || []).forEach((s) => links.push(ext(`https://www.sherdog.com/events/x-${s}`, "Sherdog")));
+  (aliases["pflmma.com"] || []).forEach((s) => links.push(ext(`https://pflmma.com/event/${s}`, "PFL")));
   return links;
 }
 // The switch between stats sources: "Counted by" and the source, a button per source when more

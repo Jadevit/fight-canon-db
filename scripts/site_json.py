@@ -43,11 +43,11 @@ RANDOM_FILES, RANDOM_MIN = 100, 5  # its random fighter: files of ids, fighters 
 
 FIGHT_COLS = ["weight_class", "title_fight", "scheduled_rounds", "method", "end_round", "end_time", "time_format",
               "referee", "details", "overturned", "no_contest", "bout_type"]
-TABLES = ["events", "fight_participants", "fighters", "fighter_aliases", "event_aliases", "fight_aliases",
+TABLES = ["events", "fight_participants", "fighters", "fighter_aliases", "fighter_claims", "event_aliases", "fight_aliases",
           "event_cards", "promotions", "round_stats", "smartcage_round_stats", "judge_scores", "odds"]
 # Stats sources in the order a fight's are shown: the promotions' own first.
-STATS_ORDER = ["ufcstats", "pfl", "smartcage", "oktagon", "sofascore"]
-LINKED = ("ufcstats", "sherdog", "pfl")  # sources the pages link to, by their ids
+STATS_ORDER = ["ufc", "pfl", "smartcage", "oktagon", "sofascore"]
+LINKED = ("ufcstats.com", "sherdog.com", "pflmma.com")  # sites the pages link to, by their ids
 
 
 FIGHT_HIST = ["date", "event_id", "event", "promotion", "fight_id", "division", "has_stats", "method", "end_round",
@@ -89,12 +89,18 @@ CREATE TABLE site_stats AS SELECT
     (SELECT COUNT(*) FROM fighters) fighters, (SELECT COUNT(DISTINCT promotion) FROM events) promotions,
     (SELECT MIN(date) FROM events) first_date, (SELECT MAX(date) FROM events) last_date;
 
--- What a fighter row in a list shows: their record from UFC Stats and their fights here.
+-- What a fighter row in a list shows: their record, counted from their fights here, and whether
+-- a source prints the same pro record (then it's their whole career, as of that page).
 CREATE TABLE site_cards AS
-    SELECT f.fighter_id, f.name, f.nickname, f.wins, f.losses, f.draws, f.no_contests,
-           COUNT(p.fight_id) n, count_if(p.result = 'W') w, count_if(p.result = 'L') l,
-           count_if(p.result = 'D') d, count_if(p.result = 'NC') nc
-    FROM fighters f LEFT JOIN fight_participants p USING (fighter_id) GROUP BY ALL;
+    WITH counted AS (
+        SELECT f.fighter_id, f.name, f.nickname,
+               COUNT(p.fight_id) n, count_if(p.result = 'W') w, count_if(p.result = 'L') l,
+               count_if(p.result = 'D') d, count_if(p.result = 'NC') nc
+        FROM fighters f LEFT JOIN fight_participants p USING (fighter_id) GROUP BY ALL)
+    SELECT c.*, EXISTS (SELECT 1 FROM fighter_claims k WHERE k.fighter_id = c.fighter_id AND k.source <> 'legacy'
+                        AND k.wins = c.w AND k.losses = c.l AND coalesce(k.draws, 0) = c.d
+                        AND (k.no_contests IS NULL OR k.no_contests = c.nc))::INT whole
+    FROM counted c;
 
 -- Events with their fight counts.
 CREATE TABLE site_events AS
@@ -187,11 +193,12 @@ def fighters(con, w: Writer) -> None:
             opp = next((o for o in sides.values() if o[1] != fid), None)
             stats[fid].append([fight, *r[2:], opp[6] if opp else None, opp[5] if opp else None])
     aliases = defaultdict(lambda: defaultdict(list))
-    for fid, src, sid in rows(con, f"SELECT DISTINCT fighter_id, source, source_id FROM fighter_aliases "
-                                   f"WHERE source IN ({sql_list(LINKED)}) ORDER BY fighter_id, source, source_id")[1]:
+    for fid, src, sid in rows(con, f"SELECT DISTINCT fighter_id, site, source_id FROM fighter_aliases "
+                                   f"WHERE site IN ({sql_list(LINKED)}) ORDER BY fighter_id, site, source_id")[1]:
         aliases[fid][src].append(sid)
-    cols, people = rows(con, """SELECT fighter_id, name, nickname, dob, height_in, reach_in, weight_lbs, stance,
-                                       nationality, wins, losses, draws, no_contests FROM fighters ORDER BY fighter_id""")
+    cols, people = rows(con, """SELECT fighter_id, f.name, f.nickname, dob, height_in, reach_in, weight_lbs, stance,
+                                       nationality, c.whole FROM fighters f JOIN site_cards c USING (fighter_id)
+                                ORDER BY fighter_id""")
     for r in people:
         fid = r[0]
         w(f"f/{fid}.json", {
@@ -225,10 +232,10 @@ def events(con, w: Writer) -> None:
     ocols, odds = grouped(con, "SELECT fight_id, fighter_id, open, close, close_low, close_high FROM odds "
                                "WHERE book = 'all' ORDER BY fight_id, fighter_id, source")
     aliases = defaultdict(lambda: defaultdict(list))
-    for eid, src, sid in rows(con, f"SELECT event_id, source, source_id FROM event_aliases "
-                                   f"WHERE source IN ({sql_list(LINKED)}) ORDER BY event_id, source, source_id")[1]:
+    for eid, src, sid in rows(con, f"SELECT event_id, site, source_id FROM event_aliases "
+                                   f"WHERE site IN ({sql_list(LINKED)}) ORDER BY event_id, site, source_id")[1]:
         aliases[eid][src].append(sid)
-    ufc_fights = dict(rows(con, "SELECT fight_id, source_id FROM fight_aliases WHERE source = 'ufcstats'")[1])
+    ufc_fights = dict(rows(con, "SELECT fight_id, source_id FROM fight_aliases WHERE site = 'ufcstats.com'")[1])
     src_at = rcols.index("source")
     shards = defaultdict(dict)
     cols, evs = rows(con, """SELECT e.event_id, e.name, e.date, e.location, e.promotion, p.coverage,
@@ -338,13 +345,12 @@ def search(con, w: Writer) -> dict:
                                "SELECT fighter_id, name FROM fighter_aliases")[1]:
         names[fid] |= words(name)
     entries = []
-    for r in rows(con, """SELECT fighter_id, name, nickname, wins, losses, draws, no_contests, n, w, l, d, nc
+    for r in rows(con, """SELECT fighter_id, name, nickname, n, w, l, d, nc
                           FROM site_cards ORDER BY n DESC, name, fighter_id""")[1]:
         ws = names.get(r[0], set())
         if ws:
             entries.append((ws, r + [" ".join(sorted(ws))]))
-    sf = trie(w, "sf", ["fighter_id", "name", "nickname", "wins", "losses", "draws", "no_contests", "n", "w", "l", "d",
-                        "nc", "words"], entries)
+    sf = trie(w, "sf", ["fighter_id", "name", "nickname", "n", "w", "l", "d", "nc", "words"], entries)
     evs = []
     for eid, name, date, loc, promo, n in rows(
             con, "SELECT event_id, name, date, location, promotion, n FROM site_events ORDER BY date DESC, event_id")[1]:

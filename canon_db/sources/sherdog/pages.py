@@ -61,10 +61,26 @@ def parse_fights(table: str) -> list[dict]:
     return out
 
 
+RECORD = {"wins": "wins", "losses": "losses", "draws": "draws", "n/c": "no_contests", "nc": "no_contests",
+          "no contests": "no_contests"}
+
+
+def record(page: str) -> dict:
+    """{wins, losses, draws, no_contests} as the page prints them. It prints draws and no contests
+    only when there are some, so those are 0 when the record is there without them; all None when
+    the page has no record."""
+    found = {RECORD[k.strip().lower()]: int(n) for k, n in re.findall(
+        r'<div class="winloses [^"]*">\s*<span>([^<]*)</span>\s*<span>(\d+)</span>', page)
+        if k.strip().lower() in RECORD}
+    if "wins" not in found:
+        return dict.fromkeys(("wins", "losses", "draws", "no_contests"))
+    return {k: found.get(k, 0) for k in ("wins", "losses", "draws", "no_contests")}
+
+
 def parse_fighter(page: str) -> dict:
-    """{name, nickname, nationality, dob, height, weight, association, fights, exhibition,
+    """{name, nickname, nationality, dob, height, weight, association, record, fights, exhibition,
     amateur}: `fights` is the pro history; the other two are those sections (upcoming fights
-    are left out)."""
+    are left out). `record` is the pro record the page prints (see record())."""
     name = re.search(r'<span class="fn">(.*?)</span>', page, re.S)
     nick = re.search(r'<span class="nickname">(.*?)</span>', page, re.S)
     nat = re.search(r'itemprop="nationality">(.*?)<', page, re.S)
@@ -80,6 +96,7 @@ def parse_fighter(page: str) -> dict:
         height=text(height.group(1)) if height else "",
         weight=text(weight.group(1)) if weight else "",
         association=text(assoc.group(1)) if assoc else "",
+        record=record(page),
         fights=parse_fights(_section(page, "PRO")),
         exhibition=parse_fights(_section(page, "PRO EXHIBITION")),
         amateur=parse_fights(_section(page, "AMATEUR")),

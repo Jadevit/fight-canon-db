@@ -1,48 +1,57 @@
 """Fight Canon ids: rows found by a source's alias, new rows, values by source rank, merges.
 
-Fighters, events and fights have our ids; a source only adds aliases (its id for our row)
-and data. A source with full results that finds no row of ours for something makes one.
+Fighters, events and fights have our ids; a source only adds aliases (its id for our row, on
+one of its sites) and data. A source with full results that finds no row of ours for something
+makes one.
 
-When two sources give a column, the promotions' own sites (OFFICIAL) are taken over the rest
-(Sherdog), which only fill what they leave blank: write() does that per column. When two rows
-turn out to be one, merge() keeps the older id, records the other in merged_ids, and moves
-everything that pointed at it.
+What each source says about a row is its claim (canon_db.claims), and the row's columns are
+worked out from the claims by source rank. When two rows turn out to be one, merge() keeps the
+older id, records the other in retired_ids, and moves everything that pointed at it, claims too.
 """
 
 from __future__ import annotations
 
 import sqlite3
+from datetime import date
 
-from canon_db.db import COLUMNS
+from canon_db import claims
+from canon_db.db import COLUMNS, TIER_ROWS, site
 
-OFFICIAL = frozenset({"ufcstats", "pfl", "oktagon"})  # promotions' own sites
+# Promotions' own sites: primary for fights (source_tiers.csv).
+OFFICIAL = frozenset(r["source"] for r in TIER_ROWS if r["kind"] == "fight" and r["tier"] == "primary")
 
 # kind -> (table, id column, aliases table)
 KINDS = {"fighter": ("fighters", "fighter_id", "fighter_aliases"),
          "event": ("events", "event_id", "event_aliases"),
          "fight": ("fights", "fight_id", "fight_aliases")}
+CLAIMS = {"fighter": "fighter_claims", "event": "event_claims", "fight": "fight_claims"}  # (canon_db.claims)
 
 # Sources of round stats, best first.
-FULL_STATS = ("ufcstats", "pfl")  # official counts with every column; a fight with one has no other
+FULL_STATS = ("ufc", "pfl")  # official counts with every column; a fight with one has no other
 STATS_RANK = (*FULL_STATS, "sofascore", "oktagon")
 STATS_TABLES = tuple(t for t in COLUMNS if t.endswith("round_stats"))
 # A source's rows about a fighter in a fight (stats, cards, odds): merges move them, a fight takes them along.
 FIGHT_ROWS = tuple(t for t, cols in COLUMNS.items() if {"fight_id", "fighter_id", "source"} <= set(cols))
 FIGHTER_ROWS = ("fight_participants", *FIGHT_ROWS)
+# Rebuilt on every update: a merge or deletion only drops the gone id's rows (the next rebuild
+# checks the row that's left).
+REBUILT = ("review_flags",)
 
 
-def find(conn: sqlite3.Connection, kind: str, source: str, source_id: str) -> int | None:
-    """Our id for a source's id, or None."""
+def find(conn: sqlite3.Connection, kind: str, source: str, source_id: str, site_: str | None = None) -> int | None:
+    """Our id for a source's id on one of its sites (its default if not given), or None."""
     _, col, aliases = KINDS[kind]
-    row = conn.execute(f"SELECT {col} FROM {aliases} WHERE source = ? AND source_id = ?",
-                       (source, str(source_id))).fetchone()
+    row = conn.execute(f"SELECT {col} FROM {aliases} WHERE source = ? AND site = ? AND source_id = ?",
+                       (source, site_ or site(source), str(source_id))).fetchone()
     return row[0] if row else None
 
 
-def aliases(conn: sqlite3.Connection, kind: str, source: str) -> dict[str, int]:
-    """Every id this source has for this kind: {source id: our id}."""
+def aliases(conn: sqlite3.Connection, kind: str, source: str, site_: str | None = None) -> dict[str, int]:
+    """Every id this source has for this kind on one of its sites (its default if not given):
+    {source id: our id}."""
     _, col, table = KINDS[kind]
-    return {s: i for s, i in conn.execute(f"SELECT source_id, {col} FROM {table} WHERE source = ?", (source,))}
+    return {s: i for s, i in conn.execute(f"SELECT source_id, {col} FROM {table} WHERE source = ? AND site = ?",
+                                          (source, site_ or site(source)))}
 
 
 def add(conn: sqlite3.Connection, kind: str, values: dict) -> int:
@@ -55,15 +64,19 @@ def add(conn: sqlite3.Connection, kind: str, values: dict) -> int:
                         list(values.values())).lastrowid
 
 
-def alias(conn: sqlite3.Connection, kind: str, id_: int, source: str, source_id: str, name: str | None = None) -> None:
-    """Record a source's id for our row (fighters: with a spelling of their name)."""
+def alias(conn: sqlite3.Connection, kind: str, id_: int, source: str, source_id: str, name: str | None = None,
+          site_: str | None = None) -> None:
+    """Record a source's id for our row, on one of its sites (its default if not given), with the
+    name as printed there (fighters: every spelling is a row)."""
     _, col, table = KINDS[kind]
+    where = site_ or site(source)
     if kind == "fighter":
-        conn.execute(f"INSERT OR IGNORE INTO {table} ({col}, source, source_id, name) VALUES (?,?,?,?)",
-                     (id_, source, str(source_id), name))
-    else:
-        conn.execute(f"INSERT OR REPLACE INTO {table} ({col}, source, source_id) VALUES (?,?,?)",
-                     (id_, source, str(source_id)))
+        conn.execute(f"INSERT OR IGNORE INTO {table} ({col}, source, site, source_id, name) VALUES (?,?,?,?,?)",
+                     (id_, source, where, str(source_id), name))
+    else:  # a name already printed stays if this read had none
+        conn.execute(f"INSERT INTO {table} ({col}, source, site, source_id, name) VALUES (?,?,?,?,?) "
+                     f"ON CONFLICT DO UPDATE SET {col} = excluded.{col}, name = coalesce(excluded.name, name)",
+                     (id_, source, where, str(source_id), name))
 
 
 def sources(conn: sqlite3.Connection, kind: str, id_: int) -> set[str]:
@@ -76,20 +89,6 @@ def official(conn: sqlite3.Connection, kind: str) -> set[int]:
     _, col, table = KINDS[kind]
     return {r[0] for r in conn.execute(
         f"SELECT DISTINCT {col} FROM {table} WHERE source IN ({', '.join('?' * len(OFFICIAL))})", sorted(OFFICIAL))}
-
-
-def write(conn: sqlite3.Connection, kind: str, id_: int, source: str, values: dict, ranked: bool | None = None) -> None:
-    """Set columns of our row from `source`. An official source's value replaces what's there
-    (a blank doesn't); any other source's only fills a blank if a promotion's site has the
-    row (`ranked`: whether one has it, if the caller knows), and otherwise replaces it."""
-    if not values:
-        return
-    table, col, _ = KINDS[kind]
-    if ranked is None:
-        ranked = bool(sources(conn, kind, id_) & OFFICIAL)
-    fill = source not in OFFICIAL and ranked
-    sets = ", ".join(f"{c} = coalesce({c}, ?)" if fill else f"{c} = coalesce(?, {c})" for c in values)
-    conn.execute(f"UPDATE {table} SET {sets} WHERE {col} = ?", (*values.values(), id_))
 
 
 def best_stats(conn: sqlite3.Connection, fight: int) -> int:
@@ -105,6 +104,7 @@ def merge(conn: sqlite3.Connection, kind: str, a: int, b: int) -> int:
     if a == b:
         return a
     keep, drop = min(a, b), max(a, b)
+    claims.dirty = True  # claims move
     table, col, aliases_table = KINDS[kind]
     first, second = (drop, keep) if sources(conn, kind, drop) & OFFICIAL and not sources(conn, kind, keep) & OFFICIAL \
         else (keep, drop)
@@ -117,6 +117,7 @@ def merge(conn: sqlite3.Connection, kind: str, a: int, b: int) -> int:
             conn.execute(f"DELETE FROM {t} WHERE fighter_id = ?", (drop,))
     elif kind == "event":
         conn.execute("UPDATE fights SET event_id = ? WHERE event_id = ?", (keep, drop))
+        conn.execute("UPDATE fight_claims SET event_id = ? WHERE event_id = ?", (keep, drop))
         conn.execute("UPDATE OR IGNORE event_cards SET event_id = ? WHERE event_id = ?", (keep, drop))
         conn.execute("DELETE FROM event_cards WHERE event_id = ?", (drop,))
     else:
@@ -141,15 +142,29 @@ def merge(conn: sqlite3.Connection, kind: str, a: int, b: int) -> int:
             conn.execute(f"DELETE FROM {t} WHERE fight_id = ?", (drop,))
     conn.execute(f"UPDATE OR IGNORE {aliases_table} SET {col} = ? WHERE {col} = ?", (keep, drop))
     conn.execute(f"DELETE FROM {aliases_table} WHERE {col} = ?", (drop,))
+    conn.execute(f"UPDATE {CLAIMS[kind]} SET {col} = ? WHERE {col} = ?", (keep, drop))  # keyed by page: no clash
+    retire(conn, kind, drop, keep, "merged")  # before the row goes: its flags point at it
     conn.execute(f"DELETE FROM {table} WHERE {col} = ?", (drop,))
-    conn.execute("UPDATE merged_ids SET new_id = ? WHERE kind = ? AND new_id = ?", (keep, kind, drop))
-    conn.execute("INSERT OR REPLACE INTO merged_ids (kind, old_id, new_id) VALUES (?,?,?)", (kind, drop, keep))
     return keep
 
 
-def delete_fight(conn: sqlite3.Connection, fight: int) -> None:
-    """Delete a fight and everything attached to it."""
-    for t in (*FIGHT_ROWS, "fight_participants", "fight_aliases", "fights"):
+def retire(conn: sqlite3.Connection, kind: str, old: int, new: int | None, reason: str) -> None:
+    """Record that `old` no longer names a row: it became `new` (None: it's gone). Ids that
+    pointed at `old` now point at `new`, so a chain of merges leads to the row that's left."""
+    if kind in KINDS:
+        for t in REBUILT:
+            conn.execute(f"DELETE FROM {t} WHERE {KINDS[kind][1]} = ?", (old,))
+    if new is not None:
+        conn.execute("UPDATE retired_ids SET new_id = ? WHERE kind = ? AND new_id = ?", (new, kind, old))
+    conn.execute("INSERT OR REPLACE INTO retired_ids (kind, old_id, new_id, reason, retired_on) VALUES (?,?,?,?,?)",
+                 (kind, old, new, reason, date.today().isoformat()))
+
+
+def delete_fight(conn: sqlite3.Connection, fight: int, reason: str) -> None:
+    """Delete a fight and everything attached to it; its id is retired with `reason`."""
+    retire(conn, "fight", fight, None, reason)
+    claims.dirty = True
+    for t in (*FIGHT_ROWS, "fight_participants", "fight_claims", "fight_aliases", "fights"):
         conn.execute(f"DELETE FROM {t} WHERE fight_id = ?", (fight,))
 
 
@@ -160,13 +175,14 @@ def clear(conn: sqlite3.Connection, source: str, fights, tables: tuple[str, ...]
 
 
 def drop_claim(conn: sqlite3.Connection, fight: int, source: str) -> bool:
-    """A source no longer lists this fight: remove its aliases (and its stats and odds), and
-    the fight if no source is left. Returns True if the fight was deleted."""
+    """A source no longer lists this fight: remove its aliases and claims (and its stats and odds),
+    and the fight if no source is left. Returns True if the fight was deleted."""
+    claims.dirty = True
     conn.execute("DELETE FROM fight_aliases WHERE fight_id = ? AND source = ?", (fight, source))
-    for t in FIGHT_ROWS:
+    for t in (*FIGHT_ROWS, "fight_claims"):
         conn.execute(f"DELETE FROM {t} WHERE fight_id = ? AND source = ?", (fight, source))
     if not conn.execute("SELECT 1 FROM fight_aliases WHERE fight_id = ?", (fight,)).fetchone():
-        delete_fight(conn, fight)
+        delete_fight(conn, fight, "no source lists it")
         return True
     return False
 
@@ -198,13 +214,20 @@ def merge_duplicates(conn: sqlite3.Connection) -> int:
 
 def drop_empty(conn: sqlite3.Connection) -> None:
     """Delete events with no fights and fighters with none, with their aliases and cards, unless
-    a promotion's site has them (it lists fighters whose fights are all elsewhere)."""
+    a promotion's site has them (it lists fighters whose fights are all elsewhere). Their ids
+    are retired."""
     on_site = f"SELECT {{}} FROM {{}} WHERE source IN ({', '.join(repr(s) for s in sorted(OFFICIAL))})"
     empty = (f"SELECT event_id FROM events WHERE event_id NOT IN (SELECT event_id FROM fights) "
+             f"AND event_id NOT IN (SELECT event_id FROM fight_claims WHERE event_id IS NOT NULL) "
              f"AND event_id NOT IN ({on_site.format('event_id', 'event_aliases')})")
-    for t in ("event_cards", "event_aliases", "events"):
+    for (eid,) in conn.execute(empty).fetchall():
+        retire(conn, "event", eid, None, "no fights left")
+    for t in ("event_cards", "event_claims", "event_aliases", "events"):
         conn.execute(f"DELETE FROM {t} WHERE event_id IN ({empty})")
     idle = (f"SELECT fighter_id FROM fighters WHERE fighter_id NOT IN (SELECT fighter_id FROM fight_participants) "
+            f"AND fighter_id NOT IN (SELECT fighter_id FROM participant_claims WHERE fighter_id IS NOT NULL) "
             f"AND fighter_id NOT IN ({on_site.format('fighter_id', 'fighter_aliases')})")
-    for t in ("fighter_aliases", "fighters"):
+    for (fid,) in conn.execute(idle).fetchall():
+        retire(conn, "fighter", fid, None, "no fights left")
+    for t in ("fighter_claims", "fighter_aliases", "fighters"):
         conn.execute(f"DELETE FROM {t} WHERE fighter_id IN ({idle})")

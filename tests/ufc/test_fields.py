@@ -1,6 +1,6 @@
 """Unit tests for the cell parsers. Run: python -m pytest tests/."""
 
-from canon_db.sources.ufcstats import fields as F
+from canon_db.sources.ufc import fields as F
 
 
 def test_id_from_url():

@@ -6,10 +6,10 @@ import pytest
 from canon_db.http import save_changed, visible
 from canon_db.sources import aca, brave, ksw
 from canon_db.sources.pfl.fetch import RANKINGS as PFL
-from canon_db.sources.ufcstats.client import RANKINGS as UFC
+from canon_db.sources.ufc.client import RANKINGS as UFC
 
 TESTS = Path(__file__).parent
-RANKINGS = {"ufcstats": UFC, "pfl": PFL, "brave": brave.RANKINGS, "aca": aca.RANKINGS, "ksw": ksw.RANKINGS}
+RANKINGS = {"ufc": UFC, "pfl": PFL, "brave": brave.RANKINGS, "aca": aca.RANKINGS, "ksw": ksw.RANKINGS}
 NOW = datetime(2026, 11, 5, 12, 0, tzinfo=UTC)
 LATER = datetime(2026, 11, 6, 12, 0, tzinfo=UTC)
 

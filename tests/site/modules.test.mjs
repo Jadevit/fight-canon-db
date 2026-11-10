@@ -55,8 +55,8 @@ test("formats", async () => {
 
 test("a record says its no contests", async () => {
   const { proRecord } = await load("ui");
-  assert.equal(proRecord({ wins: 9, losses: 0, draws: 0 }, { w: 1 }), "9-0-0");
-  assert.equal(proRecord({}, { w: 3, l: 1, d: 1, nc: 2 }), "3-1-1 (2 NC)");
+  assert.equal(proRecord({ w: 9 }), "9-0-0");
+  assert.equal(proRecord({ w: 3, l: 1, d: 1, nc: 2 }), "3-1-1 (2 NC)");
 });
 
 test("an older call's result and failure are both dropped", async () => {

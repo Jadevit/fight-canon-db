@@ -39,8 +39,8 @@ BOARDS = {
                "subw": dict(label="Submission wins", expr="subw"),
                "fights": dict(label="Fights", expr="n")},
         note="Counts pro fights in this database, which doesn't have every fighter's whole career."),
-    "ufcstats": dict(label="UFC Stats", source=("round_stats", "ufcstats"), stats=FULL,
-                     note="Fights counted by UFC Stats: the UFC, and the other promotions it covers."),
+    "ufc": dict(label="UFC Stats", source=("round_stats", "ufc"), stats=FULL,
+                note="Fights counted by UFC Stats: the UFC, and the other promotions it covers."),
     "pfl": dict(label="PFL (from Dec 2025)", source=("round_stats", "pfl"), stats=FULL,
                 note="PFL's own stats, from December 2025 on."),
     "smartcage": dict(

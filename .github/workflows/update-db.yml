@@ -61,7 +61,7 @@ jobs:
           DROP: ${{ inputs.allow_drop && '--allow-drop' || '' }}
         run: |
           if [ -n "$ALL$EVENTS" ]; then
-            python -m canon_db update $DROP ufcstats $ALL ${EVENTS:+--events $EVENTS}
+            python -m canon_db update $DROP ufc $ALL ${EVENTS:+--events $EVENTS}
           else
             python -m canon_db update $DROP
           fi

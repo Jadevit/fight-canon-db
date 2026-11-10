@@ -8,10 +8,12 @@ import logging
 import sqlite3
 from collections import Counter
 
-from canon_db import ids
+from canon_db import claims, ids
+from canon_db.db import site
 from canon_db.promotions import promotion
 from canon_db.sources.sherdog.fetch import NAME, Pages
 from canon_db.sources.sherdog.linking import State, crowded
+from canon_db.sources.sherdog.pages import bio
 
 # Fallback when an event's page can't be read: its name starts with the promotion
 # ("CWFC 88 - ..."); labels that differ from ours.
@@ -97,8 +99,8 @@ class Writer:
     def merges(self) -> None:
         """Fighters found to be one through a Sherdog id, events through a shared fight."""
         conn, st = self.conn, self.st
-        def exists(f: int) -> bool:
-            return conn.execute("SELECT 1 FROM fighters WHERE fighter_id = ?", (f,)).fetchone() is not None
+        def exists(f: int, kind: str = "fighter") -> bool:  # a State can outlive rows merged or dropped since
+            return conn.execute(f"SELECT 1 FROM {kind}s WHERE {kind}_id = ?", (f,)).fetchone() is not None
 
         for fid, _sid, prior in st.new_links:
             a, b = self.fighter_now(fid), self.fighter_now(prior)
@@ -109,7 +111,8 @@ class Writer:
         st.new_links = []
         for a, b in st.same_events:
             a, b = self.event_now(a), self.event_now(b)
-            if a != b and not ids.sources(conn, "event", a) & ids.sources(conn, "event", b) & ids.OFFICIAL:
+            if a != b and exists(a, "event") and exists(b, "event") \
+                    and not ids.sources(conn, "event", a) & ids.sources(conn, "event", b) & ids.OFFICIAL:
                 keep = ids.merge(conn, "event", a, b)
                 self.moved_events[a + b - keep] = keep
                 if keep in self.ranked_events or a + b - keep in self.ranked_events:
@@ -119,7 +122,7 @@ class Writer:
         known = ids.aliases(conn, "event", NAME)
         for sid, eid in st.events.items():
             st.events[sid] = self.event_now(eid)
-            if known.get(sid) != st.events[sid]:  # linked through a shared fight
+            if known.get(sid) != st.events[sid] and exists(st.events[sid], "event"):  # linked through a shared fight
                 ids.alias(conn, "event", st.events[sid], NAME, sid)
 
     def fighter(self, sid: str, name: str) -> int:
@@ -134,49 +137,50 @@ class Writer:
         ids.alias(self.conn, "fighter", fid, NAME, sid, name)
         return fid
 
-    def event(self, sid: str, name: str, day: str | None, location: str | None, label: str) -> int:
-        """Our event for a Sherdog event id (a new one if it's not linked). An event's name and
-        date are set once: fighter pages and event pages name some events differently."""
+    def event(self, sid: str, name: str, day: str | None, location: str | None, label: str,
+              card: bool = False) -> int:
+        """Our event for a Sherdog event id (a new one if it's not linked), and Sherdog's claim on it.
+        The event's own page (`card`) says what it is; fighter pages name some events differently,
+        so theirs only fill what the event page hasn't said, and give no label (`label` is then a
+        guess from the name, for a new event only)."""
         eid = self.event_now(self.st.events.get(sid))
         if eid is None:
             eid = ids.add(self.conn, "event", {"name": name, "date": day, "location": location, "promotion": label})
             self.st.events[sid] = eid
             self.new_events[eid] = sid
             self.counts["new events"] += 1
-        else:
-            ids.write(self.conn, "event", eid, NAME, {"name": name, "date": day, "location": location}, True)
         ids.alias(self.conn, "event", eid, NAME, sid)
+        claims.claim(self.conn, "event", eid, NAME, sid,
+                     dict(name=name, date=day, location=location, promotion=label if card else None),
+                     mode="fill" if card else "blanks")
         return eid
 
     def fight(self, key: str, found: int | None, event: tuple, values: dict, sides: list[tuple],
               bout_type: str | None = None) -> int:
-        """Write one Sherdog fight (found by its alias, else `found`, else new) and return it.
-        `event`: Writer.event's arguments; `sides`: [(Sherdog id, name, result)] x2. On a fight
-        a promotion's site has, Sherdog only fills blanks: its results, corners and event stay,
-        and a side Sherdog doesn't link to ours isn't added. A new fight gets `bout_type`."""
+        """Write one Sherdog fight (found by its alias, else `found`, else new), with Sherdog's claim
+        on it and its sides, and return it. `event`: Writer.event's arguments; `sides`: [(Sherdog
+        id, name, result)] x2. On a fight a promotion's site has, Sherdog makes no new fighter or
+        event: a side it doesn't link to ours is claimed by name only. `bout_type` is the section
+        of a fighter's page the bout is in (None from a card)."""
         conn = self.conn
         fight = ids.find(conn, "fight", NAME, key) or found
         if fight is not None and fight in self.ranked:
-            ids.write(conn, "fight", fight, NAME, values, True)
-            for sid, name, _ in sides:
-                if sid in self.st.fid:
-                    self.fighter(sid, name)
+            people = [self.fighter(sid, name) if sid in self.st.fid else None for sid, name, _ in sides]
+            eid = self.event_now(self.st.events.get(event[0]))
             self.counts["fights a promotion's site has"] += 1
         else:
-            people = [(self.fighter(sid, name), result) for sid, name, result in sides]
+            people = [self.fighter(sid, name) for sid, name, _ in sides]
             eid = self.event(*event)
             if fight is None:
-                fight = ids.add(conn, "fight", {"event_id": eid, "bout_type": bout_type, **values,
-                                                "title_fight": values.get("title_fight") or 0})
-                self.st.bouts.add(fight, eid, event[2], people[0][0], people[1][0])
+                fight = ids.add(conn, "fight", {"event_id": eid})
+                self.st.bouts.add(fight, eid, event[2], people[0], people[1])
                 self.counts["new fights"] += 1
             else:
-                ids.write(conn, "fight", fight, NAME, {"event_id": eid, **values}, False)
                 self.counts["fights updated"] += 1
-            conn.execute("DELETE FROM fight_participants WHERE fight_id = ?", (fight,))
-            conn.executemany("INSERT INTO fight_participants (fight_id, fighter_id, corner, result) VALUES (?,?,?,?)",
-                             [(fight, f, corner, r) for corner, (f, r) in enumerate(sorted(people))])
         ids.alias(conn, "fight", fight, NAME, key)
+        claims.claim(conn, "fight", fight, NAME, key, {"event_id": eid, "bout_type": bout_type, **values}, mode="fill")
+        claims.sides(conn, fight, NAME, key, [dict(fighter_id=f, fighter_source_id=sid, name=name, result=result)
+                                             for f, (sid, name, result) in zip(people, sides)])
         return fight
 
 
@@ -187,12 +191,17 @@ def write(conn: sqlite3.Connection, st: State, read: dict[int, dict], pages: Pag
     for fid, page in read.items():
         sid = st.sd[fid]
         for f in page["fights"]:
-            if f["date"] and f["opponent_id"] and f["event_id"]:
+            if f["date"] and f["opponent_id"] and f["event_id"] and f["opponent_id"] != sid:  # a few list themselves
                 found.setdefault(fight_key(f["event_id"], sid, f["opponent_id"]),
                                  (fid, sid, f, st.match(fid, f, crowded(page, f))))
     with conn:
         w = Writer(conn, st)
         w.merges()
+        for fid, page in read.items():  # the fighter's own page: its claim on them, whole
+            b = bio({k: page.get(k, "") for k in ("nickname", "dob", "height", "weight", "nationality")})
+            claims.claim(conn, "fighter", w.fighter_now(fid), NAME, st.sd[fid],
+                         dict(name=page.get("name") or None, association=page.get("association") or None, **b,
+                              **(page.get("record") or {})))
         touched = set()
         for key, (fid, sid, f, m) in found.items():
             other = {"W": "L", "L": "W"}.get(f["result"], f["result"])
@@ -217,17 +226,19 @@ def write(conn: sqlite3.Connection, st: State, read: dict[int, dict], pages: Pag
         todo = dict(w.new_events)
         if pages is not None and todo:
             labels = Labels(conn)
-            conn.executemany("UPDATE events SET promotion = ?, location = coalesce(?, location) WHERE event_id = ?",
-                             label_events(pages, labels, todo))
+            for label, location, eid in label_events(pages, labels, todo):  # their own pages
+                claims.claim(conn, "event", eid, NAME, todo[eid], dict(promotion=label, location=location), mode="fill")
             conn.executemany("INSERT OR IGNORE INTO promotions (promotion, coverage) VALUES (?, 'partial')",
                              sorted({(label,) for label, _ in labels.new.values()}))
-            conn.executemany("INSERT OR REPLACE INTO promotion_aliases (promotion, source, source_id, name) "
-                             "VALUES (?,?,?,?)", [(label, NAME, org, name) for org, (label, name) in labels.new.items()])
+            conn.executemany("INSERT OR REPLACE INTO promotion_aliases (promotion, source, site, source_id, name) "
+                             "VALUES (?,?,?,?,?)", [(label, NAME, site(NAME), org, name) for org, (label, name) in labels.new.items()])
             w.counts["new promotions"] = len(labels.new)
         conn.execute("INSERT OR IGNORE INTO promotions (promotion, coverage) SELECT DISTINCT promotion, 'partial' "
                      "FROM events WHERE promotion NOT IN (SELECT promotion FROM promotions)")
         mark_bout_types(conn, {st.sd[fid]: page for fid, page in read.items()})
         default_pro(conn)
+    claims.current(conn)  # the fights as worked out, for duplicates
+    with conn:
         w.counts["duplicate fights merged"] = ids.merge_duplicates(conn)
         w.counts["non-pro dropped"] = drop_non_pro(conn)
     w.counts.update(fights=len(found))
@@ -240,8 +251,9 @@ def mark_bout_types(conn: sqlite3.Connection, pages: dict[str, dict]) -> set[str
     rows = [(kind, fight_key(f["event_id"], sid, f["opponent_id"])) for sid, page in pages.items()
             for kind, key in (("pro", "fights"), ("exhibition", "exhibition"), ("amateur", "amateur"))
             for f in page.get(key, []) if f["event_id"] and f["opponent_id"]]
-    conn.executemany("UPDATE fights SET bout_type = ? WHERE fight_id = "
-                     "(SELECT fight_id FROM fight_aliases WHERE source = 'sherdog' AND source_id = ?)", rows)
+    for kind, key in rows:
+        if (fight := ids.find(conn, "fight", NAME, key)) is not None:
+            claims.claim(conn, "fight", fight, NAME, key, {"bout_type": kind}, mode="fill")
     # A bout Sherdog now lists as pro comes back with its card.
     conn.executemany("DELETE FROM non_pro_bouts WHERE source = 'sherdog' AND source_id = ?",
                      [(key,) for kind, key in rows if kind == "pro"])
@@ -250,15 +262,16 @@ def mark_bout_types(conn: sqlite3.Connection, pages: dict[str, dict]) -> set[str
 
 def default_pro(conn: sqlite3.Connection) -> None:
     """Sherdog fights not from a card came from a fighter page's pro section."""
-    conn.execute("UPDATE fights SET bout_type = 'pro' WHERE bout_type IS NULL AND event_id NOT IN "
-                 "(SELECT event_id FROM event_cards) AND fight_id IN "
-                 "(SELECT fight_id FROM fight_aliases WHERE source = ?)", (NAME,))
+    claims.dirty = True
+    conn.execute("UPDATE fight_claims SET bout_type = 'pro' WHERE source = ? AND bout_type IS NULL AND fight_id IN "
+                 "(SELECT fight_id FROM fights WHERE event_id NOT IN (SELECT event_id FROM event_cards))", (NAME,))
 
 
 def drop_non_pro(conn: sqlite3.Connection) -> int:
     """Delete amateur and exhibition fights that no promotion's site has (pro MMA only), then
     fighters and events left with no fights. Their Sherdog ids go in non_pro_bouts, so cards
     skip them. Returns the number of fights deleted."""
+    claims.current(conn)  # bout types as worked out
     gone = [r[0] for r in conn.execute(
         f"SELECT fight_id FROM fights WHERE bout_type IN ('amateur', 'exhibition') AND fight_id NOT IN "
         f"(SELECT fight_id FROM fight_aliases WHERE source IN ({', '.join('?' * len(ids.OFFICIAL))}))",
@@ -268,6 +281,6 @@ def drop_non_pro(conn: sqlite3.Connection) -> int:
         "f.bout_type FROM fight_aliases a JOIN fights f USING (fight_id) WHERE a.fight_id = ? AND a.source = ?",
         [(fight, NAME) for fight in gone])
     for fight in gone:
-        ids.delete_fight(conn, fight)
+        ids.delete_fight(conn, fight, "not pro MMA")
     ids.drop_empty(conn)
     return len(gone)

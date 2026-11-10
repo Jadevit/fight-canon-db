@@ -12,8 +12,8 @@ A bout is matched to our fight like a PFL bout (see pfl/load.py): date within a 
 both names, then the one unclaimed fight on the linked event that has one of its fighters.
 That links Oktagon's fighter ids (fighter_aliases) and the event (event_aliases, the
 tournament id). The stats host also holds test tournaments (made-up logs of real bouts);
-anything named "test" is left out. Matched fighters also get a missing `dob`, and their `sex` from the bout's
-gender on Oktagon's fight card.
+anything named "test" is left out. Matched fighters get Oktagon's claim (canon_db.claims): its `dob`, and
+their `sex` from the bout's gender on Oktagon's fight card.
 
 Which events:
   default     this year's events not loaded yet, and those from the last --recent-days days again
@@ -30,6 +30,7 @@ from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
 
+from canon_db import claims
 from canon_db.http import Fetcher, read_json
 from canon_db.ids import OFFICIAL, alias, clear
 from canon_db.matching import Cards
@@ -115,14 +116,12 @@ def load(conn: sqlite3.Connection, raw: Path) -> Counter:
         conn.executemany(
             f"INSERT OR REPLACE INTO round_stats (fight_id, fighter_id, round, {', '.join(COLS)}, source) "
             f"VALUES ({', '.join('?' * (len(COLS) + 4))})", rows)
-        before = conn.total_changes
-        conn.executemany("UPDATE fighters SET dob = ? WHERE fighter_id = ? AND dob IS NULL",
-                         [(d, fid) for fid, d in dobs.items()])
-        counts["birth dates filled"] = conn.total_changes - before
-        before = conn.total_changes
-        conn.executemany("UPDATE fighters SET sex = ? WHERE fighter_id = ? AND sex IS NULL",
-                         [(s, fid) for fid, s in sexes.items()])
-        counts["sex filled"] = conn.total_changes - before
+        okt_ids = {ours: sid for _, people in by_match.values() for sid, ours in people.items()}
+        for fid in sorted(set(dobs) | set(sexes)):
+            if fid in okt_ids:
+                claims.claim(conn, "fighter", fid, NAME, okt_ids[fid], dict(dob=dobs.get(fid), sex=sexes.get(fid)))
+        counts["birth dates"] = len(dobs)
+        counts["sexes"] = len(sexes)
     counts.update({"events linked": len(event_alias), "fights with stats": len(fights), "round_stats rows": len(rows)})
     return counts
 

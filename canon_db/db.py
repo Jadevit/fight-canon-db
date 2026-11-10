@@ -19,10 +19,24 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_DB = ROOT / "data" / "canon.db"
+# CANON_DB names another file (a branch's own copy, say); data/canon.db otherwise.
+DEFAULT_DB = Path(os.environ["CANON_DB"]) if os.environ.get("CANON_DB") else ROOT / "data" / "canon.db"
 RAW = ROOT / "data" / "raw"
 SCHEMA = Path(__file__).resolve().parent / "schema.sql"
 PROMOTIONS = Path(__file__).resolve().parent / "promotions.csv"
+SOURCES = Path(__file__).resolve().parent / "sources.csv"
+TIERS = Path(__file__).resolve().parent / "source_tiers.csv"
+
+
+def _csv(path: Path) -> list[dict[str, str]]:
+    with open(path, newline="", encoding="utf-8") as fh:
+        return list(csv.DictReader(fh))
+
+
+SITES = {r["source"]: r["sites"].split() for r in _csv(SOURCES)}  # a source's sites, its default first
+TIER_ROWS = _csv(TIERS)
+# Sources renamed: old name -> (new name, the site its rows came from). migrate() renames them.
+RENAMED = {"ufcstats": ("ufc", "ufcstats.com"), "ufc.com": ("ufc", "ufc.com")}
 
 
 def _columns() -> dict[str, list[str]]:
@@ -66,6 +80,31 @@ def summary(conn: sqlite3.Connection) -> dict:
                               last_event=name, last_event_id=eid),
                 rows={t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
                       for t in TABLES})
+
+
+def create(conn: sqlite3.Connection) -> None:
+    """An empty database from schema.sql, with its sources (every `source` column points at them)."""
+    conn.executescript(SCHEMA.read_text())
+    sync_sources(conn)
+
+
+def site(source: str) -> str:
+    """A source's default site: the `site` of its aliases unless the loader says otherwise ('' for
+    one with no site, such as legacy and correction)."""
+    return SITES[source][0] if SITES[source] else ""
+
+
+def sync_sources(conn: sqlite3.Connection) -> None:
+    """Make `sources` and `source_tiers` match sources.csv and source_tiers.csv."""
+    with conn:
+        conn.execute("PRAGMA defer_foreign_keys = ON")  # every `source` column points here
+        conn.execute("DELETE FROM source_tiers")
+        conn.execute("DELETE FROM sources")
+        conn.executemany("INSERT INTO sources VALUES (?,?,?,?,?,?)",
+                         [(r["source"], r["name"], r["url"] or None, r["sites"] or None, int(r["full_results"]),
+                           r["attribution"] or None) for r in _csv(SOURCES)])
+        conn.executemany("INSERT INTO source_tiers VALUES (?,?,?,?)",
+                         [(r["source"], r["kind"], r["tier"], int(r["priority"])) for r in TIER_ROWS])
 
 
 def sync_promotions(conn: sqlite3.Connection) -> None:
@@ -168,15 +207,32 @@ def migrate(db: Path) -> dict[str, int]:
     conn.execute("PRAGMA foreign_keys = OFF")  # checked once, after promotions are synced
     conn.execute("ATTACH ? AS old", (str(db),))
     counts = {}
+    renamed = " ".join(f"WHEN '{old}' THEN '{new}'" for old, (new, _) in RENAMED.items())
+    old_sites = " ".join(f"WHEN '{old}' THEN '{s}'" for old, (_, s) in RENAMED.items())
+    sync_sources(conn)
     with conn:
         for t in TABLES:
+            if t in ("sources", "source_tiers"):  # from their files
+                counts[t] = conn.execute(f"SELECT COUNT(*) FROM main.{t}").fetchone()[0]
+                continue
             new_cols = [r[1] for r in conn.execute(f"PRAGMA main.table_info({t})")]
             old_cols = {r[1] for r in conn.execute(f"PRAGMA old.table_info({t})")}
-            cols = ", ".join(c for c in new_cols if c in old_cols)
-            if cols:
-                conn.execute(f"INSERT INTO main.{t} ({cols}) SELECT {cols} FROM old.{t}")
+            take = {c: c for c in new_cols if c in old_cols}
+            if "source" in take:
+                take["source"] = f"CASE source {renamed} ELSE source END"
+            if old_cols and "site" in new_cols and "site" not in old_cols:  # aliases before sites: the default
+                take["site"] = (f"CASE source {old_sites} ELSE (SELECT CASE WHEN instr(sites, ' ') "
+                                "THEN substr(sites, 1, instr(sites, ' ') - 1) ELSE sites END "
+                                f"FROM main.sources s WHERE s.source = old.{t}.source) END")
+            if take:
+                conn.execute(f"INSERT INTO main.{t} ({', '.join(take)}) SELECT {', '.join(take.values())} FROM old.{t}")
             n_new = conn.execute(f"SELECT COUNT(*) FROM main.{t}").fetchone()[0]
             n_old = conn.execute(f"SELECT COUNT(*) FROM old.{t}").fetchone()[0] if old_cols else 0
+            if t == "retired_ids" and not old_cols and conn.execute(
+                    "SELECT 1 FROM old.sqlite_master WHERE name = 'merged_ids'").fetchone():  # what it replaced
+                n_old = conn.execute("INSERT INTO main.retired_ids (kind, old_id, new_id, reason) "
+                                     "SELECT kind, old_id, new_id, 'merged' FROM old.merged_ids").rowcount
+                n_new = conn.execute("SELECT COUNT(*) FROM main.retired_ids").fetchone()[0]
             if n_new != n_old:
                 raise RuntimeError(f"{t}: {n_old} rows before, {n_new} after")
             counts[t] = n_new

@@ -1,7 +1,7 @@
 import json
 import sqlite3
 
-from canon_db import db
+from canon_db import claims, db
 from canon_db.sources.oktagon.load import is_test, load
 from canon_db.sources.oktagon.pages import card_fights, fighters, rounds
 
@@ -48,16 +48,18 @@ def test_fighters_and_cards():
 
 def _db():
     conn = sqlite3.connect(":memory:")
-    conn.executescript(db.SCHEMA.read_text())
+    db.create(conn)
     db.sync_promotions(conn)
     conn.executemany("INSERT INTO fighters (fighter_id, name, dob) VALUES (?,?,?)",
                      [(1, "Alan Able", None), (2, "Ben Baker", "1985-05-05")])
-    conn.executemany("INSERT INTO fighter_aliases VALUES (?, 'sherdog', ?, ?)",
+    conn.executemany("INSERT INTO fighter_aliases (fighter_id, source, site, source_id, name) VALUES (?, 'sherdog', 'sherdog.com', ?, ?)",
                      [(1, "100", "Alan Able"), (2, "200", "Ben Baker")])
-    conn.execute("INSERT INTO events (event_id, name, date) VALUES (9, 'Oktagon 1', '2020-01-03')")
+    conn.execute("INSERT INTO events (event_id, name, date, promotion) VALUES (9, 'Oktagon 1', '2020-01-03', 'UFC')")
     conn.execute("INSERT INTO fights (fight_id, event_id) VALUES (1, 9)")
     conn.executemany("INSERT INTO fight_participants VALUES (1, ?, ?, ?)",
                      [(1, 0, "W"), (2, 1, "L")])
+    claims.claim(conn, "fighter", 1, "sherdog", "100", dict(name="Alan Able"))
+    claims.claim(conn, "fighter", 2, "sherdog", "200", dict(name="Ben Baker", dob="1985-05-05"))
     return conn
 
 
@@ -82,7 +84,8 @@ def test_load(tmp_path):
         (1, 1, 2, 3, None, None, "oktagon"), (2, 1, 1, 1, None, None, "oktagon")]
     assert conn.execute("SELECT event_id FROM event_aliases WHERE source = 'oktagon' AND source_id = '5'").fetchone() == (
         9,)
-    # A missing birth date is filled, one we have is kept; both get the bout's sex.
+    # Oktagon's claims: a birth date (where its log has one) and the bout's sex.
+    claims.current(conn)
     assert conn.execute("SELECT fighter_id, dob, sex FROM fighters ORDER BY fighter_id").fetchall() == [
         (1, "1990-01-01", "M"), (2, "1985-05-05", "M")]
     load(conn, tmp_path)  # loading again replaces, doesn't duplicate

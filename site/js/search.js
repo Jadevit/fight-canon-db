@@ -76,7 +76,7 @@ export function headerSearch() {
   const draw = (mine, people, events) => {
     if (mine !== n) return;
     box.innerHTML = (people.length ? `<span class="label">Fighters</span>` + people.map((r) =>
-        `<a href="${fighterHref(r.fighter_id, r.name)}">${esc(r.name)}<small>${proRecord(r, r)}</small></a>`).join("") : "") +
+        `<a href="${fighterHref(r.fighter_id, r.name)}">${esc(r.name)}<small>${proRecord(r)}</small></a>`).join("") : "") +
       (events.length ? `<span class="label">Events</span>` + events.map((e) =>
         `<a href="${eventHref(e.event_id, e.name)}">${esc(e.name)}<small>${esc(e.date)}</small></a>`).join("") : "") +
       (people.length || events.length ? "" : `<p>Nothing found.</p>`);

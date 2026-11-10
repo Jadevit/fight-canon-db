@@ -23,7 +23,8 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import date, timedelta
 
-from canon_db import ids
+from canon_db import claims, ids
+from canon_db.db import site
 from canon_db.http import save
 from canon_db.matching import name_ok
 from canon_db.sources.sherdog.fetch import BASE, NAME, Pages
@@ -38,7 +39,11 @@ log = logging.getLogger(NAME)
 
 def match(st: State, b: dict) -> tuple | None:
     """Our fight this bout is, through whichever side is linked; links the other side if the
-    names agree, and the event."""
+    names agree, and the event. The other side must be our fight's opponent: linked to them, or
+    unlinked with names that agree. A fighter's only fight within a day isn't enough (a bout we
+    don't hold, such as an amateur one the day after, would tie its event to the wrong one of
+    ours), and nor are agreeing names when the other side is linked to someone else (two people
+    sharing a word of their names would be merged)."""
     for me, opp in (b["sides"], b["sides"][::-1]):
         fid = st.fid.get(me["sid"])
         if fid is None:
@@ -46,6 +51,11 @@ def match(st: State, b: dict) -> tuple | None:
         m = st.match(fid, dict(date=b["date"], opponent=opp["name"]), b["crowded"])
         if m is None:
             continue
+        have = st.fid.get(opp["sid"])
+        if have != m[3] if have is not None else not name_ok(opp["name"], st.names.get(m[3], [])):
+            continue
+        if have is None and any(st.fid.get(s) == m[3] for s in b.get("on_card", ())):
+            continue  # our fight's opponent is elsewhere on this card as themselves (a tournament night)
         st.event_is(b["event"], m[2])
         if opp["sid"] and name_ok(opp["name"], st.names.get(m[3], [])):
             st.link(m[3], opp["sid"], f"card bout with {fid} on {b['date']}")
@@ -60,8 +70,11 @@ def write(conn: sqlite3.Connection, st: State, bouts: list[dict]) -> Counter:
     database has replaces its Sherdog values (event pages are read after its results settle)."""
     counts = Counter(bouts=len(bouts))
     per_card = Counter((b["event"], s["sid"]) for b in bouts for s in b["sides"])
+    on_card: dict[str, set] = {}
     for b in bouts:
         b["crowded"] = any(per_card[(b["event"], s["sid"])] > 1 for s in b["sides"])
+        b["on_card"] = on_card.setdefault(b["event"], set())
+        b["on_card"].update(s["sid"] for s in b["sides"] if s["sid"])
     ok = [b for b in bouts if b.get("placed", True) and b["event"] and all(s["sid"] for s in b["sides"])
           and b["sides"][0]["sid"] != b["sides"][1]["sid"]]  # a few cards list one fighter on both sides
     written = {id(b) for b in ok}
@@ -82,12 +95,12 @@ def write(conn: sqlite3.Connection, st: State, bouts: list[dict]) -> Counter:
         if id(b) not in written:
             cards[b["event"]][1] = False
             counts["bouts not written"] += 1
+    counts["new links"] = len(st.new_links)  # merges() clears them
     with conn:
         w = Writer(conn, st)
         w.merges()
-        official = ids.official(conn, "fighter")
         for b, m in found:
-            event = (b["event"], b["event_name"], b["date"], b["location"], b["label"])
+            event = (b["event"], b["event_name"], b["date"], b["location"], b["label"], True)
             values = dict(weight_class=b["weight_class"], title_fight=int(bool(b["title"])), method=b["method"],
                           end_round=b["round"], end_time=b["time"], referee=b["referee"],
                           no_contest=int(b["sides"][0]["result"] == "NC"))
@@ -96,7 +109,8 @@ def write(conn: sqlite3.Connection, st: State, bouts: list[dict]) -> Counter:
             for s in b["sides"]:
                 fid = w.fighter_now(st.fid.get(s["sid"]))
                 if fid is not None:
-                    ids.write(conn, "fighter", fid, NAME, {c: s.get(c) for c in BIO}, fid in official)
+                    # a card's bio only fills what the fighter's own page hasn't said
+                    claims.claim(conn, "fighter", fid, NAME, s["sid"], {c: s.get(c) for c in BIO}, mode="blanks")
         conn.execute("INSERT OR IGNORE INTO promotions (promotion, coverage) SELECT DISTINCT promotion, 'partial' "
                      "FROM events WHERE promotion NOT IN (SELECT promotion FROM promotions)")
         rows = [(w.event_now(st.events.get(e)), NAME, b["via"], int(placed), b["fetched_at"])
@@ -105,9 +119,11 @@ def write(conn: sqlite3.Connection, st: State, bouts: list[dict]) -> Counter:
         rows = [r for r in rows if r[0] in exist]
         conn.executemany("INSERT OR REPLACE INTO event_cards (event_id, source, via, complete, fetched_at) "
                          "VALUES (?,?,?,?,?)", rows)
+        counts["cards"] = len(rows)
+    claims.current(conn)  # new fights' sides, for finding duplicates
+    with conn:
         counts["duplicate fights merged"] = ids.merge_duplicates(conn)
         ids.drop_empty(conn)
-        counts["cards"] = len(rows)
     counts.update(w.counts)
     return counts
 
@@ -211,17 +227,21 @@ def due(seen: dict, sid: str, day: str | None, today: str, settle: int) -> bool:
 
 
 def crawl(conn: sqlite3.Connection, pages: Pages, recent_days: int, workers: int = 1,
-          chunk: int = 1000) -> Counter:
+          chunk: int = 1000, events: list[str] | None = None) -> Counter:
     """Read the cards of the events in Sherdog's sitemaps that are due(): new ones and recent
     ones (all ~78k the first time, which takes days; a daily run reads a few hundred). Pages
-    are fetched `workers` at a time and written `chunk` events at a time."""
-    today = date.today().isoformat()
-    seen = pages_read(conn)
-    listed = sitemap_events(pages)
-    # Events read before stay due without a sitemap (one that didn't come leaves only new ones).
-    todo = [e for e in sorted(set(listed) | seen.keys(), key=int) if due(seen, e, None, today, recent_days)]
-    log.info("Sherdog cards: %d events in the sitemaps, %d to read.", len(listed), len(todo))
-    st, labels, counts = State(conn), Labels(conn), Counter()
+    are fetched `workers` at a time and written `chunk` events at a time. `events`: read these
+    instead (the saved pages, for a re-read)."""
+    if events is not None:
+        todo = events
+    else:
+        today = date.today().isoformat()
+        seen = pages_read(conn)
+        listed = sitemap_events(pages)
+        # Events read before stay due without a sitemap (one that didn't come leaves only new ones).
+        todo = [e for e in sorted(set(listed) | seen.keys(), key=int) if due(seen, e, None, today, recent_days)]
+        log.info("Sherdog cards: %d events in the sitemaps, %d to read.", len(listed), len(todo))
+    labels, counts = Labels(conn), Counter()
     ours = {p.casefold(): p for (p,) in conn.execute("SELECT promotion FROM promotions")}
     bouts, read = [], []
 
@@ -229,11 +249,12 @@ def crawl(conn: sqlite3.Connection, pages: Pages, recent_days: int, workers: int
         with conn:
             conn.executemany("INSERT OR IGNORE INTO promotions (promotion, coverage) VALUES (?, 'partial')",
                              sorted({(label,) for label, _ in labels.new.values()}))
-            conn.executemany("INSERT OR REPLACE INTO promotion_aliases (promotion, source, source_id, name) "
-                             "VALUES (?,?,?,?)", [(label, NAME, o, n) for o, (label, n) in labels.new.items()])
+            conn.executemany("INSERT OR REPLACE INTO promotion_aliases (promotion, source, site, source_id, name) "
+                             "VALUES (?,?,?,?,?)", [(label, NAME, site(NAME), o, n) for o, (label, n) in labels.new.items()])
             conn.executemany("INSERT OR REPLACE INTO event_pages (source, source_id, date, fetched_at) "
                              "VALUES (?,?,?,?)", read)
-        counts.update(write(conn, st, bouts))
+        # A fresh State each time: the last chunk's merges and drops are in the database, not in an old one.
+        counts.update(write(conn, State(conn), bouts))
         bouts.clear()
         read.clear()
 
@@ -255,7 +276,6 @@ def crawl(conn: sqlite3.Connection, pages: Pages, recent_days: int, workers: int
             if i % 500 == 0:
                 left = (time.monotonic() - start) / i * (len(todo) - i)
                 log.info("  event pages: %d/%d (%.1f h left)", i, len(todo), left / 3600)
-    counts["new links"] = len(st.new_links)
     return counts
 
 
@@ -280,7 +300,6 @@ def classify(conn: sqlite3.Connection, pages: Pages, since: str, workers: int = 
         for sid in fight.rsplit(":", 1)[1].split("-"):
             todo.setdefault(sid, set()).add(fight)
     owner = dict(conn.execute("SELECT source_id, fighter_id FROM fighter_aliases WHERE source = ?", (NAME,)))
-    official = ids.official(conn, "fighter")
     done: set[str] = set()
     total = len(set().union(*todo.values())) if todo else 0
     log.info("Sherdog bout types: %d card fights to check.", total)
@@ -317,7 +336,7 @@ def classify(conn: sqlite3.Connection, pages: Pages, since: str, workers: int = 
                     done |= mark_bout_types(conn, {sid: page}) & todo[sid]
                     fid, b = owner.get(sid), bio(page)
                     if fid is not None:
-                        ids.write(conn, "fighter", fid, NAME, {c: b[c] for c in BIO}, fid in official)
+                        claims.claim(conn, "fighter", fid, NAME, sid, {c: b[c] for c in BIO}, mode="fill")  # their page
                 if counts["pages read"] % 250 == 0:
                     left = (time.monotonic() - start) / i * (len(order) - i)
                     log.info("  pages read: %d, fights checked: %d/%d (at most %.1f h left)",

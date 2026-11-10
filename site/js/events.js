@@ -105,7 +105,7 @@ export async function event(id, show) {
   const e = d.event, fights = objs(d.fights), links = eventSources(d.aliases);
   canonical(pagePath("event", id, e.name), e.name);
   // The whole card is here if UFC Stats covers the promotion's cards or the card was read whole.
-  const whole = (e.coverage === "full" && d.aliases.ufcstats) || e.card_complete === 1;
+  const whole = (e.coverage === "full" && d.aliases["ufcstats.com"]) || e.card_complete === 1;
   // The winner's side goes left (gold); with no winner, the first fighter listed.
   const left = (x) => (x.b_res === "W" ? "b" : "a");
   const bouts = fights.map((x) => {

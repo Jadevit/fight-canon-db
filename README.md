@@ -41,9 +41,10 @@ each month; to keep another one for good, add its tag to
 
 Fighters, events and fights have Fight Canon IDs: numbers given once and never changed. Every
 source's own id for them is in `fighter_aliases`, `event_aliases` and `fight_aliases`
-(`source`, `source_id`), so a UFC fight has a UFC Stats alias, a Sherdog alias, and so on. For
-UFC Stats' fights, filter
-`fight_id IN (SELECT fight_id FROM fight_aliases WHERE source = 'ufcstats')`. Where sources
+(`source`, `site`, `source_id`), so a UFC fight has a UFC Stats alias, a Sherdog alias, and so
+on. `site` is the website the id is from (a source can have more than one: `ufc` has
+ufcstats.com and ufc.com). For UFC Stats' fights, filter
+`fight_id IN (SELECT fight_id FROM fight_aliases WHERE source = 'ufc' AND site = 'ufcstats.com')`. Where sources
 disagree, the promotions' own sites (UFC Stats, PFL, Oktagon) are taken over Sherdog, which
 fills in what they leave blank.
 
@@ -51,17 +52,17 @@ fills in what they leave blank.
 | ----------------------- | ------------------------------------------- | ------------------------------------------- |
 | `events`                | event (with its `promotion`)                | `event_id`                                  |
 | `promotions`            | league (parent, card coverage)              | `promotion`                                 |
-| `promotion_aliases`     | league's id in another source               | `source`, `source_id`                       |
+| `promotion_aliases`     | league's id in another source               | `source`, `site`, `source_id`               |
 | `fights`                | fight (→ `event_id`)                        | `fight_id`                                  |
 | `fight_participants`    | fighter in a fight (2 per fight)            | `fight_id`, `corner`                        |
 | `round_stats`           | fighter per round, per source               | `fight_id`, `fighter_id`, `round`, `source` |
 | `smartcage_round_stats` | fighter per round (older PFL)               | `fight_id`, `fighter_id`, `round`           |
 | `sofascore_round_stats` | fighter per round (Sofascore's extras)      | `fight_id`, `fighter_id`, `round`           |
-| `fighters`              | fighter (bio + pro record)                  | `fighter_id`                                |
-| `fighter_aliases`       | fighter's name and id per source            | `source`, `source_id`, `name`               |
-| `event_aliases`         | event's id per source                       | `source`, `source_id`                       |
-| `fight_aliases`         | fight's id per source                       | `source`, `source_id`                       |
-| `merged_ids`            | fighter, event or fight merged into another | `kind`, `old_id`                            |
+| `fighters`              | fighter (bio, record counted from fights)   | `fighter_id`                                |
+| `fighter_aliases`       | fighter's name and id per source            | `source`, `site`, `source_id`, `name`       |
+| `event_aliases`         | event's id (and name) per source            | `source`, `site`, `source_id`               |
+| `fight_aliases`         | fight's id (and name) per source            | `source`, `site`, `source_id`               |
+| `retired_ids`           | id no longer used (merged or deleted), why  | `kind`, `old_id`                            |
 | `event_cards`           | event whose whole card was read             | `event_id`                                  |
 | `event_pages`           | event page a card reader has read           | `source`, `source_id`                       |
 | `non_pro_bouts`         | bout deleted as amateur or exhibition       | `source`, `source_id`                       |
@@ -74,7 +75,7 @@ fills in what they leave blank.
 `round_stats.source` says who counted. Different crews count differently, so filter on it when
 the numbers have to be comparable:
 
-- `ufcstats`: the full set of columns.
+- `ufc`: UFC Stats' count, the full set of columns.
 - `pfl`: PFL events from 2025-12 on. The same columns, with no per-round reversals.
 - `oktagon`: only what landed (strikes, significant strikes by target, takedowns) and submission
   attempts. Every other column is NULL.
@@ -94,7 +95,7 @@ Stats that weren't recorded are `NULL`, not `0`.
 ### Judges' scores and odds
 
 `judge_scores.source` is `mmadecisions` (its copies of the official cards: decisions only, many
-promotions, from 1997) or `ufc.com` (official UFC scorecards, 2020-08 to 2024-11). A fight's rows
+promotions, from 1997) or `ufc` (the official UFC scorecards on ufc.com, 2020-08 to 2024-11). A fight's rows
 come from one source, MMA Decisions' where it has that fight's cards.
 
 `media_scores` are journalists' scores of decisions, from MMA Decisions: each writer's total for
@@ -114,7 +115,8 @@ doesn't have, corner means nothing.
 
 A fighter is linked to a source's id only through a fight both list (within a day, the other
 fighter already linked), never by name alone. When two rows turn out to be one fighter, event or
-fight, the older ID is kept and `merged_ids` records the other.
+fight, the older ID is kept. Every ID that goes, merged or deleted, is in `retired_ids` with the
+reason (and the ID it became, if merged).
 
 ### Which fights are here
 

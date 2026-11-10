@@ -35,25 +35,26 @@ export_parquet = _script("export_parquet")
 def _canon(path):
     """José Aldo (1), Ben Baker (2), Carl Cole (3); UFC 1 (event 1: fights 1 then 2), UFC 2 (event 2: fight 3)."""
     conn = sqlite3.connect(path)
-    conn.executescript(db.SCHEMA.read_text())
+    db.create(conn)
     db.sync_promotions(conn)
-    conn.executemany("INSERT INTO fighters (fighter_id, name, wins, losses, draws, no_contests) VALUES (?,?,?,?,?,?)",
-                     [(1, "José Aldo", 31, 8, 0, 0), (2, "Ben Baker", None, None, None, None),
-                      (3, "Carl Cole", None, None, None, None)])
-    conn.executemany("INSERT INTO fighter_aliases VALUES (1, ?, ?, ?)",
-                     [("sherdog", "1", "Junior"), ("ufcstats", "a" * 16, "José Aldo")])
+    conn.executemany("INSERT INTO fighters (fighter_id, name) VALUES (?,?)",
+                     [(1, "José Aldo"), (2, "Ben Baker"), (3, "Carl Cole")])
+    conn.executemany("INSERT INTO fighter_aliases (fighter_id, source, site, source_id, name) VALUES (1,?,?,?,?)",
+                     [("sherdog", "sherdog.com", "1", "Junior"), ("ufc", "ufcstats.com", "a" * 16, "José Aldo")])
+    conn.execute("INSERT INTO fighter_claims (fighter_id, source, site, source_id, wins, losses, draws, no_contests) "
+                 "VALUES (1, 'ufc', 'ufcstats.com', ?, 2, 0, 0, 0)", ("a" * 16,))  # prints the record we count
     conn.executemany("INSERT INTO events (event_id, name, date, location, promotion) VALUES (?,?,?,?,?)",
                      [(1, "UFC 1", "2020-01-02", "London, England", "UFC"),
                       (2, "UFC 2", "2021-05-05", "Las Vegas", "UFC")])
-    conn.execute("INSERT INTO event_aliases VALUES (1, 'ufcstats', 'e1')")
+    conn.execute("INSERT INTO event_aliases (event_id, source, site, source_id, name) VALUES (1, 'ufc', 'ufcstats.com', 'e1', NULL)")
     conn.executemany("INSERT INTO fights (fight_id, event_id, weight_class, method) VALUES (?,?,?,?)",
                      [(1, 1, "Lightweight Bout", "Decision"), (2, 1, "UFC Featherweight Title Bout", "KO/TKO"),
                       (3, 2, None, "Submission")])
-    conn.execute("INSERT INTO fight_aliases VALUES (2, 'ufcstats', 'f1')")
+    conn.execute("INSERT INTO fight_aliases (fight_id, source, site, source_id, name) VALUES (2, 'ufc', 'ufcstats.com', 'f1', NULL)")
     conn.executemany("INSERT INTO fight_participants VALUES (?,?,?,?)",
                      [(1, 2, 0, "W"), (1, 3, 1, "L"), (2, 1, 0, "W"), (2, 2, 1, "L"), (3, 1, 0, "W"), (3, 3, 1, "L")])
     conn.execute("INSERT INTO round_stats (fight_id, fighter_id, round, sig_str_land, sig_str_att, source) "
-                 "VALUES (2, 1, 1, 30, 60, 'ufcstats')")
+                 "VALUES (2, 1, 1, 30, 60, 'ufc')")
     conn.executemany("INSERT INTO round_stats (fight_id, fighter_id, round, sig_str_land, source) VALUES (3, 1, 1, ?, ?)",
                      [(6, "sofascore"), (5, "oktagon")])  # two counts of one fight
     conn.commit()
@@ -87,16 +88,16 @@ def test_site_json(tmp_path, monkeypatch):
     rows = lambda t: [dict(zip(t["cols"], r)) for r in t["rows"]]  # noqa: E731
 
     aldo = read("f/1.json")
-    assert aldo["fighter"]["wins"] == 31 and aldo["aliases"] == {"sherdog": ["1"], "ufcstats": ["a" * 16]}
+    assert aldo["fighter"]["whole"] == 1 and aldo["aliases"] == {"sherdog.com": ["1"], "ufcstats.com": ["a" * 16]}
     assert [(f["fight_id"], f["result"], f["opp"]) for f in rows(aldo["fights"])] == [
         (3, "W", "Carl Cole"), (2, "W", "Ben Baker")]  # newest first
     assert [(st["fight_id"], st["source"], st["sl"], st["sa"]) for st in rows(aldo["stats"])] == [
-        (2, "ufcstats", 30, 60), (3, "oktagon", 5, None), (3, "sofascore", 6, None)]  # per source
+        (2, "ufc", 30, 60), (3, "oktagon", 5, None), (3, "sofascore", 6, None)]  # per source
 
     e1 = read("e/1.json")
     assert [f["fight_id"] for f in rows(e1["fights"])] == [1, 2]  # card order
-    assert [st["source"] for st in e1["stats"]["2"]] == ["ufcstats"] and "1" not in e1["stats"]
-    assert e1["aliases"] == {"ufcstats": ["e1"]} and e1["ufcstats"] == {"2": "f1"}  # links to UFC Stats' pages
+    assert [st["source"] for st in e1["stats"]["2"]] == ["ufc"] and "1" not in e1["stats"]
+    assert e1["aliases"] == {"ufcstats.com": ["e1"]} and e1["ufcstats"] == {"2": "f1"}  # links to UFC Stats' pages
     assert read(f"fx/{site_json.shard(2)}.json")["2"] == 1
     # Each count of a fight, the promotion's own first.
     assert [(st["source"], st["rows"][0][st["cols"].index("sig_str_land")]) for st in read("e/2.json")["stats"]["3"]] == [
@@ -125,10 +126,10 @@ def test_site_json(tmp_path, monkeypatch):
     assert "bouts" in tables and "event_pages" not in tables
     assert dict((c[0], c[2]) for c in tables["fights"]["columns"])["end_time"] == "m:ss"
     m = read("meta.json")
-    assert m["stats_order"][0] == "ufcstats"
+    assert m["stats_order"][0] == "ufc"
     assert m["stats"]["events"] == 2 and m["boards"]["results"]["stats"]["wins"]["label"] == "Wins"
     assert m["sums"]["round_stats"]["sl"] == "sig_str_land" and "kd" in m["stats_cols"]
-    assert m["boards"]["ufcstats"]["source"] == ["round_stats", "ufcstats"] and m["boards"]["results"]["source"] is None
+    assert m["boards"]["ufc"]["source"] == ["round_stats", "ufc"] and m["boards"]["results"]["source"] is None
     # The Fighters page: the last week's pairs (only UFC 2's fight), and random-pick files by id.
     page = read("fighters.json")
     assert [[s[page["cols"].index("fighter_id")] for s in m] for m in page["matchups"]] == [[1, 3]]
@@ -138,7 +139,7 @@ def test_site_json(tmp_path, monkeypatch):
     # Leaderboards' opening views: every division (0) and each one.
     assert [r[:4] for r in read("l/results/wins.json")["0"]] == [[1, "José Aldo", 2, 2], [2, "Ben Baker", 2, 1],
                                                                [3, "Carl Cole", 2, 0]]
-    sig = read("l/ufcstats/sig.json")
+    sig = read("l/ufc/sig.json")
     assert sig["0"] == [[1, "José Aldo", 1, 30]] and list(sig) == ["0", "9"]  # all, and Featherweight
 
 

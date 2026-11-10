@@ -25,7 +25,11 @@ Which pages:
               --recent-days days, plus anyone linked during the run (their page holds their
               earlier career)
   --all       every such fighter, whenever they fought (~4.5k pages, ~1.5 h)
-  --offline   every page already on disk, no network
+  --offline   the pages on disk of those fighters and the ones they link to, no network
+  --reread    every saved page, fighters' then events', no network: what each says, as claims
+              (hours; run locally, as CI keeps no pages); cards' bouts are then classified from
+              the saved fighter pages. `--reread fighters` then
+              `--reread events` saves each half on its own.
 """
 
 from __future__ import annotations
@@ -35,6 +39,8 @@ import logging
 import sqlite3
 from datetime import date, timedelta
 from pathlib import Path
+
+from concurrent.futures import ThreadPoolExecutor
 
 from canon_db import ids
 from canon_db.http import Fetcher
@@ -58,9 +64,54 @@ def add_arguments(p: argparse.ArgumentParser) -> None:
                    help="skip reading whole cards (the events in Sherdog's sitemaps that are due)")
     p.add_argument("--workers", type=int, default=4,
                    help="pages fetched at once for cards and bout types (the delay still holds)")
+    p.add_argument("--reread", nargs="?", const="all", choices=("all", "fighters", "events"),
+                   help="no network: read every saved fighter and event page again (hours); "
+                        "'fighters' or 'events' does one half, so each is saved on its own")
+
+
+def reread(conn: sqlite3.Connection, pages: Pages, workers: int, part: str = "all", chunk: int = 10000) -> None:
+    """Every saved fighter page linked to a fighter of ours (its fights, and its claim on them),
+    `chunk` at a time, then every saved event page as a card; `part` 'fighters' or 'events' does
+    only that half. Pages are read on `workers` threads."""
+    if part in ("all", "fighters"):
+        reread_fighters(conn, pages, workers, chunk)
+    if part in ("all", "events"):
+        events = sorted((p.stem for p in pages.events.glob("*.html") if p.stem.isdigit()),  # a page is named by its id
+                        key=lambda s: (len(s), s))
+        log.info("Sherdog re-read: %d saved event pages.", len(events))
+        c = cards.crawl(conn, pages, 0, workers, chunk=5000, events=events)
+        log.info("Sherdog cards: %s.", ", ".join(f"{k} {v}" for k, v in c.items()))
+        # Cards bring back amateur and exhibition bouts dropped before non_pro_bouts remembered them:
+        # the saved fighter pages say which (a bout no saved page lists stays unchecked).
+        c = cards.classify(conn, pages, "0000", workers)
+        log.info("Sherdog bout types: %s.", ", ".join(f"{k} {v}" for k, v in c.items()))
+
+
+def reread_fighters(conn: sqlite3.Connection, pages: Pages, workers: int, chunk: int) -> None:
+    def parse(sid: str) -> dict | None:
+        try:
+            return pages.get(sid)
+        except Exception as e:  # one bad page shouldn't end the run
+            log.warning("Couldn't read fighter %s: %s: %s", sid, type(e).__name__, e)
+            return None
+
+    linked = {s for (s,) in conn.execute("SELECT DISTINCT source_id FROM fighter_aliases WHERE source = ?", (NAME,))}
+    todo = [s for s in pages.on_disk() if s in linked]
+    log.info("Sherdog re-read: %d saved fighter pages of fighters of ours.", len(todo))
+    with ThreadPoolExecutor(max(1, workers)) as pool:
+        for i in range(0, len(todo), chunk):
+            st = State(conn)  # fresh each time: the last chunk's merges and links are in the database
+            batch = [s for s in todo[i:i + chunk] if s in st.fid and st.sd[st.fid[s]] == s]
+            read = {st.fid[s]: page for s, page in zip(batch, pool.map(parse, batch)) if page is not None}
+            counts = write(conn, st, read, pages)
+            log.info("  fighter pages %d/%d: %s", min(i + chunk, len(todo)), len(todo),
+                     ", ".join(f"{k} {v}" for k, v in counts.items()))
 
 
 def update(conn: sqlite3.Connection, args: argparse.Namespace, raw: Path) -> None:
+    if args.reread:
+        reread(conn, Pages(raw, None), args.workers, args.reread)
+        return
     st = State(conn)
     pages = Pages(raw, None if args.offline else Fetcher(args.delay))
     if args.offline:

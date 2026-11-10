@@ -5,16 +5,16 @@ Each run:
   2. picks the events to (re)load: completed events not yet in the database, plus
      every event from the last --recent-days days (stats and corrections are posted
      after fight night). Upcoming events are skipped;
-  3. downloads those events' event, fight and fighter pages to data/raw/ufcstats/
+  3. downloads those events' event, fight and fighter pages to data/raw/ufc/
      (kept for debugging and --offline re-runs; never committed);
-  4. writes each of those events (its event row, fights, participants and round stats)
-     and the fighters' bios.
+  4. writes what each of those events' pages say (the event, its fights and their sides, round
+     stats) and the fighters' bios, as claims (canon_db.claims).
 
 An event is only written if every one of its fight pages downloaded, so a flaky run can
-never delete data. UFC Stats' ids are aliases (`ufcstats`) of our rows. A bout whose fight
+never delete data. UFC Stats' ids are aliases (`ufc`, site ufcstats.com) of our rows. A bout whose fight
 has no UFC Stats alias yet is placed on one of ours if both fighters are known and fought
 within a day of it, or one is and the other's name agrees (that links the other); else it's
-a new fight. UFC Stats is a promotion's own site: its values replace other sources'.
+a new fight. UFC Stats is a promotion's own site, so its claims rank as primary (source_tiers).
 """
 
 from __future__ import annotations
@@ -26,23 +26,23 @@ from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
 
-from canon_db import http, ids
+from canon_db import claims, http, ids
 from canon_db.http import save
 from canon_db.matching import Bouts
 from canon_db.promotions import promotion
-from canon_db.sources.ufcstats import fields as F
-from canon_db.sources.ufcstats.client import BASE, EVENTS_LIST_URL, RANKINGS, Fetcher
-from canon_db.sources.ufcstats.pages import (parse_event, parse_events_list, parse_fight,
+from canon_db.sources.ufc import fields as F
+from canon_db.sources.ufc.client import BASE, EVENTS_LIST_URL, RANKINGS, Fetcher
+from canon_db.sources.ufc.pages import (parse_event, parse_events_list, parse_fight,
                                              parse_fighter)
 
-NAME = "ufcstats"
+NAME = "ufc"
 URLS = {"events": "event-details", "fights": "fight-details", "fighters": "fighter-details"}
 ROUND_COLS = ("knockdowns", "sig_str_land", "sig_str_att", "total_str_land", "total_str_att", "td_land",
               "td_att", "sub_att", "reversals", "ctrl_sec", "head_land", "head_att", "body_land", "body_att",
               "leg_land", "leg_att", "dist_land", "dist_att", "clinch_land", "clinch_att", "ground_land",
               "ground_att")
 
-log = logging.getLogger("ufcstats")
+log = logging.getLogger(NAME)
 
 
 # --- page source: network (saving to raw/) or raw/ only ---------------------------
@@ -175,55 +175,62 @@ class Writer:
         if eid is None:
             if not ev["fights"]:
                 return None
-            eid = ids.add(conn, "event", {"name": e["name"], "promotion": promo or promotion(e["name"])})
+        # Its label: UFC if on UFC Stats' events list, else read from its name (see promotion()).
+        label = promo or promotion(e["name"])
+        if eid is None:
+            eid = ids.add(conn, "event", {"name": e["name"], "date": e["date"], "promotion": label})
             self.counts["new events"] += 1
-        elif promo:
-            conn.execute("UPDATE events SET promotion = ? WHERE event_id = ?", (promo, eid))
         ids.alias(conn, "event", eid, NAME, e["id"])
-        ids.write(conn, "event", eid, NAME, {k: e[k] for k in ("name", "date", "location")})
+        claims.claim(conn, "event", eid, NAME, e["id"], {**{k: e[k] for k in ("name", "date", "location")},
+                                                        "promotion": label})
         mine = set()
         for f, fight in placed:
             sides = [self.fighter(s) for s in f["sides"]]
             if fight is None:
-                fight = ids.add(conn, "fight", {"event_id": eid, **f["values"]})
+                fight = ids.add(conn, "fight", {"event_id": eid})
                 self.bouts.add(fight, eid, e["date"], *sides)
                 self.counts["new fights"] += 1
-            else:
-                ids.write(conn, "fight", fight, NAME, {"event_id": eid, **f["values"]})
             ids.alias(conn, "fight", fight, NAME, f["id"])
             mine.add(fight)
-            conn.execute("DELETE FROM fight_participants WHERE fight_id = ?", (fight,))
-            conn.executemany("INSERT INTO fight_participants (fight_id, fighter_id, corner, result) VALUES (?,?,?,?)",
-                             [(fight, fid, corner, s["result"]) for corner, (fid, s) in enumerate(zip(sides, f["sides"]))])
-            rows = [(fight, fid, r["round"], *(r.get(c) for c in ROUND_COLS))
+            claims.claim(conn, "fight", fight, NAME, f["id"], {"event_id": eid, **f["values"]})
+            # UFC Stats lists red first (see fight_participants for before 2010-03-21).
+            claims.sides(conn, fight, NAME, f["id"], [
+                dict(fighter_id=fid, fighter_source_id=s["id"], name=s["name"], result=s["result"], corner=corner)
+                for corner, (fid, s) in enumerate(zip(sides, f["sides"]))])
+            rows = [(fight, fid, r["round"], *(r.get(c) for c in ROUND_COLS), NAME)
                     for fid, s in zip(sides, f["sides"]) for r in f["rounds"].get(s["id"], [])]
             if rows:  # a fight's stats come from one source, and UFC Stats' are the fullest
                 for t in ("round_stats", "smartcage_round_stats", "sofascore_round_stats"):
                     conn.execute(f"DELETE FROM {t} WHERE fight_id = ?", (fight,))
-                conn.executemany(f"INSERT INTO round_stats (fight_id, fighter_id, round, {', '.join(ROUND_COLS)}) "
-                                 f"VALUES ({', '.join('?' * (len(ROUND_COLS) + 3))})", rows)
-        # Bouts UFC Stats no longer lists on this event.
-        for (fight,) in conn.execute("SELECT fight_id FROM fights f WHERE event_id = ? AND EXISTS (SELECT 1 FROM "
-                                     "fight_aliases a WHERE a.fight_id = f.fight_id AND a.source = ?)",
-                                     (eid, NAME)).fetchall():
+                conn.executemany(f"INSERT INTO round_stats (fight_id, fighter_id, round, {', '.join(ROUND_COLS)}, source) "
+                                 f"VALUES ({', '.join('?' * (len(ROUND_COLS) + 4))})", rows)
+        # Bouts UFC Stats no longer lists on this event: those it put here (its claims), and those on
+        # it with its alias that it puts nowhere else.
+        for (fight,) in conn.execute(
+                "SELECT fight_id FROM fight_claims WHERE source = ?1 AND event_id = ?2 UNION "
+                "SELECT fight_id FROM fights f WHERE event_id = ?2 AND EXISTS (SELECT 1 FROM fight_aliases a "
+                "WHERE a.fight_id = f.fight_id AND a.source = ?1) AND NOT EXISTS (SELECT 1 FROM fight_claims c "
+                "WHERE c.fight_id = f.fight_id AND c.source = ?1 AND c.event_id <> ?2)", (NAME, eid)).fetchall():
             if fight not in mine:
                 ids.drop_claim(conn, fight, NAME)
                 self.counts["bouts gone from the card"] += 1
-        if not conn.execute("SELECT 1 FROM fights WHERE event_id = ?", (eid,)).fetchone():
-            for t in ("event_cards", "event_aliases", "events"):  # nothing left on it
+        if not conn.execute("SELECT 1 FROM fights WHERE event_id = ?1 UNION ALL "
+                            "SELECT 1 FROM fight_claims WHERE event_id = ?1", (eid,)).fetchone():
+            ids.retire(conn, "event", eid, None, "no fights left")  # nothing left on it
+            for t in ("event_cards", "event_claims", "event_aliases", "events"):
                 conn.execute(f"DELETE FROM {t} WHERE event_id = ?", (eid,))
         return eid
 
 
 def apply_fighter(conn: sqlite3.Connection, fid: int, html: str | None, ufc_id: str, fight_names: set[str]) -> None:
-    """Write a fighter's bio from their page (UFC Stats' values replace other sources')."""
+    """Claim a fighter's bio from their page (no page: the last claim stays)."""
     names = set(fight_names)
     if html:
         b = parse_fighter(html)
         if b["name"]:
             names.add(b["name"])
         wins, losses, draws, ncs = F.parse_record(b["record"])
-        ids.write(conn, "fighter", fid, NAME, dict(
+        claims.claim(conn, "fighter", fid, NAME, ufc_id, dict(
             name=b["name"] or None, nickname=b["nickname"] or None, dob=F.parse_dob(b["dob"]),
             height_in=F.parse_height_in(b["height"]), reach_in=F.parse_reach_in(b["reach"]),
             weight_lbs=F.parse_weight_lbs(b["weight"]), stance=b["stance"] or None,
@@ -260,6 +267,8 @@ def load_events(conn: sqlite3.Connection, pages: Pages, targets: list[str],
         for ufc_id, names in fight_names.items():
             if ufc_id in w.fighters:
                 apply_fighter(conn, w.fighters[ufc_id], fighter_pages[ufc_id], ufc_id, names)
+    claims.current(conn)  # new fights' sides, for finding duplicates
+    with conn:
         w.counts["duplicate fights merged"] = ids.merge_duplicates(conn)
         ids.drop_empty(conn)
     log.info("Loaded %d events (%d fights, %d fighters); %d skipped for missing pages. %s",
@@ -327,17 +336,6 @@ def add_arguments(p: argparse.ArgumentParser) -> None:
     p.add_argument("--delay", type=float, default=1.0, help="seconds between requests")
 
 
-def fill_sex(conn: sqlite3.Connection) -> None:
-    """Set fighters.sex where UFC Stats' bout titles say it: 'F' for anyone in a women's
-    bout, 'M' for anyone else in a named division (catch weight and open weight don't say)."""
-    bouts = ("SELECT p.fighter_id FROM fight_participants p JOIN fights f USING (fight_id) "
-             "JOIN fight_aliases a ON a.fight_id = f.fight_id AND a.source = 'ufcstats' WHERE f.weight_class LIKE ")
-    with conn:
-        conn.execute(f"UPDATE fighters SET sex = 'F' WHERE sex IS NULL AND fighter_id IN ({bouts} '%Women%')")
-        conn.execute(f"UPDATE fighters SET sex = 'M' WHERE sex IS NULL AND fighter_id IN ({bouts} '%weight%' "
-                     "AND f.weight_class NOT LIKE '%Catch%' AND f.weight_class NOT LIKE '%Open%')")
-
-
 def update(conn: sqlite3.Connection, args: argparse.Namespace, raw: Path) -> None:
     """Bring `conn` up to date with UFC Stats. Raises if nothing could be loaded."""
     pages = Pages(raw, None if args.offline else Fetcher(args.delay))
@@ -366,6 +364,5 @@ def update(conn: sqlite3.Connection, args: argparse.Namespace, raw: Path) -> Non
                                   {eid for eid, _ in completed})
     if skipped and not loaded:
         raise RuntimeError(f"All {len(skipped)} target events failed to download.")
-    fill_sex(conn)
     if not args.offline:
         http.snapshot(http.Fetcher(args.delay), *RANKINGS, raw / "rankings")  # another site: a plain Fetcher

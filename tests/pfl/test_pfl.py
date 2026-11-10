@@ -67,13 +67,13 @@ def test_leftover_takes_the_one_fight_with_a_fighter():
 
 def _db():
     conn = sqlite3.connect(":memory:")
-    conn.executescript(db.SCHEMA.read_text())
+    db.create(conn)
     db.sync_promotions(conn)
     conn.executemany("INSERT INTO fighters (fighter_id, name) VALUES (?,?)",
                      [(1, "Alan Able"), (2, "Ben Baker")])
-    conn.executemany("INSERT INTO fighter_aliases VALUES (?, 'sherdog', ?, ?)",
+    conn.executemany("INSERT INTO fighter_aliases (fighter_id, source, site, source_id, name) VALUES (?, 'sherdog', 'sherdog.com', ?, ?)",
                      [(1, "100", "Alan Able"), (2, "200", "Ben Baker")])
-    conn.execute("INSERT INTO events (event_id, name, date) VALUES (9, 'PFL 1', '2020-01-03')")
+    conn.execute("INSERT INTO events (event_id, name, date, promotion) VALUES (9, 'PFL 1', '2020-01-03', 'UFC')")
     conn.execute("INSERT INTO fights (fight_id, event_id) VALUES (1, 9)")
     conn.executemany("INSERT INTO fight_participants VALUES (1, ?, ?, ?)",
                      [(1, 0, "W"), (2, 1, "L")])

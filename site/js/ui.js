@@ -54,10 +54,8 @@ export const ICON = {
   open: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="7.5" ry="3"/><path d="M4.5 6v12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3V6M4.5 12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3"/></svg>`,
 };
 
-// Pro MMA record from the fighter's UFC Stats page; falls back to the fights in the database.
-export const tally = (f, fallback) => (f.wins != null ? { w: f.wins, l: f.losses, d: f.draws, nc: f.no_contests } : fallback);
-const record = (r) => `${r.w || 0}-${r.l || 0}-${r.d || 0}` + (r.nc ? ` (${r.nc} NC)` : "");
-export const proRecord = (f, fallback) => record(tally(f, fallback));
+// A record ({w, l, d, nc}), counted from the fights in the database.
+export const proRecord = (r) => `${r.w || 0}-${r.l || 0}-${r.d || 0}` + (r.nc ? ` (${r.nc} NC)` : "");
 
 export function debounce(fn, ms = 150) {
   let t;

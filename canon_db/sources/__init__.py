@@ -7,12 +7,11 @@
 To add a source, create sources/<name>/ with those three and register it below.
 """
 
-from canon_db.sources import (aca, bestfightodds, brave, ksw, mmadecisions, oktagon, pfl, sherdog, sofascore,
-                              ufcstats)
+from canon_db.sources import (aca, bestfightodds, brave, ksw, mmadecisions, oktagon, pfl, sherdog, sofascore, ufc)
 
-# ufcstats first: Sherdog links through its fights, and odds match against both. pfl and
+# ufc first: Sherdog links through its fights, and odds match against both. pfl and
 # oktagon after sherdog: their stats attach to the fights Sherdog's cards give. sofascore
 # after oktagon: its stats sit beside Oktagon's. mmadecisions attaches judges' cards to any of them.
 # brave, aca and ksw (rankings pages only, for now) last: their lists will link to fighters the others have.
-SOURCES = {s.NAME: s for s in (ufcstats, sherdog, pfl, oktagon, sofascore, mmadecisions, bestfightodds,
+SOURCES = {s.NAME: s for s in (ufc, sherdog, pfl, oktagon, sofascore, mmadecisions, bestfightodds,
                                brave, aca, ksw)}

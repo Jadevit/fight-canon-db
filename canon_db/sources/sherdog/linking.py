@@ -22,11 +22,13 @@ class State:
         self.bouts = Bouts(conn)
         self.names, self.fights = self.bouts.names, self.bouts.fights
         self.sd, self.fid = {}, {}  # fighter_id -> a Sherdog id, Sherdog id -> fighter_id
+        self.pairs: set[tuple[int, str]] = set()  # every (fighter, Sherdog id) linked, now or before
         for fid, sid in conn.execute(
                 "SELECT DISTINCT fighter_id, source_id FROM fighter_aliases WHERE source = ? "
                 "ORDER BY fighter_id, CAST(source_id AS INTEGER)", (NAME,)):
             self.sd.setdefault(fid, sid)
             self.fid[sid] = fid
+            self.pairs.add((fid, sid))
         self.official: dict[int, set] = defaultdict(set)  # fighter -> (source, id) on promotions' sites
         for fid, src, sid in conn.execute(
                 f"SELECT fighter_id, source, source_id FROM fighter_aliases WHERE source IN "
@@ -47,14 +49,16 @@ class State:
         """Link a fighter to a Sherdog id. If another fighter has it, the two are one (merged
         on write), unless they clash(). A fighter already linked can take a second id: Sherdog
         sometimes has a duplicate profile. Returns True if `fid` is newly linked (their page
-        is worth reading)."""
+        is worth reading). A pair already linked is nothing new: two fighters of ours sharing
+        an id would otherwise take it back and forth for ever."""
         have_sid, have_fid = self.sd.get(fid), self.fid.get(sid)
-        if have_fid == fid:
+        if have_fid == fid or (fid, sid) in self.pairs:
             return False
         if have_fid is not None and self.clash(fid, have_fid):
             self.conflicts.append((str(fid), sid, have_sid or "", str(have_fid), why))
             return False
         self.fid[sid] = fid
+        self.pairs.add((fid, sid))
         self.new_links.append((fid, sid, have_fid))
         if have_sid is None:
             self.sd[fid] = sid

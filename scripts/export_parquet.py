@@ -17,7 +17,9 @@ from pathlib import Path
 
 import duckdb
 
-NOT_ON_SITE = {"media_scores"}  # in canon.db only, for now
+NOT_ON_SITE = {"media_scores", "review_flags"}  # in canon.db only, for now
+NOT_ON_SITE_PREFIXES = ("pipeline_",)  # the loaders' own bookkeeping
+NOT_ON_SITE_SUFFIXES = ("_claims",)  # what each source said: the tables are worked out from them
 
 ORDER = {  # each table's row order: the ranges queries on it usually read
     "events": "date, event_id",
@@ -41,7 +43,8 @@ def export(src: Path, out: Path) -> dict:
     con.execute("ATTACH ? AS canon (TYPE sqlite, READ_ONLY)", [str(src)])
     tables = [r[0] for r in con.execute("SELECT table_name FROM information_schema.tables "
                                         "WHERE table_catalog = 'canon' ORDER BY 1").fetchall()
-              if r[0] not in NOT_ON_SITE]
+              if r[0] not in NOT_ON_SITE and not r[0].startswith(NOT_ON_SITE_PREFIXES)
+              and not r[0].endswith(NOT_ON_SITE_SUFFIXES)]
     digest = hashlib.sha256()
     for t in tables:
         path = out / f"{t}.parquet"

@@ -7,7 +7,7 @@ import {
 } from "./stats.js";
 import {
   app, badge, canonical, debounce, dot, esc, eventLink, ext, fighterHref, fighterLink, go, guard, hmm, latest, loading,
-  monthYear, nothing, num, pagePath, params, pct, plural, proRecord, res, setParams, tally
+  monthYear, nothing, num, pagePath, params, pct, plural, proRecord, res, setParams
 } from "./ui.js";
 
 // How a win came: UFC Stats writes "KO/TKO", "Submission", "Decision - Split"; Sherdog writes
@@ -37,7 +37,7 @@ const fighterRow = (r) => `
   <a class="row" href="${fighterHref(r.fighter_id, r.name)}">
     <div class="main"><div class="title">${esc(r.name)}</div>
       ${r.nickname ? `<div class="sub">“${esc(r.nickname)}”</div>` : ""}</div>
-    <div class="end"><b class="num">${proRecord(r, r)}</b>${plural(r.n, "fight")}</div>
+    <div class="end"><b class="num">${proRecord(r)}</b>${plural(r.n, "fight")}</div>
   </a>`;
 
 // Fighters opened lately, newest first, kept in this browser only ({id, name}).
@@ -53,9 +53,9 @@ function rememberFighter(id, name) {
 }
 
 // Recently fought: a row per pair who fought each other, each fighter's name and record
-// (wins in gold), nothing about the fight. Record as proRecord: their UFC Stats page, else here.
+// (wins in gold), nothing about the fight. Records are counted from the fights here.
 function recordWins(r) {
-  const { w, l, d, nc } = tally(r, r);
+  const { w, l, d, nc } = r;
   return `<span class="w">${w || 0}</span>-${l || 0}-${d || 0}${nc ? ` (${nc} NC)` : ""}`;
 }
 const pairCell = (r) => `<div class="cell"><a href="${fighterHref(r.fighter_id, r.name)}">${esc(r.name)}</a>
@@ -121,10 +121,10 @@ export async function fighter(id, show) {
   if (!d) { show(nothing("Fighter not found.")); return; }
   const f = d.fighter, fights = objs(d.fights), own = objs(d.stats);
 
-  // Record: from their UFC Stats page if they have one, else the fights here.
-  const here = { w: 0, l: 0, d: 0, nc: 0 };
-  fights.forEach((x) => { if (x.result) here[x.result.toLowerCase()]++; });
-  const r = tally(f, here);
+  // Record: counted from the fights here. "Pro record" when a source prints the same one.
+  const r = { w: 0, l: 0, d: 0, nc: 0 };
+  fights.forEach((x) => { if (x.result) r[x.result.toLowerCase()]++; });
+  const here = r;
   const kinds = { ko: 0, sub: 0, dec: 0 };
   fights.filter((x) => x.result === "W").forEach((x) => { const k = winKind(x.method); if (k in kinds) kinds[k]++; });
 
@@ -137,15 +137,15 @@ export async function fighter(id, show) {
     f.stance && esc(f.stance),
     f.nationality && esc(f.nationality),
   ].filter(Boolean);
-  const links = (d.aliases.ufcstats || []).map((s) => ext(`http://ufcstats.com/fighter-details/${s}`, "UFC Stats"))
-    .concat((d.aliases.sherdog || []).map((s) => ext(`https://www.sherdog.com/fighter/x-${s}`, "Sherdog")));
+  const links = (d.aliases["ufcstats.com"] || []).map((s) => ext(`http://ufcstats.com/fighter-details/${s}`, "UFC Stats"))
+    .concat((d.aliases["sherdog.com"] || []).map((s) => ext(`https://www.sherdog.com/fighter/x-${s}`, "Sherdog")));
   canonical(pagePath("fighter", id, f.name), f.name);
   rememberFighter(id, f.name);
 
   const total = r.w + r.l + r.d || 1;
   const recordBlock = `
     <section class="section">
-      <span class="label">${f.wins != null ? "Pro record" : "Record in the database"}</span>
+      <span class="label">${f.whole ? "Pro record" : "Record in the database"}</span>
       <div class="big-record num"><span class="gold">${r.w}</span><span class="sep">–</span>${r.l}<span class="sep">–</span>${r.d}${
         r.nc ? `<small>${r.nc} NC</small>` : ""}</div>
       <div class="split">${r.w ? `<span style="width:${(100 * r.w) / total}%;background:var(--gold)"></span>` : ""}${

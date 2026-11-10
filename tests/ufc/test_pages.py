@@ -5,7 +5,7 @@ Run: python -m pytest tests/
 
 from pathlib import Path
 
-from canon_db.sources.ufcstats.pages import parse_event, parse_events_list, parse_fight, parse_fighter
+from canon_db.sources.ufc.pages import parse_event, parse_events_list, parse_fight, parse_fighter
 
 FIX = Path(__file__).parent / "fixtures"
 

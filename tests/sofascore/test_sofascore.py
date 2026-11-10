@@ -66,15 +66,15 @@ def test_bouts_keep_finished_mma():
 
 def _db():
     conn = sqlite3.connect(":memory:")
-    conn.executescript(db.SCHEMA.read_text())
+    db.create(conn)
     db.sync_promotions(conn)
     conn.executemany("INSERT INTO fighters (fighter_id, name) VALUES (?,?)",
                      [(1, "Alan Able"), (2, "Ben Baker"),
                       (3, "Carl Cole"), (4, "Dan Dale")])
-    conn.executemany("INSERT INTO fighter_aliases VALUES (?, 'sherdog', ?, ?)",
+    conn.executemany("INSERT INTO fighter_aliases (fighter_id, source, site, source_id, name) VALUES (?, 'sherdog', 'sherdog.com', ?, ?)",
                      [(1, "100", "Alan Able"), (2, "200", "Ben Baker"),
                       (3, "300", "Carl Cole"), (4, "400", "Dan Dale")])
-    conn.execute("INSERT INTO events (event_id, name, date) VALUES (9, 'Oktagon 1', '2020-01-02')")
+    conn.execute("INSERT INTO events (event_id, name, date, promotion) VALUES (9, 'Oktagon 1', '2020-01-02', 'UFC')")
     for fight, pair in ((1, (2, 1)), (2, (3, 4))):
         conn.execute("INSERT INTO fights (fight_id, event_id) VALUES (?, 9)", (fight,))
         conn.executemany("INSERT INTO fight_participants VALUES (?, ?, ?, ?)",
@@ -83,7 +83,7 @@ def _db():
     conn.execute("INSERT INTO round_stats (fight_id, fighter_id, round, sig_str_land, source) "
                  "VALUES (1, 1, 1, 4, 'oktagon')")
     conn.execute("INSERT INTO round_stats (fight_id, fighter_id, round, sig_str_land, source) "
-                 "VALUES (2, 3, 1, 9, 'ufcstats')")
+                 "VALUES (2, 3, 1, 9, 'ufc')")
     return conn
 
 
@@ -112,7 +112,7 @@ def test_load(tmp_path):
         (1, 1, 4, None, None, None, "oktagon"),
         (1, 1, 7, 20, None, 15, "sofascore"),
         (1, 2, 3, 15, None, 0, "sofascore"),
-        (2, 3, 9, None, None, None, "ufcstats")]
+        (2, 3, 9, None, None, None, "ufc")]
     assert conn.execute("SELECT count(*) FROM sofascore_round_stats").fetchone() == (2,)
     assert conn.execute("SELECT event_id FROM event_aliases WHERE source = 'sofascore' AND source_id = '500'").fetchone() == (
         9,)

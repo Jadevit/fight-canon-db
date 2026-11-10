@@ -7,12 +7,12 @@ from canon_db.sources.bestfightodds.load import NAME, load
 
 def _db():
     conn = sqlite3.connect(":memory:")
-    conn.executescript(db.SCHEMA.read_text())
+    db.create(conn)
     db.sync_promotions(conn)
     people = [(1, "Ann Avery"), (2, "Bea Brook"), (3, "Cara Cole")]
     conn.executemany("INSERT INTO fighters (fighter_id, name) VALUES (?, ?)", people)
-    conn.executemany("INSERT INTO fighter_aliases VALUES (?, 'sherdog', ?, ?)", [(i, str(i), n) for i, n in people])
-    conn.execute("INSERT INTO events (event_id, name, date) VALUES (9, 'Card', '2024-05-04')")
+    conn.executemany("INSERT INTO fighter_aliases (fighter_id, source, site, source_id, name) VALUES (?, 'sherdog', 'sherdog.com', ?, ?)", [(i, str(i), n) for i, n in people])
+    conn.execute("INSERT INTO events (event_id, name, date, promotion) VALUES (9, 'Card', '2024-05-04', 'UFC')")
     conn.execute("INSERT INTO fights (fight_id, event_id) VALUES (1, 9)")
     conn.executemany("INSERT INTO fight_participants VALUES (1, ?, ?, ?)", [(1, 0, "W"), (2, 1, "L")])
     return conn
@@ -68,7 +68,7 @@ def test_a_fight_without_a_line_or_a_match(tmp_path):
 
 def test_choosing_pages():
     conn = _db()
-    conn.executemany("INSERT INTO fighter_aliases VALUES (1, ?, ?, 'Ann Avery')",
+    conn.executemany("INSERT INTO fighter_aliases (fighter_id, source, site, source_id, name) SELECT 1, ?1, (SELECT sites FROM sources WHERE source = ?1), ?2, 'Ann Avery'",
                      [(NAME, "ann-avery-1"), (NAME, "ann-avery-5")])
     assert fighters_since(conn, "2024-05-01") == {1, 2} and fighters_since(conn, "2024-06-01") == set()
 
