@@ -64,7 +64,7 @@ def test_claim_modes():
     assert conn.execute("SELECT dob, height_in, nickname FROM fighter_claims").fetchone() == (None, None, None)
 
 
-def test_sides_come_from_one_source_and_disagreements_are_flagged():
+def test_sides_come_from_one_source_and_disagreements_are_counted():
     conn = _conn()
     fa, fb, e, f = _bout(conn)
     claims.claim(conn, "fight", f, "sherdog", "9:1-2", dict(event_id=e, method="KO (Punch)", referee="Herb"))
@@ -72,14 +72,12 @@ def test_sides_come_from_one_source_and_disagreements_are_flagged():
     claims.sides(conn, f, "sherdog", "9:1-2", [dict(fighter_id=fb, name="Bea Bell", result="W"),
                                               dict(fighter_id=fa, name="Ann Avery", result="L")])
     claims.sides(conn, f, "ufc", "f", [dict(fighter_id=fb, result="L", corner=0), dict(fighter_id=fa, result="W", corner=1)])
-    claims.resolve(conn)
+    counts = claims.resolve(conn)
     assert conn.execute("SELECT method, referee, title_fight FROM fights").fetchone() == ("KO/TKO", "Herb", 0)
     assert conn.execute("SELECT fighter_id, corner, result FROM fight_participants ORDER BY corner").fetchall() == [
         (fb, 0, "L"), (fa, 1, "W")]
-    flags = conn.execute("SELECT row_key, value FROM review_flags ORDER BY fighter_id").fetchall()
-    assert [(json.loads(k)["fighter_id"], v) for k, v in flags] == [(fa, "sherdog: L; ufc: W"), (fb, "sherdog: W; ufc: L")]
-    claims.resolve(conn)  # rebuilt, not added to
-    assert conn.execute("SELECT count(*) FROM review_flags").fetchone() == (2,)
+    assert counts["results disagree"] == 2  # the ranks decide; it's counted, not flagged
+    assert conn.execute("SELECT count(*) FROM review_flags").fetchone() == (0,)
 
     # Without UFC Stats' sides, Sherdog's: corners by fighter id. A side not linked doesn't count.
     claims.sides(conn, f, "ufc", "f", [dict(fighter_id=None, name="Ann Avery", result="W"), dict(fighter_id=fb, result="L")])
@@ -156,17 +154,17 @@ def test_sex_from_divisions_cases():
     assert dict(conn.execute("SELECT name, sex FROM fighters")) == dict(a="F", b="F", c="M", d="M", e=None, f=None)
 
 
-def test_birth_dates_that_disagree_are_flagged_and_oktagon_ranks_below_sherdog():
+def test_birth_dates_that_disagree_are_counted_not_flagged_and_oktagon_ranks_below_sherdog():
     conn = _conn()
     fa, *_ = _bout(conn)
     ids.alias(conn, "fighter", fa, "oktagon", "o1", "Ann Avery")
     claims.claim(conn, "fighter", fa, "sherdog", "1", dict(name="Ann Avery", dob="1990-05-17"))
     claims.claim(conn, "fighter", fa, "oktagon", "o1", dict(dob="1990-01-01", sex="F"))
     claims.claim(conn, "fighter", fa, "legacy", str(fa), dict(dob="1990-05-18"), site_="")  # not a source's word
-    claims.resolve(conn)
+    claims.claim(conn, "fighter", fa, "correction", str(fa), dict(dob="1990-05-17"), site_="")  # nor a correction
+    counts = claims.resolve(conn)
     assert conn.execute("SELECT dob, sex FROM fighters WHERE fighter_id = ?", (fa,)).fetchone() == ("1990-05-17", "F")
-    assert conn.execute("SELECT check_name, value FROM review_flags").fetchall() == [
-        ("birth dates disagree", "oktagon: 1990-01-01; sherdog: 1990-05-17")]
+    assert counts["birth dates disagree"] == 1 and conn.execute("SELECT count(*) FROM review_flags").fetchone() == (0,)
 
 
 def test_a_printed_name_that_isnt_our_fighters_is_flagged_once():

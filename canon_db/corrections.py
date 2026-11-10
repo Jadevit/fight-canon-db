@@ -11,7 +11,6 @@ Only accepted rows belong in the file; validate() refuses any other, and the upd
   result     fight id    a fighter id in that fight  W, L, D or NC (the other side's follows)
   same       an id       fighter, event or fight     another id: the two are one (merged)
   different  an id       fighter, event or fight     another id: the two are never merged
-  flag       a row_key   a check_name                (blank) the flagged value is right: the flag goes
 
 apply() runs at the start of every update: it copies the file into `corrections`, merges what
 `same` says, and writes values and results as claims of source 'correction', which resolve()
@@ -23,7 +22,6 @@ Taking a row out of the file undoes it at the next update (merges aside: a merge
 from __future__ import annotations
 
 import csv
-import json
 import logging
 import sqlite3
 from collections import Counter
@@ -93,14 +91,6 @@ def validate(rows: list[dict[str, str]]) -> list[str]:
                 errors.append(f"{at}: `field` must be fighter, event or fight")
             if not value.isdigit() or value == target:
                 errors.append(f"{at}: `value` must be another id")
-        elif kind == "flag":
-            if not field:
-                errors.append(f"{at}: `field` must be the flag's check_name")
-            try:
-                json.loads(target)
-            except ValueError:
-                errors.append(f"{at}: `target` must be the flag's row_key, as JSON")
-            continue
         else:
             errors.append(f"{at}: no kind {kind!r}")
             continue
@@ -177,19 +167,5 @@ def apply(conn: sqlite3.Connection, path: Path = FILE) -> Counter:
                                                          dict(fighter_id=b, result=rb, corner=cb)])
             counts["results"] += 1
     counts["different"] = sum(r["kind"] == "different" for r in rows)
-    counts["flags"] = sum(r["kind"] == "flag" for r in rows)
     return counts
 
-
-def clear_flags(conn: sqlite3.Connection) -> int:
-    """Delete the review flags a `flag` correction says are right. Ids in a row key follow
-    `retired_ids`. Returns the flags cleared."""
-    n = 0
-    for check, key in conn.execute("SELECT field, target FROM corrections WHERE kind = 'flag'").fetchall():
-        k = json.loads(key)
-        for name in ("fighter", "event", "fight"):
-            if f"{name}_id" in k and isinstance(k[f"{name}_id"], int):
-                k[f"{name}_id"] = ids.now(conn, name, k[f"{name}_id"]) or k[f"{name}_id"]
-        for keyed in {key, json.dumps(k)}:
-            n += conn.execute("DELETE FROM review_flags WHERE check_name = ? AND row_key = ?", (check, keyed)).rowcount
-    return n

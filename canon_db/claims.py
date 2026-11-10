@@ -8,14 +8,13 @@ fight_participants from every claim at once, so no value depends on the order so
 - A column takes the best-ranked claim that has a value (source_tiers: tier, then priority),
   so a blank falls through to the next source. Third-party sources never fill these tables.
 - A fight's two fighters, results and corners come from one source: the best-ranked whose two
-  sides are both linked to fighters of ours. Two sources that disagree on a result are flagged
-  in review_flags, whichever wins.
+  sides are both linked to fighters of ours.
 - Rows no ranked claim speaks for are left as they are.
 - Rules that aren't any page's word run after (RULES), such as sex from a fight's division.
-- Checks flag what needs a look by hand (CHECKS, in review_flags): results or birth dates sources
-  disagree on, and names a source prints for a fighter that don't agree with ours.
-- Corrections by hand are claims of source 'correction', the top tier (canon_db.corrections); a
-  flag a correction says is right isn't raised again.
+- Sources disagreeing is what the ranks are for, not a flag: disagreements() counts them for the
+  log. A check flags what needs a person (CHECKS, in review_flags): a name a source prints for a
+  fighter that doesn't agree with ours, which means a bad alias.
+- Corrections by hand are claims of source 'correction', the top tier (canon_db.corrections).
 """
 
 from __future__ import annotations
@@ -39,7 +38,7 @@ KEY = ("source", "site", "source_id")
 SIDE_COLS = ("fighter_id", "fighter_source_id", "name", "result", "corner")
 # Main-table columns a rule works out, not a claim (a source's printed record stays in its claim).
 COUNTED = {("fighters", c) for c in ("wins", "losses", "draws", "no_contests")}
-CHECKS = ("results disagree", "birth dates disagree", "printed name disagrees")  # review_flags rows resolve() rebuilds
+CHECKS = ("printed name disagrees",)  # review_flags rows resolve() rebuilds
 dirty = False  # claims changed since the last resolve() (claim(), sides(), and ids' merges and deletions)
 
 
@@ -153,35 +152,18 @@ def _participants(conn: sqlite3.Connection) -> int:
     return n
 
 
-def _flag_results(conn: sqlite3.Connection) -> int:
-    """Flag fighters whose result in a fight differs between sources (a source with no result yet
-    doesn't disagree). Returns the flags."""
-    rows = conn.execute("""
-        SELECT p.fight_id, p.fighter_id, group_concat(p.source || ': ' || p.result, '; ')
-        FROM (SELECT DISTINCT fight_id, fighter_id, source, result FROM participant_claims
-              WHERE fighter_id IS NOT NULL AND result IS NOT NULL ORDER BY fight_id, fighter_id, source, result) p
-        GROUP BY p.fight_id, p.fighter_id
-        HAVING count(DISTINCT p.result) > 1""").fetchall()
-    conn.executemany(
-        "INSERT INTO review_flags (check_name, table_name, row_key, column_name, value, reason, fighter_id, fight_id) "
-        "VALUES ('results disagree', 'fight_participants', ?, 'result', ?, 'sources give this fighter different "
-        "results', ?, ?)",
-        [(json.dumps({"fight_id": fight, "fighter_id": fid}), said, fid, fight) for fight, fid, said in rows])
-    return len(rows)
-
-
-def _flag_dobs(conn: sqlite3.Connection) -> int:
-    """Flag fighters whose sources give different birth dates (legacy values aside). Returns the flags."""
-    rows = conn.execute("""
-        SELECT fighter_id, group_concat(source || ': ' || dob, '; ')
-        FROM (SELECT DISTINCT fighter_id, source, dob FROM fighter_claims
-              WHERE dob IS NOT NULL AND source <> 'legacy' ORDER BY fighter_id, source, dob)
-        GROUP BY fighter_id HAVING count(DISTINCT dob) > 1""").fetchall()
-    conn.executemany(
-        "INSERT INTO review_flags (check_name, table_name, row_key, column_name, value, reason, fighter_id) "
-        "VALUES ('birth dates disagree', 'fighters', ?, 'dob', ?, 'sources give this fighter different birth dates', ?)",
-        [(json.dumps({"fighter_id": fid}), said, fid) for fid, said in rows])
-    return len(rows)
+def disagreements(conn: sqlite3.Connection) -> dict[str, int]:
+    """How often ranked sources disagree, for the log: results in a fight, and birth dates. The
+    hierarchy decides these; they aren't flags. Corrections and legacy values aren't a source's word."""
+    skip = "AND source NOT IN ('correction', 'legacy')"
+    results = conn.execute(f"""
+        SELECT count(*) FROM (SELECT fight_id, fighter_id FROM participant_claims
+                              WHERE fighter_id IS NOT NULL AND result IS NOT NULL {skip}
+                              GROUP BY fight_id, fighter_id HAVING count(DISTINCT result) > 1)""").fetchone()[0]
+    dobs = conn.execute(f"""
+        SELECT count(*) FROM (SELECT fighter_id FROM fighter_claims WHERE dob IS NOT NULL {skip}
+                              GROUP BY fighter_id HAVING count(DISTINCT dob) > 1)""").fetchone()[0]
+    return {"results disagree": results, "birth dates disagree": dobs}
 
 
 def _same_words(a: str, b: str) -> bool:
@@ -257,11 +239,8 @@ def resolve(conn: sqlite3.Connection) -> Counter:
         for rule in RULES:
             rule(conn)
         conn.execute(f"DELETE FROM review_flags WHERE check_name IN ({', '.join('?' * len(CHECKS))})", CHECKS)
-        counts["results disagree"] = _flag_results(conn)
-        counts["birth dates disagree"] = _flag_dobs(conn)
         counts["printed name disagrees"] = _flag_names(conn)
-        from canon_db.corrections import clear_flags  # (it imports this module)
-        counts["flags corrected"] = clear_flags(conn)
+        counts.update(disagreements(conn))
         conn.execute("DROP TABLE temp.ranks")
     dirty = False
     return counts

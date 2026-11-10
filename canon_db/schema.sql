@@ -435,11 +435,11 @@ CREATE UNIQUE INDEX idx_review_flags ON review_flags(check_name, table_name, row
 -- (`explanation`), with a citation, who submitted it and who accepted it. `kind`: 'fighter',
 -- 'event' or 'fight' (`target` our id, `field` a column, `value` the right value); 'result'
 -- (`target` a fight, `field` a fighter in it, `value` their result); 'same' or 'different'
--- (`field` fighter, event or fight: `target` and `value` are, or are never, one row); 'flag'
--- (`target` a review flag's row_key, `field` its check_name: the flagged value is right).
+-- (`field` fighter, event or fight: `target` and `value` are, or are never, one row). For the
+-- few cases the ranks get wrong, above all identity; a wrong value a rule can catch is a rule's.
 CREATE TABLE corrections (
     id           INTEGER PRIMARY KEY,       -- the row's own id in the file, never reused
-    kind         TEXT NOT NULL CHECK (kind IN ('fighter', 'event', 'fight', 'result', 'same', 'different', 'flag')),
+    kind         TEXT NOT NULL CHECK (kind IN ('fighter', 'event', 'fight', 'result', 'same', 'different')),
     target       TEXT NOT NULL,
     field        TEXT NOT NULL,
     value        TEXT,

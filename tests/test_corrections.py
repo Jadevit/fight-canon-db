@@ -1,5 +1,4 @@
 import csv
-import json
 import sqlite3
 
 import pytest
@@ -60,7 +59,6 @@ def test_the_file_in_the_repo_is_valid():
     (dict(field="wins"), "no column 'wins'"),  # counted from fights, not set
     (dict(kind="result", field="2", value="won"), "`value` must be"),
     (dict(kind="same", field="fighter", value="1"), "another id"),
-    (dict(kind="flag", field="results disagree", target="fight 1"), "row_key"),
     (dict(kind="rename"), "no kind"),
 ])
 def test_a_row_without_what_it_needs_is_refused(bad, why):
@@ -123,15 +121,3 @@ def test_same_merges_and_different_keeps_apart(tmp_path):
     assert ids.merge(conn, "fighter", fa, fb) is None  # nothing merges them
     assert conn.execute("SELECT count(*) FROM fighters").fetchone() == (2,)
 
-
-def test_a_flag_corrected_stays_cleared(tmp_path):
-    conn = _conn()
-    fa, _, _, f = _bout(conn)
-    claims.sides(conn, f, "sherdog", "9:1-2", [dict(fighter_id=fa, result="L"), dict(fighter_id=fa + 1, result="W")])
-    claims.resolve(conn)
-    assert conn.execute("SELECT count(*) FROM review_flags").fetchone() == (2,)
-    key = json.dumps({"fight_id": f, "fighter_id": fa})
-    corrections.apply(conn, _file(tmp_path, _row(kind="flag", field="results disagree", target=key, value="")))
-    assert claims.resolve(conn)["flags corrected"] == 1
-    assert conn.execute("SELECT row_key FROM review_flags").fetchall() == [
-        (json.dumps({"fight_id": f, "fighter_id": fa + 1}),)]
