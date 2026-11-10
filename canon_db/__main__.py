@@ -9,7 +9,7 @@
 
 All sources run against one working copy of the database, which replaces
 data/canon.db (and data/summary.json) only if its content changed. If any source
-fails, or a table or source lost more rows than an update should (db.drops; pass
+fails (or corrections.csv has a row it refuses), or a table or source lost more rows than an update should (db.drops; pass
 `update --allow-drop` when that's intended), nothing is published. Under GitHub Actions, `changed=true|false` is written
 to $GITHUB_OUTPUT.
 """
@@ -22,7 +22,7 @@ import logging
 import sys
 from pathlib import Path
 
-from canon_db import claims, db
+from canon_db import claims, corrections, db
 from canon_db.sources import SOURCES
 
 
@@ -63,6 +63,8 @@ def main() -> None:
     try:
         with db.updating(args.db, args.allow_drop) as (conn, result):
             db.sync_sources(conn)
+            fixed = corrections.apply(conn)  # first, so sources match against what they merge
+            log.info("Corrections: %s.", ", ".join(f"{k} {v}" for k, v in fixed.items() if v) or "none")
             resolved = False
             for name, source_args in run.items():
                 raw = args.raw / name

@@ -12,6 +12,8 @@ fight_participants from every claim at once, so no value depends on the order so
   in review_flags, whichever wins.
 - Rows no ranked claim speaks for are left as they are.
 - Rules that aren't any page's word run after (RULES), such as sex from a fight's division.
+- Corrections by hand are claims of source 'correction', the top tier (canon_db.corrections); a
+  flag a correction says is right isn't raised again.
 """
 
 from __future__ import annotations
@@ -222,6 +224,8 @@ def resolve(conn: sqlite3.Connection) -> Counter:
         conn.execute(f"DELETE FROM review_flags WHERE check_name IN ({', '.join('?' * len(CHECKS))})", CHECKS)
         counts["results disagree"] = _flag_results(conn)
         counts["birth dates disagree"] = _flag_dobs(conn)
+        from canon_db.corrections import clear_flags  # (it imports this module)
+        counts["flags corrected"] = clear_flags(conn)
         conn.execute("DROP TABLE temp.ranks")
     dirty = False
     return counts

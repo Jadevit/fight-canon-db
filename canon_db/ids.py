@@ -98,11 +98,32 @@ def best_stats(conn: sqlite3.Connection, fight: int) -> int:
     return min((STATS_RANK.index(s) for s in have if s in STATS_RANK), default=len(STATS_RANK))
 
 
-def merge(conn: sqlite3.Connection, kind: str, a: int, b: int) -> int:
+def now(conn: sqlite3.Connection, kind: str, id_: int) -> int | None:
+    """The row id `id_` names today: itself, the row it was merged into, or None if it's gone."""
+    row = conn.execute("SELECT new_id FROM retired_ids WHERE kind = ? AND old_id = ?", (kind, id_)).fetchone()
+    if row is not None:
+        return row[0]
+    table, col, _ = KINDS[kind]
+    return id_ if conn.execute(f"SELECT 1 FROM {table} WHERE {col} = ?", (id_,)).fetchone() else None
+
+
+def apart(conn: sqlite3.Connection, kind: str, a: int, b: int) -> bool:
+    """Does a correction say rows `a` and `b` are two (`different`, by the ids it names or the rows
+    they became)?"""
+    for x, y in conn.execute("SELECT target, value FROM corrections WHERE kind = 'different' AND field = ?", (kind,)):
+        if {int(x), int(y)} == {a, b} or {now(conn, kind, int(x)), now(conn, kind, int(y))} == {a, b}:
+            return True
+    return False
+
+
+def merge(conn: sqlite3.Connection, kind: str, a: int, b: int) -> int | None:
     """Make rows `a` and `b` one. The older (lower) id is kept; per column, the value of the
-    row a promotion's site has wins, else the kept row's. Returns the kept id."""
+    row a promotion's site has wins, else the kept row's. Returns the kept id, or None if a
+    correction says the two are different (nothing is merged)."""
     if a == b:
         return a
+    if apart(conn, kind, a, b):
+        return None
     keep, drop = min(a, b), max(a, b)
     claims.dirty = True  # claims move
     table, col, aliases_table = KINDS[kind]
@@ -207,6 +228,8 @@ def merge_duplicates(conn: sqlite3.Connection) -> int:
         x, y = gone.get(x, x), gone.get(y, y)
         if x != y:
             keep = merge(conn, "fight", x, y)
+            if keep is None:  # a correction says they're two (a rematch within a day)
+                continue
             gone[max(x, y)] = keep
             n += 1
     return n

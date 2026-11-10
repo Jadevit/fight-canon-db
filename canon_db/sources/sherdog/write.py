@@ -102,10 +102,16 @@ class Writer:
         def exists(f: int, kind: str = "fighter") -> bool:  # a State can outlive rows merged or dropped since
             return conn.execute(f"SELECT 1 FROM {kind}s WHERE {kind}_id = ?", (f,)).fetchone() is not None
 
-        for fid, _sid, prior in st.new_links:
+        for fid, sid, prior in st.new_links:
             a, b = self.fighter_now(fid), self.fighter_now(prior)
             if b is not None and a != b and exists(a) and exists(b):
                 keep = ids.merge(conn, "fighter", a, b)
+                if keep is None:  # a correction says they're two: the id stays with who had it
+                    st.fid[sid] = prior
+                    if st.sd.get(fid) == sid:
+                        del st.sd[fid]
+                    self.counts["fighters kept apart"] += 1
+                    continue
                 self.moved[a + b - keep] = keep
                 self.counts["fighters merged"] += 1
         st.new_links = []
@@ -114,6 +120,9 @@ class Writer:
             if a != b and exists(a, "event") and exists(b, "event") \
                     and not ids.sources(conn, "event", a) & ids.sources(conn, "event", b) & ids.OFFICIAL:
                 keep = ids.merge(conn, "event", a, b)
+                if keep is None:  # a correction says they're two
+                    self.counts["events kept apart"] += 1
+                    continue
                 self.moved_events[a + b - keep] = keep
                 if keep in self.ranked_events or a + b - keep in self.ranked_events:
                     self.ranked_events.add(keep)

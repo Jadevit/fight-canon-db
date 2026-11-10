@@ -430,6 +430,26 @@ CREATE TABLE review_flags (
 );
 CREATE UNIQUE INDEX idx_review_flags ON review_flags(check_name, table_name, row_key, ifnull(column_name, ''));
 
+-- Corrections by hand, copied from canon_db/corrections.csv on every update (canon_db/corrections.py):
+-- the top tier, above every source. Each says what was wrong and why the new value is right
+-- (`explanation`), with a citation, who submitted it and who accepted it. `kind`: 'fighter',
+-- 'event' or 'fight' (`target` our id, `field` a column, `value` the right value); 'result'
+-- (`target` a fight, `field` a fighter in it, `value` their result); 'same' or 'different'
+-- (`field` fighter, event or fight: `target` and `value` are, or are never, one row); 'flag'
+-- (`target` a review flag's row_key, `field` its check_name: the flagged value is right).
+CREATE TABLE corrections (
+    id           INTEGER PRIMARY KEY,       -- the row's own id in the file, never reused
+    kind         TEXT NOT NULL CHECK (kind IN ('fighter', 'event', 'fight', 'result', 'same', 'different', 'flag')),
+    target       TEXT NOT NULL,
+    field        TEXT NOT NULL,
+    value        TEXT,
+    citation     TEXT NOT NULL,
+    explanation  TEXT NOT NULL,
+    submitted_by TEXT NOT NULL,
+    accepted_by  TEXT NOT NULL,
+    date         TEXT NOT NULL CHECK (date = date(date))  -- YYYY-MM-DD
+);
+
 CREATE INDEX idx_fights_event          ON fights(event_id);
 CREATE INDEX idx_participants_fighter  ON fight_participants(fighter_id);
 CREATE INDEX idx_round_stats_fighter   ON round_stats(fighter_id);

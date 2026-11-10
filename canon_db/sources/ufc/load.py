@@ -171,7 +171,7 @@ class Writer:
             other = conn.execute("SELECT event_id FROM fights WHERE fight_id = ?", (fight,)).fetchone()[0]
             if NAME in ids.sources(conn, "event", other):
                 continue  # another UFC Stats event: the fight moves, the events stay apart
-            eid = other if eid is None else ids.merge(conn, "event", eid, other)
+            eid = other if eid is None else ids.merge(conn, "event", eid, other) or eid  # (kept apart: None)
         if eid is None:
             if not ev["fights"]:
                 return None

@@ -161,6 +161,20 @@ def test_an_id_two_fighters_share_is_not_passed_back_and_forth():
     assert st.new_links == [(3, "300", None), (4, "300", 3)]
 
 
+def test_two_fighters_a_correction_keeps_apart_are_not_merged():
+    conn = _db()
+    conn.executemany("INSERT INTO fighters (fighter_id, name) VALUES (?, 'Carl Cole')", [(3,), (4,)])
+    conn.execute("INSERT INTO corrections VALUES (1, 'different', '3', 'fighter', '4', 'c', 'two people', 'j', 'j', "
+                 "'2026-11-09')")
+    st = State(conn)
+    st.link(3, "300", "seed")
+    st.link(4, "300", "a shared fight")
+    counts = write(conn, st, {})
+    assert counts["fighters kept apart"] == 1 and "fighters merged" not in counts
+    assert conn.execute("SELECT count(*) FROM retired_ids WHERE reason = 'merged'").fetchone() == (0,)
+    assert st.fid["300"] == 3
+
+
 def test_merge_keeps_older_id_and_official_values():
     conn = _db()
     conn.execute("INSERT INTO fighters (fighter_id, name, nationality) VALUES (3, 'Ben Baker Jr', 'England')")
