@@ -167,3 +167,18 @@ def test_birth_dates_that_disagree_are_flagged_and_oktagon_ranks_below_sherdog()
     assert conn.execute("SELECT dob, sex FROM fighters WHERE fighter_id = ?", (fa,)).fetchone() == ("1990-05-17", "F")
     assert conn.execute("SELECT check_name, value FROM review_flags").fetchall() == [
         ("birth dates disagree", "oktagon: 1990-01-01; sherdog: 1990-05-17")]
+
+
+def test_a_printed_name_that_isnt_our_fighters_is_flagged_once():
+    conn = _conn()
+    fa, fb, _, f = _bout(conn, a="Ann Avery", b="Aori Qileng")
+    ids.alias(conn, "fighter", fa, "oktagon", "7", "Cara Cole")  # another person's id
+    claims.sides(conn, f, "sherdog", "9:1-2", [dict(fighter_id=fa, name="Cara Cole", result="W"),
+                                               dict(fighter_id=fb, name="Qileng Aori", result="L")])
+    claims.claim(conn, "fighter", fb, "sherdog", "2", dict(name="Qilengaori"))  # run together: the same
+    claims.claim(conn, "fighter", fa, "sherdog", "1", dict(name="Ann Avery-Lane"))  # a word agrees
+    claims.resolve(conn)
+    assert conn.execute("SELECT row_key, value, reason, fighter_id FROM review_flags "
+                        "WHERE check_name = 'printed name disagrees'").fetchall() == [
+        (json.dumps({"fighter_id": fa, "name": "Cara Cole"}), "Cara Cole",
+         "oktagon, sherdog print a name that doesn't agree with this fighter's", fa)]

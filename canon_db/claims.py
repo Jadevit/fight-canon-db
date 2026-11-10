@@ -12,17 +12,21 @@ fight_participants from every claim at once, so no value depends on the order so
   in review_flags, whichever wins.
 - Rows no ranked claim speaks for are left as they are.
 - Rules that aren't any page's word run after (RULES), such as sex from a fight's division.
+- Checks flag what needs a look by hand (CHECKS, in review_flags): results or birth dates sources
+  disagree on, and names a source prints for a fighter that don't agree with ours.
 - Corrections by hand are claims of source 'correction', the top tier (canon_db.corrections); a
   flag a correction says is right isn't raised again.
 """
 
 from __future__ import annotations
 
+import itertools
 import json
 import sqlite3
 from collections import Counter
 
 from canon_db.db import COLUMNS, site
+from canon_db.matching import name_ok, norm
 
 # Tiers that fill the main tables, best first. third_party is kept beside them, never in them.
 RANKED = ("correction", "official", "primary", "secondary", "legacy")
@@ -35,7 +39,7 @@ KEY = ("source", "site", "source_id")
 SIDE_COLS = ("fighter_id", "fighter_source_id", "name", "result", "corner")
 # Main-table columns a rule works out, not a claim (a source's printed record stays in its claim).
 COUNTED = {("fighters", c) for c in ("wins", "losses", "draws", "no_contests")}
-CHECKS = ("results disagree", "birth dates disagree")  # review_flags rows resolve() rebuilds
+CHECKS = ("results disagree", "birth dates disagree", "printed name disagrees")  # review_flags rows resolve() rebuilds
 dirty = False  # claims changed since the last resolve() (claim(), sides(), and ids' merges and deletions)
 
 
@@ -180,6 +184,37 @@ def _flag_dobs(conn: sqlite3.Connection) -> int:
     return len(rows)
 
 
+def _same_words(a: str, b: str) -> bool:
+    """`b` is `a`'s words run together or in another order (names written family name first)."""
+    words, joined = norm(a).split(), norm(b).replace(" ", "")
+    return len(words) <= 4 and any("".join(p) == joined for p in itertools.permutations(words))
+
+
+def _flag_names(conn: sqlite3.Connection) -> int:
+    """Flag a name a source prints for a fighter (an alias, their page, a bout) that doesn't agree
+    with ours: a bad alias puts another person's values on them. One flag per fighter and name,
+    naming the sources. Returns the flags."""
+    ours = dict(conn.execute("SELECT fighter_id, name FROM fighters"))
+    printed: dict[tuple[int, str], set[str]] = {}
+    for fid, name, source in conn.execute("""
+            SELECT fighter_id, name, source FROM fighter_aliases WHERE name IS NOT NULL
+            UNION SELECT fighter_id, name, source FROM fighter_claims WHERE name IS NOT NULL AND source <> 'legacy'
+            UNION SELECT fighter_id, name, source FROM participant_claims
+                  WHERE name IS NOT NULL AND fighter_id IS NOT NULL AND source <> 'legacy'"""):
+        printed.setdefault((fid, name), set()).add(source)
+    rows = []
+    for (fid, name), sources in sorted(printed.items()):
+        o = ours.get(fid)
+        if o is None or norm(o) == norm(name) or name_ok(name, [o]) or _same_words(name, o) or _same_words(o, name):
+            continue
+        rows.append((json.dumps({"fighter_id": fid, "name": name}), name,
+                     f"{', '.join(sorted(sources))} print a name that doesn't agree with this fighter's", fid))
+    conn.executemany(
+        "INSERT INTO review_flags (check_name, table_name, row_key, column_name, value, reason, fighter_id) "
+        "VALUES ('printed name disagrees', 'fighters', ?, 'name', ?, ?, ?)", rows)
+    return len(rows)
+
+
 def sex_from_divisions(conn: sqlite3.Connection) -> None:
     """A fighter with no stated sex: 'F' if they fought in a women's bout UFC Stats lists, 'M' if in
     one of its named men's divisions (catch weight and open weight don't say)."""
@@ -224,6 +259,7 @@ def resolve(conn: sqlite3.Connection) -> Counter:
         conn.execute(f"DELETE FROM review_flags WHERE check_name IN ({', '.join('?' * len(CHECKS))})", CHECKS)
         counts["results disagree"] = _flag_results(conn)
         counts["birth dates disagree"] = _flag_dobs(conn)
+        counts["printed name disagrees"] = _flag_names(conn)
         from canon_db.corrections import clear_flags  # (it imports this module)
         counts["flags corrected"] = clear_flags(conn)
         conn.execute("DROP TABLE temp.ranks")
