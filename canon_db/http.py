@@ -86,7 +86,14 @@ def save(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(text, encoding="utf-8")
-    tmp.replace(path)
+    for attempt in range(5):
+        try:
+            tmp.replace(path)
+            return
+        except PermissionError:  # Windows: another program (Syncthing, a virus scan) has the file open
+            if attempt == 4:
+                raise
+            time.sleep(0.5 * (attempt + 1))
 
 
 _HIDDEN = re.compile(r"(?is)<(script|style)\b.*?</\1>")
