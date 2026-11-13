@@ -1,30 +1,30 @@
 {
-  "updated_at": "2026-11-12T18:59:30+00:00",
+  "updated_at": "2026-11-13T18:24:30+00:00",
   "coverage": {
     "first_event_date": "1963-12-02",
-    "last_event_date": "2026-11-10",
-    "last_event": "Octagon Promotion - Octagon 93: Zhanyshbek uulu vs. Madrakhimov",
-    "last_event_id": 61701
+    "last_event_date": "2026-11-13",
+    "last_event": "One Championship - One Friday Fights 178",
+    "last_event_id": 61723
   },
   "rows": {
-    "fighters": 180679,
-    "fighter_aliases": 212797,
-    "promotions": 12410,
-    "promotion_aliases": 12379,
+    "fighters": 180686,
+    "fighter_aliases": 212810,
+    "promotions": 12411,
+    "promotion_aliases": 12380,
     "merged_ids": 2,
-    "events": 61636,
-    "event_aliases": 65398,
-    "event_cards": 61630,
-    "non_pro_bouts": 1441,
-    "event_pages": 75770,
-    "fights": 373400,
-    "fight_aliases": 384958,
-    "fight_participants": 746800,
+    "events": 61642,
+    "event_aliases": 65404,
+    "event_cards": 61636,
+    "non_pro_bouts": 1512,
+    "event_pages": 75775,
+    "fights": 373425,
+    "fight_aliases": 384983,
+    "fight_participants": 746850,
     "round_stats": 76410,
     "smartcage_round_stats": 3548,
     "sofascore_round_stats": 19392,
     "judge_scores": 111246,
     "media_scores": 115828,
-    "odds": 51854
+    "odds": 51858
   }
 }
