@@ -1,30 +1,30 @@
 {
-  "updated_at": "2026-11-13T18:24:30+00:00",
+  "updated_at": "2026-11-14T17:16:06+00:00",
   "coverage": {
     "first_event_date": "1963-12-02",
-    "last_event_date": "2026-11-13",
-    "last_event": "One Championship - One Friday Fights 178",
-    "last_event_id": 61723
+    "last_event_date": "2026-11-14",
+    "last_event": "ROMAN - Roots of Martial Arts Network 6",
+    "last_event_id": 61730
   },
   "rows": {
-    "fighters": 180686,
-    "fighter_aliases": 212810,
+    "fighters": 180702,
+    "fighter_aliases": 212834,
     "promotions": 12411,
     "promotion_aliases": 12380,
     "merged_ids": 2,
-    "events": 61642,
-    "event_aliases": 65404,
-    "event_cards": 61636,
-    "non_pro_bouts": 1512,
-    "event_pages": 75775,
-    "fights": 373425,
-    "fight_aliases": 384983,
-    "fight_participants": 746850,
-    "round_stats": 76410,
+    "events": 61653,
+    "event_aliases": 65416,
+    "event_cards": 61647,
+    "non_pro_bouts": 1568,
+    "event_pages": 75779,
+    "fights": 373488,
+    "fight_aliases": 385046,
+    "fight_participants": 746976,
+    "round_stats": 76428,
     "smartcage_round_stats": 3548,
     "sofascore_round_stats": 19392,
     "judge_scores": 111246,
     "media_scores": 115828,
-    "odds": 51858
+    "odds": 51880
   }
 }
