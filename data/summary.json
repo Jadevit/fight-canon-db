@@ -1,30 +1,30 @@
 {
-  "updated_at": "2026-11-20T19:14:01+00:00",
+  "updated_at": "2026-11-21T18:20:46+00:00",
   "coverage": {
     "first_event_date": "1963-12-02",
-    "last_event_date": "2026-11-20",
-    "last_event": "One Championship - One Friday Fights 179",
-    "last_event_id": 61798
+    "last_event_date": "2026-11-21",
+    "last_event": "UFC Fight Night: Prochazka vs. Stirling",
+    "last_event_id": 61814
   },
   "rows": {
-    "fighters": 180799,
-    "fighter_aliases": 212964,
+    "fighters": 180816,
+    "fighter_aliases": 213005,
     "promotions": 12422,
     "promotion_aliases": 12391,
-    "merged_ids": 3,
-    "events": 61712,
-    "event_aliases": 65481,
-    "event_cards": 61706,
-    "non_pro_bouts": 1912,
-    "event_pages": 75851,
-    "fights": 373756,
-    "fight_aliases": 385328,
-    "fight_participants": 747512,
-    "round_stats": 76630,
+    "merged_ids": 5,
+    "events": 61730,
+    "event_aliases": 65502,
+    "event_cards": 61724,
+    "non_pro_bouts": 1980,
+    "event_pages": 75852,
+    "fights": 373856,
+    "fight_aliases": 385436,
+    "fight_participants": 747712,
+    "round_stats": 76660,
     "smartcage_round_stats": 3548,
     "sofascore_round_stats": 19478,
-    "judge_scores": 111462,
-    "media_scores": 116026,
-    "odds": 51944
+    "judge_scores": 111504,
+    "media_scores": 116076,
+    "odds": 51996
   }
 }
