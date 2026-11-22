@@ -1,30 +1,30 @@
 {
-  "updated_at": "2026-11-21T18:20:46+00:00",
+  "updated_at": "2026-11-22T18:35:04+00:00",
   "coverage": {
     "first_event_date": "1963-12-02",
-    "last_event_date": "2026-11-21",
-    "last_event": "UFC Fight Night: Prochazka vs. Stirling",
-    "last_event_id": 61814
+    "last_event_date": "2026-11-22",
+    "last_event": "Deep - 134 Impact",
+    "last_event_id": 61838
   },
   "rows": {
-    "fighters": 180816,
-    "fighter_aliases": 213005,
-    "promotions": 12422,
-    "promotion_aliases": 12391,
+    "fighters": 180832,
+    "fighter_aliases": 213042,
+    "promotions": 12423,
+    "promotion_aliases": 12392,
     "merged_ids": 5,
-    "events": 61730,
-    "event_aliases": 65502,
-    "event_cards": 61724,
-    "non_pro_bouts": 1980,
-    "event_pages": 75852,
-    "fights": 373856,
-    "fight_aliases": 385436,
-    "fight_participants": 747712,
-    "round_stats": 76660,
+    "events": 61743,
+    "event_aliases": 65516,
+    "event_cards": 61737,
+    "non_pro_bouts": 2077,
+    "event_pages": 75860,
+    "fights": 373950,
+    "fight_aliases": 385537,
+    "fight_participants": 747900,
+    "round_stats": 76730,
     "smartcage_round_stats": 3548,
     "sofascore_round_stats": 19478,
-    "judge_scores": 111504,
-    "media_scores": 116076,
-    "odds": 51996
+    "judge_scores": 111606,
+    "media_scores": 116180,
+    "odds": 52058
   }
 }
